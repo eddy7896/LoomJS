@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/modernist-f9a04a5e-e1e5-463e-b1b3-4e829c3cfa6c/styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+:root{
+  --lj-ink:#1b1d21; --lj-ink-2:#4b5058; --lj-ink-3:#868d97;
+  --lj-canvas:#f6f7f9; --lj-panel:#ffffff; --lj-hair:#e8eaee; --lj-hair-2:#dfe2e7;
+  --lj-brand:#ec3013; --lj-brand-tint:#fdece8;
+  --lj-mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  /* node category system */
+  --ui:#7c5cff;   --ui-fill:#f2effe;  --ui-bd:#d7cdfb;
+  --fn:#ec3013;   --fn-fill:#fdece8;  --fn-bd:#f7c8bd;
+  --api:#12a07a;  --api-fill:#e6f6f1; --api-bd:#b4e2d6;
+  --st:#2f7de1;   --st-fill:#e9f1fd;  --st-bd:#bfd8f7;
+  --db:#d98a12;   --db-fill:#fbf1df;  --db-bd:#f0d8a8;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var(--lj-ink)}
+.bs{max-width:1240px;margin:0 auto;padding:0 40px 120px}
+
+/* rhythm */
+.sec{padding:64px 0 8px;scroll-margin-top:20px}
+.eyebrow{display:flex;align-items:center;gap:10px;font:800 11px/1 var(--font-heading);letter-spacing:.16em;text-transform:uppercase;color:var(--lj-ink-3);margin:0 0 14px}
+.eyebrow .no{font:700 11px var(--lj-mono);color:var(--lj-brand)}
+.eyebrow .ln{flex:1;height:1px;background:var(--lj-hair-2)}
+.h2{font:800 30px/1.05 var(--font-heading);letter-spacing:-.02em;margin:0 0 8px}
+.lede{font:400 15px/1.6 var(--font-body);color:var(--lj-ink-2);max-width:720px;margin:0 0 30px}
+.grid{display:grid;gap:20px}
+
+/* cover */
+.cover{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:20px;padding:52px 48px;margin-top:44px;display:grid;grid-template-columns:1.35fr 1fr;gap:40px;align-items:center;box-shadow:0 1px 2px rgba(20,22,26,.04),0 12px 34px rgba(20,22,26,.05)}
+.mark{display:flex;align-items:center;gap:14px}
+.markglyph{width:52px;height:52px;flex:none}
+.markwd{font:800 34px/1 var(--font-heading);letter-spacing:-.03em}
+.markwd b{color:var(--lj-brand)}
+.covertag{font:800 13px var(--font-heading);letter-spacing:.02em;color:var(--lj-brand);margin:26px 0 10px}
+.coverh{font:800 40px/1.04 var(--font-heading);letter-spacing:-.03em;margin:0 0 16px}
+.coverp{font:400 15px/1.62 var(--font-body);color:var(--lj-ink-2);max-width:520px}
+.coverchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.cchip{font:700 11px var(--lj-mono);padding:6px 11px;border-radius:8px;background:var(--lj-canvas);border:1px solid var(--lj-hair-2);color:var(--lj-ink-2)}
+.coverpane{background:var(--lj-canvas);border:1px solid var(--lj-hair);border-radius:16px;height:100%;min-height:300px;position:relative;overflow:hidden;background-image:radial-gradient(var(--lj-hair-2) 1.1px,transparent 1.1px);background-size:22px 22px}
+
+/* generic card */
+.card2{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:16px;padding:22px}
+.lbl{font:800 10px/1 var(--font-heading);letter-spacing:.1em;text-transform:uppercase;color:var(--lj-ink-3);margin:0 0 12px}
+
+/* color */
+.swrow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.sw{border:1px solid var(--lj-hair);border-radius:12px;overflow:hidden;background:var(--lj-panel)}
+.sw .chip{height:78px}
+.sw .meta{padding:10px 12px}
+.sw .nm{font:800 12px var(--font-heading)}
+.sw .hex{font:600 11px var(--lj-mono);color:var(--lj-ink-3);margin-top:2px}
+.ramp{display:flex;border-radius:12px;overflow:hidden;border:1px solid var(--lj-hair)}
+.ramp span{flex:1;height:44px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:600 9px var(--lj-mono)}
+
+/* type */
+.typerow{display:flex;align-items:baseline;gap:16px;padding:16px 0;border-bottom:1px solid var(--lj-hair)}
+.typerow:last-child{border-bottom:0}
+.typerow .spec{width:150px;flex:none;font:600 11px var(--lj-mono);color:var(--lj-ink-3)}
+.typesamp{font-family:var(--font-heading)}
+
+/* node category cards */
+.nodeset{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.ncard{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:14px;box-shadow:0 1px 2px rgba(20,22,26,.04),0 8px 20px rgba(20,22,26,.05);overflow:hidden}
+.nhd{display:flex;align-items:center;gap:9px;padding:11px 13px;font:800 12.5px var(--font-heading);border-bottom:1px solid var(--lj-hair)}
+.nhd .ni{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none}
+.nhd .ni svg{width:15px;height:15px}
+.nhd .tag{margin-left:auto;font:800 9px var(--lj-mono);letter-spacing:.06em;padding:3px 7px;border-radius:6px}
+.nbd{padding:12px 13px;display:flex;flex-direction:column;gap:8px}
+.nrow{display:flex;align-items:center;gap:8px;font:500 12px/1.2 var(--font-body)}
+.nrow .k{font:600 10.5px var(--lj-mono);color:var(--lj-ink-3)}
+.nrow .v{margin-left:auto;font:600 10.5px var(--lj-mono);color:var(--lj-ink)}
+.nfield2{padding:7px 10px;border:1px solid var(--lj-hair-2);border-radius:8px;font:600 11px var(--lj-mono);color:var(--lj-ink-3);background:var(--lj-canvas)}
+.nbtn2{padding:8px 11px;border-radius:8px;font:800 11px var(--font-heading);color:#fff;text-align:center}
+
+/* anatomy callout */
+.anat{position:relative;background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:16px;padding:34px 40px;display:flex;justify-content:center}
+.port-demo{position:relative}
+.p-in,.p-out{position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;border:2.5px solid var(--fn);top:44px}
+.p-in{left:-7px}.p-out{right:-7px}
+.callout{position:absolute;font:600 11px var(--lj-mono);color:var(--lj-ink-3);white-space:nowrap}
+.callout b{color:var(--lj-ink);font-weight:700}
+
+/* wires */
+.wirepane{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:16px;padding:8px;position:relative;overflow:hidden;height:200px;background-image:radial-gradient(var(--lj-hair-2) 1.1px,transparent 1.1px);background-size:22px 22px}
+.pill-node{position:absolute;background:#fff;border:1px solid var(--lj-hair-2);border-radius:10px;padding:8px 11px;font:800 11px var(--font-heading);box-shadow:0 2px 8px rgba(20,22,26,.06);display:flex;align-items:center;gap:7px}
+.pill-node .d{width:9px;height:9px;border-radius:50%}
+.portspec{display:flex;flex-direction:column;gap:12px}
+.pspec{display:flex;align-items:center;gap:12px;font:500 12px/1.3 var(--font-body);color:var(--lj-ink-2)}
+.pspec .dot{width:14px;height:14px;border-radius:50%;flex:none;border:2.5px solid var(--fn);background:#fff}
+.pspec .dot.on{background:var(--fn)}
+.pspec .dot.sq{border-radius:4px}
+.pspec b{color:var(--lj-ink)}
+
+/* principles */
+.princ{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.pr{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:14px;padding:20px 22px}
+.pr .pn{font:700 12px var(--lj-mono);color:var(--lj-brand)}
+.pr h4{font:800 16px var(--font-heading);margin:8px 0 6px}
+.pr p{font:400 13px/1.55 var(--font-body);color:var(--lj-ink-2);margin:0}
+
+/* buttons demo */
+.btnrow{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.lb{border:0;cursor:pointer;font:800 13px var(--font-heading);border-radius:10px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px}
+.lb svg{width:16px;height:16px}
+.lb-pri{background:var(--lj-brand);color:#fff}
+.lb-sec{background:var(--lj-panel);color:var(--lj-ink);border:1px solid var(--lj-hair-2)}
+.lb-ghost{background:transparent;color:var(--lj-ink-2)}
+.lb-icon{padding:10px;background:var(--lj-panel);border:1px solid var(--lj-hair-2);color:var(--lj-ink-2)}
+.foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--lj-hair-2);display:flex;align-items:center;gap:12px;font:600 12px var(--lj-mono);color:var(--lj-ink-3)}
+.foot .mk{width:20px;height:20px;flex:none}
+</style>
+</helmet>
+
+<div class="bs">
+
+  <!-- COVER -->
+  <div class="cover">
+    <div>
+      <div class="mark">
+        <svg class="markglyph" viewBox="0 0 48 48" fill="none">
+          <rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="var(--lj-ink)" stroke-width="2.5"/>
+          <path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="var(--lj-ink)" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="13" cy="19" r="3.2" fill="var(--lj-brand)"/>
+          <circle cx="33" cy="29" r="3.2" fill="var(--lj-brand)"/>
+        </svg>
+        <div class="markwd">loom<b>JS</b></div>
+      </div>
+      <div class="covertag">BRAND &amp; DESIGN SYSTEM · v1.0</div>
+      <h1 class="coverh">Design the interface.<br>Weave the system.</h1>
+      <p class="coverp">loomJS is a visual programming environment dressed as a design tool. Designers lay out UI on an artboard; the backend — functions, routes, state and data — is woven in as connected cards. This is the visual language that keeps both halves feeling like one calm, modern surface.</p>
+      <div class="coverchips">
+        <span class="cchip">Archivo</span>
+        <span class="cchip">JetBrains&nbsp;Mono</span>
+        <span class="cchip">#ec3013</span>
+        <span class="cchip">Light&nbsp;mode</span>
+        <span class="cchip">14px&nbsp;radius</span>
+      </div>
+    </div>
+    <div class="coverpane">
+      <svg style="position:absolute;inset:0" width="100%" height="100%" viewBox="0 0 380 320" fill="none" preserveAspectRatio="xMidYMid meet">
+        <path d="M96 96 C 150 96 150 160 210 160" stroke="var(--ui)" stroke-width="2.5"/>
+        <path d="M300 160 C 250 160 250 224 190 224" stroke="var(--fn)" stroke-width="2.5"/>
+      </svg>
+      <div class="pill-node" style="left:24px;top:80px"><span class="d" style="background:var(--ui)"></span>LoginScreen</div>
+      <div class="pill-node" style="left:210px;top:144px"><span class="d" style="background:var(--fn)"></span>validate()</div>
+      <div class="pill-node" style="left:60px;top:208px"><span class="d" style="background:var(--st)"></span>session</div>
+    </div>
+  </div>
+
+  <!-- PRINCIPLES -->
+  <div class="sec" id="principles">
+    <div class="eyebrow"><span class="no">01</span>Principles<span class="ln"></span></div>
+    <h2 class="h2">A tool that hides its own programming</h2>
+    <p class="lede">Every decision serves one idea: a designer should never feel they left the canvas. Code becomes cards, syntax becomes wires, and the compiler stays out of sight.</p>
+    <div class="princ">
+      <div class="pr"><div class="pn">P1</div><h4>Design-first, always</h4><p>The artboard is home. Logic is generated from what you draw, then shown as cards you can open — never as a wall of text you must write.</p></div>
+      <div class="pr"><div class="pn">P2</div><h4>One calm surface</h4><p>Soft white panels, a single warm red accent, generous radius and hairline borders. Nothing shouts; structure comes from spacing, not heavy rules.</p></div>
+      <div class="pr"><div class="pn">P3</div><h4>Color means type</h4><p>Each node category owns one hue. Color is functional, never decorative — you read a graph by its colors before you read a single label.</p></div>
+      <div class="pr"><div class="pn">P4</div><h4>Legible by default</h4><p>Archivo for interface, JetBrains Mono for anything that is code or data. Ports, wires and states follow one consistent grammar across every view.</p></div>
+    </div>
+  </div>
+
+  <!-- LOGO -->
+  <div class="sec" id="logo">
+    <div class="eyebrow"><span class="no">02</span>Logo &amp; mark<span class="ln"></span></div>
+    <h2 class="h2">The loom mark</h2>
+    <p class="lede">Three vertical warp threads with a single red weft curving through them — the interface (the grid) and the woven-in system (the thread). The mark reads at 20px and up.</p>
+    <div class="grid" style="grid-template-columns:1.1fr 1fr 1fr">
+      <div class="card2" style="display:flex;align-items:center;justify-content:center;min-height:180px">
+        <div class="mark"><svg class="markglyph" style="width:64px;height:64px" viewBox="0 0 48 48" fill="none"><rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="var(--lj-ink)" stroke-width="2.5"/><path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="var(--lj-ink)" stroke-width="2.5" stroke-linecap="round"/><path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="3" stroke-linecap="round"/><circle cx="13" cy="19" r="3.2" fill="var(--lj-brand)"/><circle cx="33" cy="29" r="3.2" fill="var(--lj-brand)"/></svg><div class="markwd" style="font-size:30px">loom<b>JS</b></div></div>
+      </div>
+      <div class="card2" style="display:flex;align-items:center;justify-content:center;min-height:180px">
+        <svg style="width:72px;height:72px" viewBox="0 0 48 48" fill="none"><rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="var(--lj-ink)" stroke-width="2.5"/><path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="var(--lj-ink)" stroke-width="2.5" stroke-linecap="round"/><path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="3" stroke-linecap="round"/><circle cx="13" cy="19" r="3.2" fill="var(--lj-brand)"/><circle cx="33" cy="29" r="3.2" fill="var(--lj-brand)"/></svg>
+      </div>
+      <div class="card2" style="display:flex;align-items:center;justify-content:center;min-height:180px;background:var(--lj-ink)">
+        <svg style="width:72px;height:72px" viewBox="0 0 48 48" fill="none"><rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="#fff" stroke-width="2.5"/><path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="3" stroke-linecap="round"/><circle cx="13" cy="19" r="3.2" fill="var(--lj-brand)"/><circle cx="33" cy="29" r="3.2" fill="var(--lj-brand)"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLOR -->
+  <div class="sec" id="color">
+    <div class="eyebrow"><span class="no">03</span>Color<span class="ln"></span></div>
+    <h2 class="h2">A quiet ground, one warm accent</h2>
+    <p class="lede">The interface is built on cool neutrals so the work stays the loudest thing on screen. Red is the brand and the single primary action — used sparingly. Category color lives only inside nodes.</p>
+
+    <p class="lbl" style="margin-top:8px">Core</p>
+    <div class="swrow">
+      <div class="sw"><div class="chip" style="background:var(--lj-brand)"></div><div class="meta"><div class="nm">Brand Red</div><div class="hex">#EC3013</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--lj-ink)"></div><div class="meta"><div class="nm">Ink</div><div class="hex">#1B1D21</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--lj-canvas);border-bottom:1px solid var(--lj-hair)"></div><div class="meta"><div class="nm">Canvas</div><div class="hex">#F6F7F9</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--lj-panel);border-bottom:1px solid var(--lj-hair)"></div><div class="meta"><div class="nm">Panel</div><div class="hex">#FFFFFF</div></div></div>
+    </div>
+
+    <p class="lbl" style="margin-top:22px">Neutral ramp — text, borders, fills</p>
+    <div class="ramp">
+      <span style="background:#f6f7f9;color:#868d97">50</span>
+      <span style="background:#eceef1;color:#868d97">100</span>
+      <span style="background:#dfe2e7;color:#4b5058">200</span>
+      <span style="background:#c4c9d1;color:#4b5058">300</span>
+      <span style="background:#9aa1ac;color:#fff">400</span>
+      <span style="background:#6b7079;color:#fff">500</span>
+      <span style="background:#4b5058;color:#fff">600</span>
+      <span style="background:#33373d;color:#fff">700</span>
+      <span style="background:#1b1d21;color:#fff">900</span>
+    </div>
+
+    <p class="lbl" style="margin-top:22px">Node category palette — functional color</p>
+    <div class="swrow" style="grid-template-columns:repeat(5,1fr)">
+      <div class="sw"><div class="chip" style="background:var(--ui-fill);border-bottom:1px solid var(--ui-bd)"><div style="height:100%;width:8px;background:var(--ui)"></div></div><div class="meta"><div class="nm">UI Component</div><div class="hex">#7C5CFF</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--fn-fill);border-bottom:1px solid var(--fn-bd)"><div style="height:100%;width:8px;background:var(--fn)"></div></div><div class="meta"><div class="nm">Function</div><div class="hex">#EC3013</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--api-fill);border-bottom:1px solid var(--api-bd)"><div style="height:100%;width:8px;background:var(--api)"></div></div><div class="meta"><div class="nm">API Route</div><div class="hex">#12A07A</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--st-fill);border-bottom:1px solid var(--st-bd)"><div style="height:100%;width:8px;background:var(--st)"></div></div><div class="meta"><div class="nm">State</div><div class="hex">#2F7DE1</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--db-fill);border-bottom:1px solid var(--db-bd)"><div style="height:100%;width:8px;background:var(--db)"></div></div><div class="meta"><div class="nm">Database</div><div class="hex">#D98A12</div></div></div>
+    </div>
+  </div>
+
+  <!-- TYPE -->
+  <div class="sec" id="type">
+    <div class="eyebrow"><span class="no">04</span>Typography<span class="ln"></span></div>
+    <h2 class="h2">Archivo for interface, Mono for code</h2>
+    <p class="lede">Archivo carries every label, heading and body line. Anything that is literally code, a value or a type signature is set in JetBrains Mono — the visual cue that you are looking at the program, not the chrome.</p>
+    <div class="card2">
+      <div class="typerow"><span class="spec">Display / 40 / 800</span><span class="typesamp" style="font-size:40px;font-weight:800;letter-spacing:-.03em">Weave the system</span></div>
+      <div class="typerow"><span class="spec">Heading / 24 / 800</span><span class="typesamp" style="font-size:24px;font-weight:800;letter-spacing:-.02em">Node inspector</span></div>
+      <div class="typerow"><span class="spec">Label / 12 / 800 caps</span><span class="typesamp" style="font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">Auto-generated</span></div>
+      <div class="typerow"><span class="spec">Body / 15 / 400</span><span style="font-family:var(--font-body);font-size:15px">Drag a wire from any port to connect two nodes.</span></div>
+      <div class="typerow"><span class="spec">Mono / 12 / 600</span><span style="font-family:var(--lj-mono);font-size:12px;font-weight:600;color:var(--lj-ink-2)">function validateCredentials({ email })</span></div>
+    </div>
+  </div>
+
+  <!-- NODE CARDS -->
+  <div class="sec" id="nodes">
+    <div class="eyebrow"><span class="no">05</span>Node cards<span class="ln"></span></div>
+    <h2 class="h2">The card-based node system</h2>
+    <p class="lede">Every node is a light card: a tinted header carrying the category hue, an icon, a mono type badge, and a body of key–value rows. Soft shadow lifts it off the canvas; the category color never leaves the header and the port ring.</p>
+    <div class="nodeset">
+      <div class="ncard">
+        <div class="nhd"><span class="ni" style="background:var(--ui-fill);color:var(--ui)"><i data-lucide="layout-panel-top"></i></span>LoginScreen<span class="tag" style="background:var(--ui-fill);color:var(--ui)">UI</span></div>
+        <div class="nbd"><div class="nfield2">email@fintrack.app</div><div class="nfield2">••••••••</div><div class="nbtn2" style="background:var(--ui)">Sign in</div><div class="nrow"><span class="k">emit</span><span class="v">onSubmit</span></div></div>
+      </div>
+      <div class="ncard">
+        <div class="nhd"><span class="ni" style="background:var(--fn-fill);color:var(--fn)"><i data-lucide="function-square"></i></span>validateCredentials<span class="tag" style="background:var(--fn-fill);color:var(--fn)">FN</span></div>
+        <div class="nbd"><div class="nrow"><span class="k">in</span><span class="v">email, password</span></div><div class="nrow"><span class="k">rule</span><span class="v">regex · len≥8</span></div><div class="nrow"><span class="k">out</span><span class="v">valid: bool</span></div></div>
+      </div>
+      <div class="ncard">
+        <div class="nhd"><span class="ni" style="background:var(--api-fill);color:var(--api)"><i data-lucide="server"></i></span>POST /auth/login<span class="tag" style="background:var(--api-fill);color:var(--api)">API</span></div>
+        <div class="nbd"><div class="nrow"><span class="k">body</span><span class="v">{ email, pass }</span></div><div class="nrow"><span class="k">sign</span><span class="v">jwt · 24h</span></div><div class="nrow"><span class="k">200</span><span class="v">{ token }</span></div></div>
+      </div>
+      <div class="ncard">
+        <div class="nhd"><span class="ni" style="background:var(--st-fill);color:var(--st)"><i data-lucide="variable"></i></span>session<span class="tag" style="background:var(--st-fill);color:var(--st)">STATE</span></div>
+        <div class="nbd"><div class="nrow"><span class="k">token</span><span class="v">string</span></div><div class="nrow"><span class="k">user</span><span class="v">User | null</span></div></div>
+      </div>
+      <div class="ncard">
+        <div class="nhd"><span class="ni" style="background:var(--db-fill);color:var(--db)"><i data-lucide="database"></i></span>transactions<span class="tag" style="background:var(--db-fill);color:var(--db)">DB</span></div>
+        <div class="nbd"><div class="nrow"><span class="k">id</span><span class="v">uuid pk</span></div><div class="nrow"><span class="k">amount</span><span class="v">decimal</span></div><div class="nrow"><span class="k">date</span><span class="v">timestamp</span></div></div>
+      </div>
+      <div class="ncard" style="border:1.5px dashed var(--fn-bd);background:var(--fn-fill)">
+        <div class="nhd" style="border-bottom-color:var(--fn-bd)"><span class="ni" style="background:#fff;color:var(--fn)"><i data-lucide="sparkles"></i></span>Auto node<span class="tag" style="background:var(--fn);color:#fff">AUTO</span></div>
+        <div class="nbd"><div class="nrow" style="color:var(--lj-ink-2)">Dashed until accepted — generated from your design, editable any time.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANATOMY + WIRES -->
+  <div class="sec" id="wires">
+    <div class="eyebrow"><span class="no">06</span>Ports &amp; wires<span class="ln"></span></div>
+    <h2 class="h2">One grammar for connection</h2>
+    <p class="lede">Ports are circles on the card edge; inputs left, outputs right. Wires are smooth bezier curves that inherit the source node's category color. A connected port fills solid; an open port is a ring.</p>
+    <div class="grid" style="grid-template-columns:1.3fr 1fr">
+      <div class="anat">
+        <div class="port-demo">
+          <div class="ncard" style="width:220px">
+            <div class="nhd"><span class="ni" style="background:var(--fn-fill);color:var(--fn)"><i data-lucide="function-square"></i></span>validate<span class="tag" style="background:var(--fn-fill);color:var(--fn)">FN</span></div>
+            <div class="nbd"><div class="nrow"><span class="k">in</span><span class="v">email</span></div><div class="nrow"><span class="k">out</span><span class="v">valid</span></div></div>
+          </div>
+          <span class="p-in"></span><span class="p-out"></span>
+          <div class="callout" style="left:-150px;top:38px"><b>Input port</b> · left edge</div>
+          <div class="callout" style="right:-158px;top:38px"><b>Output port</b> · right edge</div>
+          <div class="callout" style="left:14px;top:-22px"><b>Tinted header</b> = category</div>
+          <div class="callout" style="left:14px;bottom:-24px">Mono <b>key → value</b> rows</div>
+        </div>
+      </div>
+      <div class="card2">
+        <p class="lbl">Port &amp; wire states</p>
+        <div class="portspec">
+          <div class="pspec"><span class="dot on"></span><b>Connected</b> — filled, category hue</div>
+          <div class="pspec"><span class="dot"></span><b>Open</b> — ring, awaiting a wire</div>
+          <div class="pspec"><span class="dot sq on" style="border-color:var(--st);background:var(--st)"></span><b>State port</b> — rounded square</div>
+          <div class="pspec"><svg width="46" height="14"><path d="M2 12 C 20 12 26 3 44 3" stroke="var(--fn)" stroke-width="2.5" fill="none"/></svg><b style="margin-left:2px">Bezier wire</b> — source color</div>
+          <div class="pspec"><svg width="46" height="14"><path d="M2 7 h42" stroke="var(--fn)" stroke-width="2.5" stroke-dasharray="5 4" fill="none"/></svg><b style="margin-left:2px">Auto wire</b> — dashed, pending</div>
+        </div>
+      </div>
+    </div>
+    <div class="wirepane" style="margin-top:18px">
+      <svg style="position:absolute;inset:0" width="100%" height="100%" viewBox="0 0 1160 184" fill="none" preserveAspectRatio="none">
+        <path d="M150 52 C 260 52 260 92 370 92" stroke="var(--ui)" stroke-width="2.5"/>
+        <path d="M470 92 C 580 92 580 52 690 52" stroke="var(--fn)" stroke-width="2.5"/>
+        <path d="M470 92 C 580 92 580 132 690 132" stroke="var(--fn)" stroke-width="2.5" stroke-dasharray="6 5"/>
+        <path d="M790 52 C 900 52 900 92 1010 92" stroke="var(--api)" stroke-width="2.5"/>
+      </svg>
+      <div class="pill-node" style="left:40px;top:40px"><span class="d" style="background:var(--ui)"></span>LoginScreen</div>
+      <div class="pill-node" style="left:372px;top:80px"><span class="d" style="background:var(--fn)"></span>validate()</div>
+      <div class="pill-node" style="left:690px;top:40px"><span class="d" style="background:var(--fn)"></span>hashPassword()</div>
+      <div class="pill-node" style="left:690px;top:120px"><span class="d" style="background:var(--fn)"></span>POST /login</div>
+      <div class="pill-node" style="left:1010px;top:80px"><span class="d" style="background:var(--api)"></span>session</div>
+    </div>
+  </div>
+
+  <!-- CANVAS + CONTROLS -->
+  <div class="sec" id="canvas">
+    <div class="eyebrow"><span class="no">07</span>Canvas &amp; controls<span class="ln"></span></div>
+    <h2 class="h2">The artboard surface</h2>
+    <p class="lede">A dotted grid on the cool canvas, the same in Design and Nodes view. Chrome is white with hairline borders and 14px radius; the primary action is the only red button on screen.</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card2">
+        <p class="lbl">Buttons &amp; controls</p>
+        <div class="btnrow">
+          <button class="lb lb-pri"><i data-lucide="rocket"></i>Deploy</button>
+          <button class="lb lb-sec"><i data-lucide="play"></i>Preview</button>
+          <button class="lb lb-ghost">Share</button>
+          <button class="lb lb-icon"><i data-lucide="settings-2"></i></button>
+        </div>
+        <p class="lbl" style="margin-top:22px">Mode switch</p>
+        <div style="display:inline-flex;background:var(--lj-canvas);border:1px solid var(--lj-hair-2);border-radius:11px;padding:4px;gap:3px">
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:8px;background:#fff;font:800 12px var(--font-heading);box-shadow:0 1px 3px rgba(20,22,26,.12)"><i data-lucide="pen-tool" style="width:15px;height:15px"></i>Design</span>
+          <span style="display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:8px;color:var(--lj-ink-3);font:800 12px var(--font-heading)"><i data-lucide="workflow" style="width:15px;height:15px"></i>Nodes</span>
+        </div>
+      </div>
+      <div class="card2" style="padding:0;overflow:hidden;position:relative;min-height:220px;background-image:radial-gradient(var(--lj-hair-2) 1.1px,transparent 1.1px);background-size:22px 22px;background-color:var(--lj-canvas)">
+        <div style="position:absolute;left:16px;bottom:14px;display:flex;align-items:center;gap:8px;background:var(--lj-ink);color:#fff;border-radius:10px;padding:8px 13px;font:600 11px var(--lj-mono)"><span style="width:8px;height:8px;border-radius:50%;background:#3bd07f"></span>Compiled · 0 errors</div>
+        <div style="position:absolute;right:16px;bottom:14px;display:flex;align-items:center;background:#fff;border:1px solid var(--lj-hair-2);border-radius:10px;font:700 11px var(--lj-mono);overflow:hidden"><span style="padding:8px 11px">70%</span><span style="padding:8px 10px;border-left:1px solid var(--lj-hair-2)">＋</span></div>
+        <div style="position:absolute;left:16px;top:16px;background:#fff;border:1px solid var(--lj-hair-2);border-radius:10px;padding:8px 12px;font:800 11px var(--font-heading);display:flex;align-items:center;gap:7px"><i data-lucide="frame" style="width:14px;height:14px;color:var(--lj-ink-3)"></i>Artboard · Login</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <svg class="mk" viewBox="0 0 48 48" fill="none"><rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="var(--lj-ink)" stroke-width="3"/><path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="var(--lj-ink)" stroke-width="3"/><path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="4"/></svg>
+    loomJS Brand &amp; Design System · v1.0 · built on Modernist · Archivo + JetBrains Mono
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    let n = 0;
+    const draw = () => {
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      else if (n++ < 40) setTimeout(draw, 120);
+    };
+    draw();
+  }
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
