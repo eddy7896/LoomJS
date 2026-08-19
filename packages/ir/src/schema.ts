@@ -1,0 +1,220 @@
+import { z } from 'zod';
+
+/**
+ * The loomJS snapshot schema (v1).
+ *
+ * A Snapshot is the serialized JSON of a whole project. It is simultaneously the
+ * save format, the compiler input, and the versioning atom (see docs/03-system-memory.md
+ * and docs/specs/snapshot-schema.md).
+ *
+ * Design rules baked in here:
+ *  - Stable ids on every node/component/artboard/wire/flow. Entities live in id-keyed
+ *    maps (Record<Id, T>) so atomic ops are O(1) and branch/merge stays cheap later.
+ *  - No secrets, ever. Connectors reference credentials by NAME (credentialRef) into the
+ *    env bucket; the value never lives in the snapshot (docs/05-guardrails.md #1).
+ *  - Types use the curated visible vocabulary only; @loom/typesys will elaborate later.
+ */
+
+export const SCHEMA_VERSION = 1 as const;
+
+export const IdSchema = z.string().min(1);
+export type Id = z.infer<typeof IdSchema>;
+
+// ---------------------------------------------------------------------------
+// Type vocabulary (curated; full TS lives only in emitted code)
+// ---------------------------------------------------------------------------
+
+export type TypeRef =
+  | { kind: 'text' }
+  | { kind: 'number' }
+  | { kind: 'boolean' }
+  | { kind: 'date' }
+  | { kind: 'record' }
+  | { kind: 'enum'; values: string[] }
+  | { kind: 'list'; of: TypeRef }
+  | { kind: 'optional'; of: TypeRef }
+  | { kind: 'trigger' }
+  | { kind: 'any' }
+  | { kind: 'unknown' };
+
+export const TypeRefSchema: z.ZodType<TypeRef> = z.lazy(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('text') }),
+    z.object({ kind: z.literal('number') }),
+    z.object({ kind: z.literal('boolean') }),
+    z.object({ kind: z.literal('date') }),
+    z.object({ kind: z.literal('record') }),
+    z.object({ kind: z.literal('enum'), values: z.array(z.string()) }),
+    z.object({ kind: z.literal('list'), of: TypeRefSchema }),
+    z.object({ kind: z.literal('optional'), of: TypeRefSchema }),
+    z.object({ kind: z.literal('trigger') }),
+    z.object({ kind: z.literal('any') }),
+    z.object({ kind: z.literal('unknown') }),
+  ]),
+);
+
+// ---------------------------------------------------------------------------
+// Shared references
+// ---------------------------------------------------------------------------
+
+/** Points at a specific port on a specific node. */
+export const PortRefSchema = z.object({ nodeId: IdSchema, portId: IdSchema });
+export type PortRef = z.infer<typeof PortRefSchema>;
+
+/** A bound property points at a backend node's output port (the Design<->Nodes seam). */
+export type Binding = PortRef;
+
+// ---------------------------------------------------------------------------
+// Property values (static / bound / event) — the seam between the two modes
+// ---------------------------------------------------------------------------
+
+export const EventHandlerSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('navigate'), flowId: IdSchema }),
+  z.object({ kind: z.literal('trigger'), target: PortRefSchema }),
+]);
+export type EventHandler = z.infer<typeof EventHandlerSchema>;
+
+export const PropertyValueSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('static'), value: z.unknown() }),
+  z.object({ kind: z.literal('bound'), source: PortRefSchema }),
+  z.object({ kind: z.literal('event'), handler: EventHandlerSchema }),
+]);
+export type PropertyValue = z.infer<typeof PropertyValueSchema>;
+
+// ---------------------------------------------------------------------------
+// Layout (flex-first, never absolute). Provisional v0 — full spec is #5.
+// ---------------------------------------------------------------------------
+
+export const SizeModeSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('hug') }),
+  z.object({ mode: z.literal('fill') }),
+  z.object({ mode: z.literal('fixed'), px: z.number() }),
+]);
+export type SizeMode = z.infer<typeof SizeModeSchema>;
+
+export const LayoutSchema = z.object({
+  direction: z.enum(['row', 'column']),
+  gap: z.number(),
+  padding: z.number(),
+  align: z.enum(['start', 'center', 'end', 'stretch']),
+  justify: z.enum(['start', 'center', 'end', 'between']),
+  size: z.object({ width: SizeModeSchema, height: SizeModeSchema }).optional(),
+});
+export type Layout = z.infer<typeof LayoutSchema>;
+
+// ---------------------------------------------------------------------------
+// Design mode: components + artboards
+// ---------------------------------------------------------------------------
+
+/** A component is an instance of a property schema. `children` (frames only) holds ids. */
+export const ComponentSchema = z.object({
+  id: IdSchema,
+  type: z.string(),
+  name: z.string().optional(),
+  props: z.record(z.string(), PropertyValueSchema),
+  layout: LayoutSchema.optional(),
+  children: z.array(IdSchema).optional(),
+});
+export type Component = z.infer<typeof ComponentSchema>;
+
+/** An input param an artboard declares for incoming flows (master->detail). */
+export const ParamSchema = z.object({ name: z.string(), type: TypeRefSchema });
+export type Param = z.infer<typeof ParamSchema>;
+
+export const ArtboardSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  root: IdSchema,
+  params: z.array(ParamSchema).optional(),
+});
+export type Artboard = z.infer<typeof ArtboardSchema>;
+
+// ---------------------------------------------------------------------------
+// Nodes mode: nodes, ports, wires
+// ---------------------------------------------------------------------------
+
+export const PortSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  direction: z.enum(['in', 'out']),
+  portKind: z.enum(['data', 'trigger']),
+  type: TypeRefSchema,
+});
+export type Port = z.infer<typeof PortSchema>;
+
+export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db']);
+export type NodeCategory = z.infer<typeof NodeCategorySchema>;
+
+export const NodeSchema = z.object({
+  id: IdSchema,
+  category: NodeCategorySchema,
+  /** category-specific: fn kinds (validate/transform/compute/gate/query/mutation/guard/code), ui 'mirror', ... */
+  kind: z.string(),
+  name: z.string().optional(),
+  ports: z.array(PortSchema),
+  position: z.object({ x: z.number(), y: z.number() }),
+  /** ui mirror nodes link back to the component they mirror. */
+  mirrorOf: IdSchema.optional(),
+  config: z.unknown().optional(),
+});
+export type Node = z.infer<typeof NodeSchema>;
+
+export const WireSchema = z.object({ id: IdSchema, from: PortRefSchema, to: PortRefSchema });
+export type Wire = z.infer<typeof WireSchema>;
+
+// ---------------------------------------------------------------------------
+// Navigation: flows (arrows between artboards)
+// ---------------------------------------------------------------------------
+
+export const FlowSchema = z.object({
+  id: IdSchema,
+  from: IdSchema,
+  to: IdSchema,
+  /** payload carried to the destination's declared params. */
+  payload: z.array(z.object({ param: z.string(), source: PortRefSchema })).optional(),
+  guard: IdSchema.optional(),
+});
+export type Flow = z.infer<typeof FlowSchema>;
+
+// ---------------------------------------------------------------------------
+// Connectors (config only; credentials are name-referenced, never inlined)
+// ---------------------------------------------------------------------------
+
+export const ConnectorInstanceSchema = z.object({
+  id: IdSchema,
+  moduleId: z.string(),
+  config: z.unknown().optional(),
+  /** NAME into the encrypted env bucket. NEVER the secret itself. */
+  credentialRef: z.string().optional(),
+});
+export type ConnectorInstance = z.infer<typeof ConnectorInstanceSchema>;
+
+// ---------------------------------------------------------------------------
+// The snapshot root
+// ---------------------------------------------------------------------------
+
+export const SnapshotSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  id: IdSchema,
+  name: z.string(),
+  entryArtboard: IdSchema.optional(),
+  artboards: z.record(z.string(), ArtboardSchema),
+  components: z.record(z.string(), ComponentSchema),
+  nodes: z.record(z.string(), NodeSchema),
+  wires: z.record(z.string(), WireSchema),
+  flows: z.record(z.string(), FlowSchema),
+  connectors: z.record(z.string(), ConnectorInstanceSchema),
+});
+export type Snapshot = z.infer<typeof SnapshotSchema>;
+
+// ---------------------------------------------------------------------------
+// Serialization (validate on the way in AND out)
+// ---------------------------------------------------------------------------
+
+export function serializeSnapshot(snapshot: Snapshot): string {
+  return JSON.stringify(SnapshotSchema.parse(snapshot));
+}
+
+export function deserializeSnapshot(json: string): Snapshot {
+  return SnapshotSchema.parse(JSON.parse(json));
+}
