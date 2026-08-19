@@ -29,7 +29,8 @@ with the offending entity id (`CompileError.entityId`) so the editor can map bac
 ## Usage
 
 ```ts
-import { compile, writeFiles } from '@loom/compiler';
+import { compile } from '@loom/compiler';
+import { writeFiles } from '@loom/compiler/node'; // node-only entry
 import { createTrivialSnapshot } from '@loom/ir';
 
 const { files } = compile(createTrivialSnapshot());

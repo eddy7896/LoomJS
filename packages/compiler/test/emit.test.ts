@@ -2,7 +2,8 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CompileError, compile, writeFiles } from '../src/index';
+import { CompileError, compile } from '../src/index';
+import { writeFiles } from '../src/node';
 import { trivialSnapshot } from './fixtures';
 
 const byPath = (files: { path: string; content: string }[], path: string): string => {

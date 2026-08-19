@@ -1,5 +1,5 @@
 {
-  "name": "@loom/compiler",
+  "name": "@loom/components",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,23 +9,14 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
-    },
-    "./node": {
-      "types": "./src/node.ts",
-      "import": "./src/node.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:smoke": "vitest run --config vitest.smoke.config.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@loom/ir": "workspace:*"
-  },
-  "devDependencies": {
-    "@loom/components": "workspace:*",
-    "@types/node": "^20.11.0"
   }
 }

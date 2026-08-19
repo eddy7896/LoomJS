@@ -1,5 +1,6 @@
+// Browser-safe entry: emission only, no node:fs. Disk writing lives in `@loom/compiler/node`
+// so the studio can import the compiler (and its layout emission) into the canvas.
 export * from './types';
 export * from './compile';
-export * from './write';
 export { knownComponentTypes } from './templates/registry';
 export { layoutToStyle } from './emit/layout';

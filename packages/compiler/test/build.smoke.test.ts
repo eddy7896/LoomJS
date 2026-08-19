@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { compile, writeFiles } from '../src/index';
+import { compile } from '../src/index';
+import { writeFiles } from '../src/node';
 import { trivialSnapshot } from './fixtures';
 
 const run = promisify(execFile);

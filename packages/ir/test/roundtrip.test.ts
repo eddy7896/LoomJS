@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyOp,
   applyOps,
   createEmptyProject,
   createTrivialSnapshot,
@@ -8,7 +9,9 @@ import {
   newComponentId,
   serializeSnapshot,
   SnapshotSchema,
+  type Component,
   type Op,
+  type Snapshot,
 } from '../src/index';
 
 describe('snapshot schema', () => {
@@ -111,5 +114,63 @@ describe('atomic ops', () => {
     ]);
     expect(snap.components[cpId]).toBeUndefined();
     expect(snap.nodes['nd_mirror']).toBeUndefined();
+  });
+});
+
+describe('editing ops', () => {
+  const base = (): Snapshot => {
+    const snapshot = createTrivialSnapshot();
+    return snapshot;
+  };
+
+  const rootOf = (s: Snapshot): string => s.artboards[s.entryArtboard!]!.root;
+
+  it('setLayout merges into an existing layout', () => {
+    const s = base();
+    const next = applyOp(s, { type: 'setLayout', componentId: rootOf(s), layout: { gap: 4 } });
+    expect(next.components[rootOf(s)]!.layout).toMatchObject({ gap: 4, direction: 'column' });
+  });
+
+  it('setLayout refuses a component that is not a container', () => {
+    const s = base();
+    const textId = s.components[rootOf(s)]!.children![0]!;
+    expect(() => applyOp(s, { type: 'setLayout', componentId: textId, layout: { gap: 4 } })).toThrow(
+      /not a container/,
+    );
+  });
+
+  it('moveComponent reparents and reorders without duplicating', () => {
+    const s = base();
+    const root = rootOf(s);
+    const textId = s.components[root]!.children![0]!;
+    const frame: Component = {
+      id: 'cp_frame2',
+      type: 'Frame',
+      props: {},
+      layout: { direction: 'row', gap: 0, padding: 0, align: 'start', justify: 'start' },
+      children: [],
+    };
+    let next = applyOp(s, { type: 'addComponent', component: frame, parentId: root });
+    next = applyOp(next, { type: 'moveComponent', componentId: textId, parentId: 'cp_frame2' });
+    expect(next.components[root]!.children).toEqual(['cp_frame2']);
+    expect(next.components.cp_frame2!.children).toEqual([textId]);
+  });
+
+  it('moveComponent refuses to put a container inside itself', () => {
+    const s = base();
+    const root = rootOf(s);
+    const textId = s.components[root]!.children![0]!;
+    expect(() =>
+      applyOp(s, { type: 'moveComponent', componentId: root, parentId: textId }),
+    ).toThrow(/is inside/);
+  });
+
+  it('removeComponent deletes the whole subtree', () => {
+    const s = base();
+    const root = rootOf(s);
+    const textId = s.components[root]!.children![0]!;
+    const next = applyOp(s, { type: 'removeComponent', componentId: root });
+    expect(next.components[root]).toBeUndefined();
+    expect(next.components[textId]).toBeUndefined();
   });
 });
