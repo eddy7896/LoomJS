@@ -9,6 +9,7 @@ import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
 import {
   everyComponentSnapshot,
+  operatorPipelineSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
   supabaseSnapshot,
@@ -94,6 +95,16 @@ describe('emitted app builds for real', () => {
     expect(home).toContain('type="number"');
     expect(home).toContain('type="checkbox"');
     expect(home).toContain('<option');
+  });
+
+  it('type-checks a route body holding every operator step', async () => {
+    const dir = await emitProject(operatorPipelineSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const api = await readFile(join(dir, 'api', 'createnotes.ts'), 'utf8');
+    expect(api).toContain('const answer = left * right;');
+    expect(api).toContain('Number(left) >= Number(right)');
+    expect(api).toContain('const answer = left || right;');
   });
 
   it('type-checks and builds an app with a backend pipeline', async () => {

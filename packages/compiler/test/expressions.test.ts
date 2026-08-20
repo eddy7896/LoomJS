@@ -184,3 +184,125 @@ describe('booleans and queries', () => {
     expect(api).not.toContain('for (');
   });
 });
+
+/** Drop any FN step into the inferred pipeline's body, between Validate and the insert. */
+function withStep(kind: string, config: Record<string, unknown>): string {
+  const { snapshot } = inferredSnapshot();
+  const route = Object.values(snapshot.nodes).find((node) => node.category === 'api')!;
+  const body = (route.config as { body: string[] }).body;
+
+  const step: Node = {
+    id: 'nd_step',
+    category: 'fn',
+    kind,
+    name: kind,
+    ports: [
+      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
+      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+    ],
+    position: { x: 0, y: 0 },
+    config,
+  };
+
+  const next = applyOps(snapshot, [
+    { type: 'addNode', node: step },
+    {
+      type: 'setNodeConfig',
+      nodeId: route.id,
+      config: { ...(route.config as object), body: [body[0]!, step.id, body[1]!] },
+    },
+  ]);
+
+  return compile(next).files.find((f) => f.path === 'api/createnotes.ts')!.content;
+}
+
+describe('Math', () => {
+  it('operates on two fields and writes the answer into a third', () => {
+    const api = withStep('math', {
+      left: 'price',
+      operator: 'multiply',
+      rightKind: 'field',
+      right: 'quantity',
+      into: 'total',
+    });
+    expect(api).toContain('const left = Number(source["price"]);');
+    expect(api).toContain('const right = Number(source["quantity"]);');
+    expect(api).toContain('const answer = left * right;');
+    expect(api).toContain('value = { ...source, ["total"]: answer };');
+  });
+
+  it('takes a typed value on the right, and replaces the whole value when no field is named', () => {
+    const api = withStep('math', { left: 'count', operator: 'add', rightKind: 'value', right: '10', into: '' });
+    expect(api).toContain('const right = Number("10");');
+    expect(api).toContain('value = answer;');
+  });
+
+  it('refuses to divide by zero rather than writing Infinity into a column', () => {
+    const api = withStep('math', { left: 'total', operator: 'divide', rightKind: 'field', right: 'people' });
+    expect(api).toContain('if (right === 0) throw new Error("Cannot divide total by zero.");');
+  });
+
+  it('names the fields that were not numbers', () => {
+    const api = withStep('math', { left: 'price', operator: 'add', rightKind: 'field', right: 'quantity' });
+    expect(api).toContain('"price and quantity must both be numbers."');
+  });
+
+  it('offers smaller-of and larger-of without a branch', () => {
+    expect(withStep('math', { left: 'a', operator: 'min', rightKind: 'field', right: 'b' })).toContain(
+      'Math.min(left, right)',
+    );
+    expect(withStep('math', { left: 'a', operator: 'max', rightKind: 'value', right: '5' })).toContain(
+      'Math.max(left, right)',
+    );
+  });
+
+  it('refuses an operation it cannot emit', () => {
+    expect(() => withStep('math', { operator: 'exponentiate' })).toThrow(/unknown operation/);
+  });
+});
+
+describe('Compare and Logic', () => {
+  it('compares equality as text, so a form field matches a numeric column', () => {
+    const api = withStep('compare', {
+      left: 'status',
+      operator: 'equals',
+      rightKind: 'value',
+      right: 'draft',
+      into: 'is_draft',
+    });
+    expect(api).toContain('const answer = String(left) === String(right);');
+    expect(api).toContain('value = { ...source, ["is_draft"]: answer };');
+  });
+
+  it('compares order as numbers, because "10" < "9" is true as text', () => {
+    expect(
+      withStep('compare', { left: 'count', operator: 'atLeast', rightKind: 'value', right: '9' }),
+    ).toContain('Number(left) >= Number(right)');
+  });
+
+  it('where a Gate stops, a Compare hands the answer on', () => {
+    const api = withStep('compare', { left: 'count', operator: 'greaterThan', rightKind: 'value', right: '0' });
+    // No throw: the boolean travels down the pipeline instead of ending it.
+    expect(api).toContain('Number(left) > Number(right)');
+    expect(api).not.toContain('Cannot');
+  });
+
+  it('reads a checkbox as checked whether it arrives as a boolean or as "true"', () => {
+    const api = withStep('logic', {
+      left: 'agreed',
+      operator: 'and',
+      rightKind: 'field',
+      right: 'confirmed',
+      into: 'ok',
+    });
+    expect(api).toContain("input === true || input === 'true'");
+    expect(api).toContain('const answer = left && right;');
+  });
+
+  it('supports or, and refuses anything else', () => {
+    expect(withStep('logic', { left: 'a', operator: 'or', rightKind: 'field', right: 'b' })).toContain(
+      'left || right',
+    );
+    expect(() => withStep('logic', { operator: 'nand' })).toThrow(/unknown operation/);
+  });
+});

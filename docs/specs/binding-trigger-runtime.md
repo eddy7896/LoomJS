@@ -114,3 +114,28 @@ node (`state:write`, scope `screen`) is that something: wire an API route's `res
 - **There is no loop node, and there will not be one.** A list is narrowed by the *query* (sort,
   limit) and rendered by the List component's implicit map, one row at a time. Iteration that
   those two cannot express belongs in a Code node (guardrail 7).
+
+## Operator steps (Math, Compare, Logic)
+
+Three FN kinds that each compute one value. They are the glossary's **Compute** — "a single
+derived value from a small expression" — split by what they operate on; flagged here as *kinds*
+inside the FN family rather than new categories, because one node with twelve operators whose
+result type shifts underneath you reads worse than three that each mean one thing.
+
+- **Shape.** Each reads named fields of the record flowing through the route, computes one
+  answer, and writes it back into a named field (`Write to`) — or replaces the whole value when
+  no field is named. A pipeline therefore stays one value moving forward, which is what keeps a
+  route body readable top to bottom, instead of a web of wires between operand ports.
+- **Math**: plus, minus, times, divided by, remainder of, smaller of, larger of. Words, never
+  symbols. Dividing by zero **fails with a named error** rather than writing `Infinity` into a
+  numeric column, and a non-numeric operand names the fields that were not numbers.
+- **Compare**: equals, does not equal, is greater than / less than / at least / at most. Equality
+  compares as text so a form's `"3"` matches a column's `3`; ordering compares as numbers,
+  because `"10" < "9"` is true as text and false as arithmetic. Where a **Gate** stops the
+  pipeline, a Compare hands the boolean on.
+- **Logic**: and, or, over two boolean fields. `not` stays on Compute, where a one-sided
+  operation belongs. A checkbox counts as checked whether it arrives as `true` or as `"true"`.
+- **Emission detail that is load-bearing:** the `source` local is declared only when the step
+  actually reads the record. The emitted app builds with `noUnusedLocals`, so an unconditional
+  declaration would turn "left blank, right a literal" into a broken build — covered by a smoke
+  gate that builds a route body holding one of every operator step.

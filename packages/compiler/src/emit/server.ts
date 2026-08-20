@@ -1,4 +1,10 @@
-import { COMPUTE_OPS, gateMessage, type GateConfig, type ValidationField } from '@loom/components';
+import {
+  COMPUTE_OPS,
+  gateMessage,
+  type GateConfig,
+  type OperandConfig,
+  type ValidationField,
+} from '@loom/components';
 import type { DbNodeConfig } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
 import { CompileError, type EmittedFile } from '../types';
@@ -145,11 +151,145 @@ function emitGateStep(node: Node): string {
   }`;
 }
 
+/**
+ * Operator steps (Math, Compare, Logic). Each reads named fields of the record flowing through,
+ * computes one value, and writes it back into a named field — so the pipeline stays a single
+ * value moving forward, which is what makes a route body readable top to bottom.
+ */
+
+/** The expression for one side of an operation. A blank left side means the whole value. */
+function operandExpr(config: Partial<OperandConfig>, side: 'left' | 'right'): string {
+  if (side === 'left') {
+    const field = String(config.left ?? '').trim();
+    return field ? `source[${JSON.stringify(field)}]` : 'value';
+  }
+  const raw = String(config.right ?? '').trim();
+  return config.rightKind === 'field' ? `source[${JSON.stringify(raw)}]` : JSON.stringify(raw);
+}
+
+const NEWLINE = String.fromCharCode(10);
+
+/**
+ * Whether the step reads the incoming record at all. The emitted app builds with
+ * `noUnusedLocals`, so a `source` nobody reads fails its own `tsc` — declaring it unconditionally
+ * would turn "left blank, right a literal" into a broken build.
+ */
+function needsSource(config: Partial<OperandConfig>): boolean {
+  return Boolean(
+    String(config.left ?? '').trim() ||
+      config.rightKind === 'field' ||
+      String(config.into ?? '').trim(),
+  );
+}
+
+const sourceLine = (config: Partial<OperandConfig>): string =>
+  needsSource(config)
+    ? `    const source = (value ?? {}) as Record<string, unknown>;${NEWLINE}`
+    : '';
+
+/** How the answer rejoins the pipeline: into a named field, or as the whole value. */
+function writeBack(config: Partial<OperandConfig>): string {
+  const into = String(config.into ?? '').trim();
+  return into ? `value = { ...source, [${JSON.stringify(into)}]: answer };` : 'value = answer;';
+}
+
+const MATH_EXPRESSIONS: Record<string, string> = {
+  add: 'left + right',
+  subtract: 'left - right',
+  multiply: 'left * right',
+  divide: 'left / right',
+  remainder: 'left % right',
+  min: 'Math.min(left, right)',
+  max: 'Math.max(left, right)',
+};
+
+function emitMathStep(node: Node): string {
+  const config = (node.config ?? {}) as Partial<OperandConfig> & { operator?: string };
+  const operator = config.operator ?? 'add';
+  const expression = MATH_EXPRESSIONS[operator];
+  if (!expression) {
+    throw new CompileError(
+      `Math has unknown operation "${operator}". Known: ${Object.keys(MATH_EXPRESSIONS).join(', ')}.`,
+      node.id,
+    );
+  }
+
+  const subject = String(config.left ?? '').trim() || 'the value';
+  // Dividing by zero yields Infinity in JavaScript, which lands in a numeric column as a number
+  // nobody meant. A named failure beats a plausible wrong answer.
+  const guard =
+    operator === 'divide' || operator === 'remainder'
+      ? `
+    if (right === 0) throw new Error(${JSON.stringify(`Cannot divide ${subject} by zero.`)});`
+      : '';
+
+  return `  {
+${sourceLine(config)}    const left = Number(${operandExpr(config, 'left')});
+    const right = Number(${operandExpr(config, 'right')});
+    if (Number.isNaN(left) || Number.isNaN(right)) {
+      throw new Error(${JSON.stringify(`${subject} and ${String(config.right ?? '').trim() || 'the value'} must both be numbers.`)});
+    }${guard}
+    const answer = ${expression};
+    ${writeBack(config)}
+  }`;
+}
+
+const COMPARE_EXPRESSIONS: Record<string, string> = {
+  equals: 'String(left) === String(right)',
+  notEquals: 'String(left) !== String(right)',
+  greaterThan: 'Number(left) > Number(right)',
+  lessThan: 'Number(left) < Number(right)',
+  atLeast: 'Number(left) >= Number(right)',
+  atMost: 'Number(left) <= Number(right)',
+};
+
+function emitCompareStep(node: Node): string {
+  const config = (node.config ?? {}) as Partial<OperandConfig> & { operator?: string };
+  const operator = config.operator ?? 'equals';
+  const expression = COMPARE_EXPRESSIONS[operator];
+  if (!expression) {
+    throw new CompileError(
+      `Compare has unknown condition "${operator}". Known: ${Object.keys(COMPARE_EXPRESSIONS).join(', ')}.`,
+      node.id,
+    );
+  }
+
+  // Equality compares as text so a form's "3" matches a column's 3; ordering compares as numbers,
+  // because "10" < "9" is true as text and false as arithmetic.
+  return `  {
+${sourceLine(config)}    const left: unknown = ${operandExpr(config, 'left')};
+    const right: unknown = ${operandExpr(config, 'right')};
+    const answer = ${expression};
+    ${writeBack(config)}
+  }`;
+}
+
+function emitLogicStep(node: Node): string {
+  const config = (node.config ?? {}) as Partial<OperandConfig> & { operator?: string };
+  const operator = config.operator ?? 'and';
+  if (operator !== 'and' && operator !== 'or') {
+    throw new CompileError(`Logic has unknown operation "${operator}". Known: and, or.`, node.id);
+  }
+
+  // A checkbox arrives as a boolean; the same value read back from a form field arrives as the
+  // string "true". Both mean checked.
+  return `  {
+${sourceLine(config)}    const truthy = (input: unknown): boolean => input === true || input === 'true';
+    const left = truthy(${operandExpr(config, 'left')});
+    const right = truthy(${operandExpr(config, 'right')});
+    const answer = left ${operator === 'and' ? '&&' : '||'} right;
+    ${writeBack(config)}
+  }`;
+}
+
 /** One server-side step, as a statement operating on `value`. */
 function emitStep(node: Node, snapshot: Snapshot): string {
   if (node.category === 'db') return emitDbStep(node, snapshot);
   if (node.kind === 'validate') return emitValidateStep(node);
   if (node.kind === 'gate') return emitGateStep(node);
+  if (node.kind === 'math') return emitMathStep(node);
+  if (node.kind === 'compare') return emitCompareStep(node);
+  if (node.kind === 'logic') return emitLogicStep(node);
 
   const config = (node.config ?? {}) as { op?: string; source?: string };
 

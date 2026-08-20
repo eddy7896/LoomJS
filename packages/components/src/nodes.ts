@@ -234,10 +234,140 @@ export function gateMessage(config: Partial<GateConfig>): string {
   return `${subject} ${condition.label}${comparand} is required.`;
 }
 
+
+/**
+ * Operator nodes: Math, Compare, Logic.
+ *
+ * All three are the glossary's **Compute** — "a single derived value from a small expression"
+ * (`docs/06-glossary.md`) — split by what they operate on, because one node with twelve operators
+ * and a type that changes underneath you is harder to read than three that each mean one thing.
+ * They are *kinds* inside the FN family, not a new category; flagged here rather than slipped in.
+ *
+ * Each reads named fields of the record flowing through the route and writes its answer back
+ * into a named field, so a pipeline stays one value moving forward rather than a web of wires.
+ */
+
+/** Where one side of an operation comes from. */
+export interface OperandConfig {
+  /** Field of the incoming record; blank means the whole value. */
+  left: string;
+  /** `value` compares against what the designer typed; `field` against another column. */
+  rightKind: 'value' | 'field';
+  right: string;
+  /** Field the answer is written into; blank replaces the whole value. */
+  into: string;
+}
+
+const operandFields = (rightLabel: string): readonly FieldDef[] => [
+  { key: 'left', label: 'Left', control: 'text', default: '' },
+  { key: 'rightKind', label: 'Right is', control: 'select', options: ['value', 'field'], default: 'value' },
+  { key: 'right', label: rightLabel, control: 'text', default: '' },
+  { key: 'into', label: 'Write to', control: 'text', default: '' },
+];
+
+/** Arithmetic. Each is a word, not a symbol — the designer picks "times", never `*`. */
+export const MATH_OPERATORS = {
+  add: 'plus',
+  subtract: 'minus',
+  multiply: 'times',
+  divide: 'divided by',
+  remainder: 'remainder of',
+  min: 'smaller of',
+  max: 'larger of',
+} as const satisfies Record<string, string>;
+
+export type MathOperator = keyof typeof MATH_OPERATORS;
+
+export const MATH_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'math',
+  label: 'Math',
+  defaultConfig: { left: '', operator: 'add', rightKind: 'value', right: '0', into: '' },
+  fields: [
+    { key: 'left', label: 'Left', control: 'text', default: '' },
+    {
+      key: 'operator',
+      label: 'Operation',
+      control: 'select',
+      options: Object.keys(MATH_OPERATORS),
+      default: 'add',
+    },
+    ...operandFields('Right').filter((field) => field.key !== 'left'),
+  ],
+  ports: () => [
+    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
+    port('pt_result', 'result', 'out', 'data', { kind: 'any' }),
+  ],
+};
+
+/** Comparison. Where a Gate stops the pipeline, a Compare hands the answer on as a boolean. */
+export const COMPARE_OPERATORS = {
+  equals: 'equals',
+  notEquals: 'does not equal',
+  greaterThan: 'is greater than',
+  lessThan: 'is less than',
+  atLeast: 'is at least',
+  atMost: 'is at most',
+} as const satisfies Record<string, string>;
+
+export type CompareOperator = keyof typeof COMPARE_OPERATORS;
+
+export const COMPARE_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'compare',
+  label: 'Compare',
+  defaultConfig: { left: '', operator: 'equals', rightKind: 'value', right: '', into: '' },
+  fields: [
+    { key: 'left', label: 'Left', control: 'text', default: '' },
+    {
+      key: 'operator',
+      label: 'Condition',
+      control: 'select',
+      options: Object.keys(COMPARE_OPERATORS),
+      default: 'equals',
+    },
+    ...operandFields('Right').filter((field) => field.key !== 'left'),
+  ],
+  ports: () => [
+    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
+    port('pt_result', 'result', 'out', 'data', { kind: 'boolean' }),
+  ],
+};
+
+/** Boolean algebra over two fields. `not` stays on Compute, where a one-sided operation belongs. */
+export const LOGIC_OPERATORS = { and: 'and', or: 'or' } as const satisfies Record<string, string>;
+
+export type LogicOperator = keyof typeof LOGIC_OPERATORS;
+
+export const LOGIC_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'logic',
+  label: 'Logic',
+  defaultConfig: { left: '', operator: 'and', rightKind: 'field', right: '', into: '' },
+  fields: [
+    { key: 'left', label: 'Left', control: 'text', default: '' },
+    {
+      key: 'operator',
+      label: 'Operation',
+      control: 'select',
+      options: Object.keys(LOGIC_OPERATORS),
+      default: 'and',
+    },
+    ...operandFields('Right').filter((field) => field.key !== 'left'),
+  ],
+  ports: () => [
+    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
+    port('pt_result', 'result', 'out', 'data', { kind: 'boolean' }),
+  ],
+};
+
 const DEFS: readonly NodeDef[] = [
   API_ROUTE_DEF,
   COMPUTE_DEF,
   GATE_DEF,
+  MATH_DEF,
+  COMPARE_DEF,
+  LOGIC_DEF,
   CODE_DEF,
   VALIDATE_DEF,
   STATE_WRITE_DEF,

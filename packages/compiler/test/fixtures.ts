@@ -490,3 +490,66 @@ export function everyComponentSnapshot(): Snapshot {
     },
   };
 }
+
+/**
+ * The inferred pipeline with one of every operator step wired into its body. Its job is the
+ * emitted app's own `tsc`: the operator templates declare locals, and a local nothing reads
+ * fails a build with `noUnusedLocals` — which no amount of string matching here would catch.
+ */
+export function operatorPipelineSnapshot(): Snapshot {
+  const { snapshot } = inferredSnapshot();
+  const route = Object.values(snapshot.nodes).find((node) => node.category === 'api')!;
+  const body = (route.config as { body: string[] }).body;
+
+  const step = (id: string, kind: string, config: Record<string, unknown>): Node => ({
+    id,
+    category: 'fn',
+    kind,
+    name: kind,
+    ports: [
+      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
+      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+    ],
+    position: { x: 0, y: 0 },
+    config,
+  });
+
+  const steps = [
+    step('nd_math', 'math', {
+      left: 'quantity',
+      operator: 'multiply',
+      rightKind: 'field',
+      right: 'price',
+      into: 'total',
+    }),
+    // Reads nothing from the record and writes nowhere: the shape that must NOT declare `source`.
+    step('nd_math_bare', 'math', { left: '', operator: 'add', rightKind: 'value', right: '1', into: '' }),
+    step('nd_compare', 'compare', {
+      left: 'total',
+      operator: 'atLeast',
+      rightKind: 'value',
+      right: '10',
+      into: 'is_big',
+    }),
+    step('nd_logic', 'logic', {
+      left: 'is_big',
+      operator: 'or',
+      rightKind: 'field',
+      right: 'is_big',
+      into: 'flagged',
+    }),
+    step('nd_gate', 'gate', { field: 'title', condition: 'isFilled', value: '', message: '' }),
+  ];
+
+  return applyOps(snapshot, [
+    ...steps.map((node) => ({ type: 'addNode', node }) as const),
+    {
+      type: 'setNodeConfig',
+      nodeId: route.id,
+      config: {
+        ...(route.config as object),
+        body: [body[0]!, ...steps.map((node) => node.id), body[1]!],
+      },
+    },
+  ]);
+}

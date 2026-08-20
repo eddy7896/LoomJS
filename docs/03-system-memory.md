@@ -182,6 +182,15 @@ Recorded here because they constrain everything downstream. Each was taken at th
   sort and limit; a List renders one row at a time. No loop node — that is the general-purpose VPL
   graveyard (`04-hallucination-check.md`), and the arbitrary case is the Code node.
 
+- **[M5.1] Operator nodes carry their operands in config, not on extra ports.** Math, Compare and
+  Logic read named fields of the record flowing through and write the answer into a named field.
+  A route body is an ordered pipeline of one value; giving each operator two data-input ports
+  would turn a readable column of steps into a web of wires for no gain. Flagged as *kinds* of
+  the glossary's Compute rather than new node categories.
+- **[M5.1] Arithmetic fails loudly.** Divide by zero and non-numeric operands raise named errors
+  instead of writing `Infinity` or `NaN` into a column — a plausible wrong number is worse than a
+  stopped request.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,
