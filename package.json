@@ -12,7 +12,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "setup:supabase": "node scripts/setup-supabase.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

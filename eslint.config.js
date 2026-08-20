@@ -27,7 +27,14 @@ export default tseslint.config(
     // Node scripts: test stubs and tooling, not browser code.
     files: ['**/*.mjs', '**/vite/**/*.ts', '**/vite.config.ts', '**/playwright.config.ts'],
     languageOptions: {
-      globals: { process: 'readonly', Buffer: 'readonly', console: 'readonly', URL: 'readonly' },
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        // Node 20 ships fetch; the setup script uses it to prove a connection works.
+        fetch: 'readonly',
+      },
     },
   },
 );
