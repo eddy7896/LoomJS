@@ -74,6 +74,23 @@ export interface ConnectInput {
   serviceKey: string;
 }
 
+export interface ServerEnv {
+  /** Every SUPABASE_* name the dev server holds, from `.env.local` or from this studio. */
+  names: string[];
+  /** Values for client-scoped credentials only — a service role key never leaves the server. */
+  values: Record<string, string>;
+}
+
+/** What the dev server already holds, so a designer with a `.env.local` need type nothing. */
+export async function readServerEnv(): Promise<ServerEnv> {
+  try {
+    const response = await fetch('/__loom/env');
+    return (await response.json()) as ServerEnv;
+  } catch {
+    return { names: [], values: {} };
+  }
+}
+
 export interface ConnectResult {
   ok: boolean;
   error?: string;
@@ -100,6 +117,8 @@ export async function connectSupabase(input: ConnectInput): Promise<ConnectResul
   }
 
   // The values go to the bucket; only the URL and the (non-secret) schema go to the document.
+  // An empty key means "keep whatever the server already has" — that is how a `.env.local`
+  // service role key stays server-side while the studio still connects.
   setEnv({
     SUPABASE_URL: input.url,
     ...(input.anonKey ? { SUPABASE_ANON_KEY: input.anonKey } : {}),

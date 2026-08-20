@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -27,6 +27,59 @@ export const PREVIEW_PORT = 5174;
 const PREVIEW_DIR = fileURLToPath(new URL('../.loom-preview', import.meta.url));
 
 const NEWLINE = String.fromCharCode(10);
+
+/** `apps/studio/.env.local` — the local stand-in for the platform's env bucket. */
+const ENV_FILE = fileURLToPath(new URL('../.env.local', import.meta.url));
+
+/**
+ * Credentials a module declares as client-scoped. Only these may be handed to the studio's
+ * browser; a server-scoped value is read here and never leaves this process
+ * (`docs/specs/connector-credentials.md`).
+ */
+const CLIENT_SCOPED = new Set(['SUPABASE_URL', 'SUPABASE_ANON_KEY']);
+
+/** A deliberately small .env reader: KEY=VALUE, # comments, optional surrounding quotes. */
+function parseEnvFile(contents: string): Record<string, string> {
+  const values: Record<string, string> = {};
+
+  for (const rawLine of contents.split(NEWLINE)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const separator = line.indexOf('=');
+    if (separator === -1) continue;
+
+    const name = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (name) values[name] = value;
+  }
+
+  return values;
+}
+
+/**
+ * Load `.env.local` into this process. The Preview's server code reads `process.env`, exactly as
+ * it will on Vercel, so a file here and an env var there are the same thing by the time the
+ * emitted handler runs.
+ */
+async function loadEnvFile(): Promise<string[]> {
+  try {
+    const values = parseEnvFile(await readFile(ENV_FILE, 'utf8'));
+    for (const [name, value] of Object.entries(values)) {
+      if (value) process.env[name] = value;
+    }
+    return Object.keys(values).filter((name) => values[name]);
+  } catch {
+    // No file is the normal case: the studio can still be given credentials through the UI.
+    return [];
+  }
+}
 
 interface EmittedFile {
   path: string;
@@ -87,6 +140,11 @@ export function loomPreview(): Plugin {
     async configureServer(server) {
       await activePreview?.close();
 
+      const fileNames = await loadEnvFile();
+      if (fileNames.length > 0) {
+        server.config.logger.info(`  loom env      ${fileNames.join(', ')} (.env.local)`);
+      }
+
       // Seed a bare app so the child server has an index.html to boot from before the first
       // compile arrives from the studio.
       await writeEmitted(seedFiles());
@@ -110,6 +168,17 @@ export function loomPreview(): Plugin {
        * Values arrive from the studio and are never written into the emitted source.
        */
       server.middlewares.use('/__loom/env', (req, res, next) => {
+        if (req.method === 'GET') {
+          // Names of everything held, but values only for client-scoped credentials. A service
+          // role key is loaded, used by the Preview, and never handed to a browser.
+          const names = Object.keys(process.env).filter((name) => name.startsWith('SUPABASE_'));
+          const values: Record<string, string> = {};
+          for (const name of names) {
+            if (CLIENT_SCOPED.has(name)) values[name] = process.env[name] ?? '';
+          }
+          json(res, 200, { names: names.sort(), values });
+          return;
+        }
         if (req.method !== 'POST') return next();
 
         void (async () => {

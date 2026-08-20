@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SUPABASE_MANIFEST } from '@loom/connectors';
 import { useEditor } from '../state/useEditor';
 import {
@@ -7,6 +7,8 @@ import {
   connectionUrl,
   disconnect,
   hasEnv,
+  readServerEnv,
+  type ServerEnv,
 } from '../state/connectors';
 
 /**
@@ -22,11 +24,25 @@ export function DataPanel() {
   const [form, setForm] = useState({ url: '', anonKey: '', serviceKey: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [serverEnv, setServerEnv] = useState<ServerEnv>({ names: [], values: {} });
 
-  const connect = async (): Promise<void> => {
+  useEffect(() => {
+    void readServerEnv().then(setServerEnv);
+  }, []);
+
+  // A `.env.local` on the dev server is enough to connect: the anon key reads the schema, and
+  // the service role key stays where it is (docs/specs/connector-credentials.md).
+  const fromFile = {
+    url: serverEnv.values.SUPABASE_URL ?? '',
+    anonKey: serverEnv.values.SUPABASE_ANON_KEY ?? '',
+    hasServiceKey: serverEnv.names.includes('SUPABASE_SERVICE_ROLE_KEY'),
+  };
+  const canUseFile = Boolean(fromFile.url && fromFile.anonKey);
+
+  const connect = async (input = form): Promise<void> => {
     setBusy(true);
     setError(undefined);
-    const result = await connectSupabase(form);
+    const result = await connectSupabase(input);
     setBusy(false);
     if (!result.ok) {
       setError(result.error);
@@ -57,9 +73,10 @@ export function DataPanel() {
             </button>
           </div>
           <p className="panel__hint">
-            {hasEnv('SUPABASE_SERVICE_ROLE_KEY')
-              ? 'Service key stored for this browser; the project keeps only its name.'
-              : 'No service key stored — reads and writes will fail until you reconnect.'}
+            {serverEnv.names.includes('SUPABASE_SERVICE_ROLE_KEY') ||
+            hasEnv('SUPABASE_SERVICE_ROLE_KEY')
+              ? 'Service role key held by the dev server; the project keeps only its name.'
+              : 'No service role key — reads and writes will fail until you reconnect.'}
           </p>
           <ul className="tables">
             {tables.map((table) => (
@@ -74,6 +91,24 @@ export function DataPanel() {
 
       {open && !url ? (
         <div className="connect-form">
+          {canUseFile ? (
+            <>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void connect({ url: fromFile.url, anonKey: fromFile.anonKey, serviceKey: '' })
+                }
+              >
+                Use .env.local ({fromFile.url.replace(/^https?:\/\//, '')})
+              </button>
+              <p className="panel__hint">
+                {fromFile.hasServiceKey
+                  ? 'Service role key is loaded on the dev server and stays there.'
+                  : 'No SUPABASE_SERVICE_ROLE_KEY in .env.local — reads and writes will fail.'}
+              </p>
+            </>
+          ) : null}
+
           {SUPABASE_MANIFEST.config.map((field) => (
             <label key={field.key} className="field field--stacked">
               <span className="field__label">{field.label}</span>
