@@ -46,8 +46,12 @@ export interface EmitContext {
   itemVar: () => string | undefined;
   /** Emit `render` with `item` in scope, for a List's per-row template. */
   withItem: <T>(item: string, render: () => T) => T;
-  /** Declare local state for a controlled input; returns its variable name. */
-  requireFieldState: (componentId: Id, initial: string) => string;
+  /**
+   * Declare local state for a controlled input; returns its variable name. The initial value
+   * carries its own type — a number field's state is a number, a checkbox's is a boolean — so a
+   * form can fill a typed column without a cast.
+   */
+  requireFieldState: (componentId: Id, initial: unknown) => string;
   /** The JS expression that fires the pipeline reached through `target`. */
   triggerExpr: (target: PortRef, componentId: Id) => string;
   /** The JS expression that navigates along `flowId` (path + payload). */

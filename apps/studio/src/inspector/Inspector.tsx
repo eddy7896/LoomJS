@@ -21,6 +21,7 @@ import {
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
+import { dbNodeFields } from '@loom/connectors';
 import { acceptAuto, backendOffer, detachAuto, generateBackend, withdrawAuto } from '../state/autobackend';
 
 /**
@@ -528,6 +529,12 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
 
   const def = defForNode(node);
   const config = (node.config ?? {}) as Record<string, unknown>;
+  // A database node's fields come from the connector, not the node vocabulary: a read is a
+  // query, and how many rows in what order is part of it.
+  const fields =
+    node.category === 'db'
+      ? dbNodeFields(node.kind === 'select' ? 'select' : 'insert')
+      : (def?.fields ?? []);
 
   return (
     <aside className="panel inspector">
@@ -547,10 +554,10 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
 
       {node.auto ? <AutoSection group={node.auto.group} state={node.auto.state} /> : null}
 
-      {def && def.fields.length > 0 ? (
+      {fields.length > 0 ? (
         <section className="field-group">
           <h3 className="field-group__title">Config</h3>
-          {def.fields.map((field) => {
+          {fields.map((field) => {
             const current = config[field.key] ?? field.default;
             if (field.control === 'select') {
               return (
@@ -565,6 +572,28 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
                       </option>
                     ))}
                   </select>
+                </Field>
+              );
+            }
+            if (field.control === 'boolean') {
+              return (
+                <Field key={field.key} label={field.label}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(current)}
+                    onChange={(e) => setNodeConfig(node.id, { [field.key]: e.target.checked })}
+                  />
+                </Field>
+              );
+            }
+            if (field.control === 'number') {
+              return (
+                <Field key={field.key} label={field.label}>
+                  <input
+                    type="number"
+                    value={Number(current)}
+                    onChange={(e) => setNodeConfig(node.id, { [field.key]: Number(e.target.value) })}
+                  />
                 </Field>
               );
             }

@@ -35,6 +35,8 @@ export const COMPUTE_OPS = {
   length: { label: 'Length', in: { kind: 'text' }, out: { kind: 'number' } },
   double: { label: 'Double', in: { kind: 'number' }, out: { kind: 'number' } },
   negate: { label: 'Negate', in: { kind: 'number' }, out: { kind: 'number' } },
+  isEmpty: { label: 'Is empty', in: { kind: 'text' }, out: { kind: 'boolean' } },
+  not: { label: 'Not', in: { kind: 'boolean' }, out: { kind: 'boolean' } },
 } as const satisfies Record<string, { label: string; in: TypeRef; out: TypeRef }>;
 
 export type ComputeOp = keyof typeof COMPUTE_OPS;
@@ -161,7 +163,85 @@ export const STATE_WRITE_DEF: NodeDef = {
   ],
 };
 
-const DEFS: readonly NodeDef[] = [API_ROUTE_DEF, COMPUTE_DEF, CODE_DEF, VALIDATE_DEF, STATE_WRITE_DEF];
+
+/**
+ * The conditions a Gate can test. Each is a phrase, not an operator symbol — "is greater than"
+ * rather than `>` — because the promise is that a designer never feels they left the canvas
+ * (`docs/06-glossary.md`: "calmest accurate word for the scary things").
+ */
+export const GATE_CONDITIONS = {
+  isFilled: { label: 'is not empty', needsValue: false },
+  isEmpty: { label: 'is empty', needsValue: false },
+  isTrue: { label: 'is checked', needsValue: false },
+  isFalse: { label: 'is not checked', needsValue: false },
+  equals: { label: 'equals', needsValue: true },
+  notEquals: { label: 'does not equal', needsValue: true },
+  greaterThan: { label: 'is greater than', needsValue: true },
+  lessThan: { label: 'is less than', needsValue: true },
+} as const satisfies Record<string, { label: string; needsValue: boolean }>;
+
+export type GateCondition = keyof typeof GATE_CONDITIONS;
+
+export interface GateConfig {
+  /** A field of the incoming record, or blank to test the whole value. */
+  field: string;
+  condition: GateCondition;
+  /** The value compared against, for the conditions that need one. */
+  value: string;
+  /** Shown to the person using the app when the condition does not hold. */
+  message: string;
+}
+
+/**
+ * Gate — the only control-flow node (`docs/06-glossary.md`). One condition: when it does not
+ * hold, the pipeline stops and the message is the failure.
+ *
+ * **V1 shape:** stop, rather than two branch edges. A route body is an ordered pipeline, and a
+ * second branch would need a second body — real work with no demand behind it yet. Everything a
+ * form actually needs ("only insert when the box is ticked") is this shape, and the deferral is
+ * recorded in `docs/specs/binding-trigger-runtime.md` rather than hidden.
+ */
+export const GATE_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'gate',
+  label: 'Gate',
+  defaultConfig: { field: '', condition: 'isFilled', value: '', message: '' },
+  fields: [
+    { key: 'field', label: 'Field', control: 'text', default: '' },
+    {
+      key: 'condition',
+      label: 'Condition',
+      control: 'select',
+      options: Object.keys(GATE_CONDITIONS),
+      default: 'isFilled',
+    },
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+    { key: 'message', label: 'Message', control: 'text', default: '' },
+  ],
+  // A Gate passes what it was given straight through, so it chains without reshaping anything.
+  ports: () => [
+    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
+    port('pt_result', 'result', 'out', 'data', { kind: 'any' }),
+  ],
+};
+
+/** The sentence shown when a Gate stops a pipeline, when the designer has not written one. */
+export function gateMessage(config: Partial<GateConfig>): string {
+  if (config.message) return config.message;
+  const subject = config.field || 'the value';
+  const condition = GATE_CONDITIONS[(config.condition ?? 'isFilled') as GateCondition];
+  const comparand = condition.needsValue ? ` ${config.value ?? ''}`.trimEnd() : '';
+  return `${subject} ${condition.label}${comparand} is required.`;
+}
+
+const DEFS: readonly NodeDef[] = [
+  API_ROUTE_DEF,
+  COMPUTE_DEF,
+  GATE_DEF,
+  CODE_DEF,
+  VALIDATE_DEF,
+  STATE_WRITE_DEF,
+];
 const BY_KIND = new Map(DEFS.map((def) => [`${def.category}:${def.kind}`, def]));
 
 export function nodeDefs(): readonly NodeDef[] {
@@ -240,6 +320,14 @@ export function mirrorPortsFor(componentType: string): Port[] {
     case 'Button':
       return [port('pt_click', 'onClick', 'out', 'trigger', { kind: 'trigger' })];
     case 'TextField':
+      return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
+    case 'NumberField':
+      return [port('pt_value', 'value', 'out', 'data', { kind: 'number' })];
+    case 'Checkbox':
+      return [port('pt_value', 'checked', 'out', 'data', { kind: 'boolean' })];
+    case 'Select':
+      // `text` rather than an enum of the options: typing it would need the mirror to read the
+      // component's config, which is a wider change than this vocabulary needs.
       return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
     case 'Text':
       return [port('pt_content', 'content', 'in', 'data', { kind: 'any' })];

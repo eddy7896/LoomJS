@@ -95,3 +95,22 @@ node (`state:write`, scope `screen`) is that something: wire an API route's `res
 - A bound value is not always text — a bucket often holds the row an insert returned. The Text
   template asks the compiler for the bound type and routes anything non-text through a small
   `asText` helper, because an object dropped into JSX as a child crashes React at runtime.
+
+## The expression vocabulary (typed inputs, booleans, Gate)
+
+- **Inputs carry their own type.** A number field's state is a `number`, a checkbox's is a
+  `boolean`, a select's is `text`. The value keeps that type from the input, along the wire,
+  through Validate's coercion, into the column — nothing downstream has to guess what a string
+  meant. An empty number box reads as `0`, never `NaN`: `NaN` would land as `null`, which is a
+  different fact from "left empty".
+- **Gate is the conditional, and the only control-flow node** (`docs/06-glossary.md`). It tests
+  one condition on a field of the value flowing through it; when the condition does not hold the
+  pipeline **stops** and the Gate's message is the failure the caller sees. It runs on the server
+  for the same reason validation does — a check the browser can skip is not a check.
+- **Deferred: Gate's two branch edges.** The glossary describes true/false output wires; V1 emits
+  the stop-on-false shape only. A route body is an ordered pipeline, and a second branch means a
+  second body — real work with no demand behind it yet. Everything a form needs ("only insert when
+  the box is ticked") is the shape that shipped.
+- **There is no loop node, and there will not be one.** A list is narrowed by the *query* (sort,
+  limit) and rendered by the List component's implicit map, one row at a time. Iteration that
+  those two cannot express belongs in a Code node (guardrail 7).

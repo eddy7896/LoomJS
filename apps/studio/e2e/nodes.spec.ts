@@ -24,6 +24,10 @@ const handle = (node: Locator, portId: string) => node.locator(`[data-handleid="
 async function drag(page: Page, from: Locator, to: Locator): Promise<void> {
   // Bring the whole graph into view first, the way a user would before reaching for a port.
   await page.locator('.react-flow__controls-fitview').click();
+  // Read a box only once both handles are actually on screen: fitView re-lays the canvas, and a
+  // box read mid-layout comes back null and fails the drag for reasons unrelated to the product.
+  await from.waitFor({ state: 'visible' });
+  await to.waitFor({ state: 'visible' });
 
   const start = (await from.boundingBox())!;
   const end = (await to.boundingBox())!;

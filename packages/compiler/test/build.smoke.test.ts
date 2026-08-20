@@ -7,7 +7,13 @@ import { promisify } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
-import { inferredSnapshot, pipelineSnapshot, supabaseSnapshot, trivialSnapshot } from './fixtures';
+import {
+  everyComponentSnapshot,
+  inferredSnapshot,
+  pipelineSnapshot,
+  supabaseSnapshot,
+  trivialSnapshot,
+} from './fixtures';
 
 const run = promisify(execFile);
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -77,6 +83,17 @@ describe('emitted app builds for real', () => {
     expect(bundle).toBeDefined();
     const code = await readFile(join(dist, 'assets', bundle!), 'utf8');
     expect(code).toContain('Hello loomJS');
+  });
+
+  it('type-checks every component the studio can place', async () => {
+    const dir = await emitProject(everyComponentSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    // The typed inputs keep their types all the way into the emitted state.
+    expect(home).toContain('type="number"');
+    expect(home).toContain('type="checkbox"');
+    expect(home).toContain('<option');
   });
 
   it('type-checks and builds an app with a backend pipeline', async () => {

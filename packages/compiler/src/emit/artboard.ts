@@ -42,7 +42,7 @@ export function emitArtboardModule(
   const seen = new Set<Id>();
   const hooks = { params: false, navigate: false, textHelper: false };
   const itemScope: string[] = [];
-  const fields = new Map<Id, string>();
+  const fields = new Map<Id, unknown>();
   const plans = planPipelines(snapshot, artboard);
 
   const ctx: EmitContext = {

@@ -171,6 +171,17 @@ Recorded here because they constrain everything downstream. Each was taken at th
   it cannot be bypassed. It also coerces — an `<input>` yields strings and a number column will
   not take one — and omits an empty optional column rather than writing an empty string.
 
+- **[M5.1] The expression vocabulary is typed at the input.** NumberField, Checkbox and Select
+  join TextField; each holds its own type in state rather than a string everything downstream has
+  to parse. Select's port stays `text` — typing it as an `enum` of its options needs the mirror to
+  read the component's config, which is a wider change than the vocabulary needed.
+- **[M5.1] Gate ships as stop-on-false, not as two branch edges.** One condition, and the request
+  ends with the Gate's message when it does not hold. Branching needs a second body inside the
+  container; the deferral is recorded in `specs/binding-trigger-runtime.md` rather than implied.
+- **[M5.1] "Loops" are answered by the query and the implicit map, deliberately.** A read carries
+  sort and limit; a List renders one row at a time. No loop node — that is the general-purpose VPL
+  graveyard (`04-hallucination-check.md`), and the arbitrary case is the Code node.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

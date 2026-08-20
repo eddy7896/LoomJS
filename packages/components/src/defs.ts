@@ -114,7 +114,54 @@ export const LIST_DEF: ComponentDef = {
   acceptsItems: true,
 };
 
-const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF, TEXT_FIELD_DEF, LIST_DEF];
+
+/** A number input. Its state is a number, so a numeric column takes it without a cast. */
+export const NUMBER_FIELD_DEF: ComponentDef = {
+  type: 'NumberField',
+  label: 'Number field',
+  isContainer: false,
+  fields: [
+    { key: 'value', label: 'Value', control: 'number', default: 0 },
+    { key: 'placeholder', label: 'Placeholder', control: 'text', default: '0' },
+  ],
+};
+
+/** A checkbox: the one component whose value is a boolean, and the source of most Gate inputs. */
+export const CHECKBOX_DEF: ComponentDef = {
+  type: 'Checkbox',
+  label: 'Checkbox',
+  isContainer: false,
+  fields: [
+    { key: 'label', label: 'Label', control: 'text', default: 'Yes' },
+    { key: 'value', label: 'Checked', control: 'boolean', default: false },
+  ],
+};
+
+/**
+ * A select. Its options are a comma-separated list, and its port stays `text`: typing the port
+ * as an `enum` of those options needs the mirror to see the component's config, which is a wider
+ * change than this vocabulary needs today.
+ */
+export const SELECT_DEF: ComponentDef = {
+  type: 'Select',
+  label: 'Select',
+  isContainer: false,
+  fields: [
+    { key: 'options', label: 'Options', control: 'text', default: 'One, Two' },
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+  ],
+};
+
+const DEFS: readonly ComponentDef[] = [
+  FRAME_DEF,
+  TEXT_DEF,
+  BUTTON_DEF,
+  TEXT_FIELD_DEF,
+  NUMBER_FIELD_DEF,
+  CHECKBOX_DEF,
+  SELECT_DEF,
+  LIST_DEF,
+];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 
 export function componentDefs(): readonly ComponentDef[] {

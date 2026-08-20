@@ -29,7 +29,7 @@ export interface FormShape {
 }
 
 /** Component types that count as an input for the purposes of recognising a form. */
-const INPUT_TYPES = new Set(['TextField']);
+const INPUT_TYPES = new Set(['TextField', 'NumberField', 'Checkbox', 'Select']);
 
 /** `Task title` -> `task_title`: the shape a Postgres column name takes. */
 export function normalizeName(input: string): string {
@@ -47,9 +47,10 @@ export function normalizeName(input: string): string {
  */
 export function labelOf(component: Component): string {
   if (component.name && component.name !== component.type) return component.name;
-  const placeholder = component.props.placeholder;
-  if (placeholder?.kind === 'static' && typeof placeholder.value === 'string') {
-    return placeholder.value;
+  // A checkbox has no placeholder; its label is the word the end user reads.
+  for (const key of ['placeholder', 'label']) {
+    const prop = component.props[key];
+    if (prop?.kind === 'static' && typeof prop.value === 'string' && prop.value) return prop.value;
   }
   return component.type;
 }

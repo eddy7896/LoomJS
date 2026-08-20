@@ -13,7 +13,29 @@ export interface DbNodeConfig {
   table: string;
   /** `select` reads rows; `insert` writes one. */
   operation: 'select' | 'insert';
+  /** Read options (`docs/06-glossary.md`: Query = read with filter/sort/limit). */
   limit?: number;
+  orderBy?: string;
+  descending?: boolean;
+}
+
+/**
+ * The inspector fields a database node shows. A read is a **query**, so how many rows and in what
+ * order are part of it — that is also loom's answer to "where is the loop": you narrow the query
+ * and a List renders one row at a time (`04-hallucination-check.md`: loops are never nodes).
+ */
+export function dbNodeFields(operation: DbNodeConfig['operation']): readonly {
+  key: string;
+  label: string;
+  control: 'text' | 'number' | 'boolean';
+  default: string | number | boolean;
+}[] {
+  if (operation !== 'select') return [];
+  return [
+    { key: 'limit', label: 'Limit', control: 'number', default: 100 },
+    { key: 'orderBy', label: 'Sort by', control: 'text', default: '' },
+    { key: 'descending', label: 'Newest first', control: 'boolean', default: false },
+  ];
 }
 
 const port = (

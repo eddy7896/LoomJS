@@ -1,4 +1,4 @@
-import { apiPortsFromBody } from '@loom/components';
+import { apiPortsFromBody, componentDefs, createComponent } from '@loom/components';
 import { inferBackend } from '@loom/inference';
 import { columnPortId, createDbNode } from '@loom/connectors';
 import { applyOps, SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
@@ -465,3 +465,28 @@ export function inferredSnapshot(): { snapshot: Snapshot; stateId: string; route
   return { snapshot, stateId: result.proposal.nodes.state, routePath: result.proposal.route };
 }
 
+/**
+ * One of every component the studio can place. The point is the emitted app's own `tsc`: a
+ * template that produces invalid TSX is a broken editor, and this is where that shows up.
+ */
+export function everyComponentSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const root = base.components.cp_root000001!;
+  const components: Record<string, Component> = {};
+
+  for (const def of componentDefs()) {
+    if (def.type === 'Frame') continue;
+    const component = createComponent(def.type, `cp_${def.type.toLowerCase()}`);
+    if (def.type === 'Select') component.props.options = { kind: 'static', value: 'Low, High' };
+    components[component.id] = component;
+  }
+
+  return {
+    ...base,
+    components: {
+      ...base.components,
+      cp_root000001: { ...root, children: [...(root.children ?? []), ...Object.keys(components)] },
+      ...components,
+    },
+  };
+}

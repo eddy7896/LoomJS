@@ -1,4 +1,4 @@
-import { COMPUTE_OPS, type ValidationField } from '@loom/components';
+import { COMPUTE_OPS, gateMessage, type GateConfig, type ValidationField } from '@loom/components';
 import type { DbNodeConfig } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
 import { CompileError, type EmittedFile } from '../types';
@@ -41,10 +41,17 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   }
 
   const limit = Number(config.limit ?? 100);
+  const orderBy = String(config.orderBy ?? '').trim();
+  // Sorting and limiting belong to the query, not to a loop the designer would have to write.
+  const order = orderBy
+    ? `
+      .order(${JSON.stringify(orderBy)}, { ascending: ${config.descending ? 'false' : 'true'} })`
+    : '';
+
   return `  {
     const { data, error } = await supabase
       .from(${JSON.stringify(table)})
-      .select('*')
+      .select('*')${order}
       .limit(${Number.isFinite(limit) ? limit : 100});
     if (error) throw new Error(error.message);
     value = data ?? [];
@@ -97,10 +104,52 @@ ${checks.join('\n')}
   }`;
 }
 
+
+/**
+ * A Gate. The condition holds or the request ends — the pipeline's one piece of control flow
+ * (`docs/06-glossary.md`). It runs on the server for the same reason validation does: a check the
+ * browser could skip is not a check.
+ */
+function emitGateStep(node: Node): string {
+  const config = (node.config ?? {}) as Partial<GateConfig>;
+  const condition = config.condition ?? 'isFilled';
+  const field = String(config.field ?? '').trim();
+  const comparand = JSON.stringify(String(config.value ?? ''));
+
+  const subject = field
+    ? `((value ?? {}) as Record<string, unknown>)[${JSON.stringify(field)}]`
+    : 'value';
+
+  const tests: Record<string, string> = {
+    isFilled: `subject !== undefined && subject !== null && subject !== ''`,
+    isEmpty: `subject === undefined || subject === null || subject === ''`,
+    isTrue: `subject === true || subject === 'true'`,
+    isFalse: `subject === false || subject === 'false' || subject === undefined || subject === null`,
+    equals: `String(subject) === ${comparand}`,
+    notEquals: `String(subject) !== ${comparand}`,
+    greaterThan: `Number(subject) > Number(${comparand})`,
+    lessThan: `Number(subject) < Number(${comparand})`,
+  };
+
+  const test = tests[condition];
+  if (!test) {
+    throw new CompileError(
+      `Gate has unknown condition "${condition}". Known: ${Object.keys(tests).join(', ')}.`,
+      node.id,
+    );
+  }
+
+  return `  {
+    const subject: unknown = ${subject};
+    if (!(${test})) throw new Error(${JSON.stringify(gateMessage(config))});
+  }`;
+}
+
 /** One server-side step, as a statement operating on `value`. */
 function emitStep(node: Node, snapshot: Snapshot): string {
   if (node.category === 'db') return emitDbStep(node, snapshot);
   if (node.kind === 'validate') return emitValidateStep(node);
+  if (node.kind === 'gate') return emitGateStep(node);
 
   const config = (node.config ?? {}) as { op?: string; source?: string };
 
@@ -119,6 +168,10 @@ function emitStep(node: Node, snapshot: Snapshot): string {
         return '  value = Number(value) * 2;';
       case 'negate':
         return '  value = -Number(value);';
+      case 'isEmpty':
+        return `  value = value === undefined || value === null || String(value).trim() === '';`;
+      case 'not':
+        return '  value = !(value === true || value === "true");';
       default:
         throw new CompileError(
           `Compute node has unknown operation "${op}". Known: ${Object.keys(COMPUTE_OPS).join(', ')}.`,
