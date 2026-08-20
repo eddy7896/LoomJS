@@ -60,10 +60,21 @@ export function ensureMirror(componentId: Id, position: { x: number; y: number }
   return id;
 }
 
+/**
+ * Where a new node lands. Everything at one fixed point means the second node you add hides the
+ * first, so free nodes step down and to the right of what is already on the canvas.
+ */
+function freePosition(snapshot: Snapshot): { x: number; y: number } {
+  const placed = Object.values(snapshot.nodes).filter((node) => !node.mirrorOf);
+  if (placed.length === 0) return { x: 360, y: 80 };
+  const lowest = Math.max(...placed.map((node) => node.position.y));
+  return { x: 360 + (placed.length % 3) * 40, y: lowest + 170 };
+}
+
 export function addGraphNode(
   category: NodeCategory,
   kind: string,
-  position = { x: 320, y: 80 },
+  position = freePosition(getState().snapshot),
 ): Id {
   const node = createNode(category, kind, newNodeId(), position);
   dispatch({ type: 'addNode', node });
@@ -80,14 +91,17 @@ export function addBodyStep(apiNodeId: Id, kind: string): Id | undefined {
   const api = snapshot.nodes[apiNodeId];
   if (!api || api.category !== 'api') return undefined;
 
-  const step = createNode('fn', kind, newNodeId(), { x: api.position.x, y: api.position.y + 160 });
+  const existing = ((api.config ?? {}) as { body?: Id[] }).body ?? [];
+  const step = createNode('fn', kind, newNodeId(), {
+    x: api.position.x,
+    y: api.position.y + 160 + existing.length * 40,
+  });
   dispatch({ type: 'addNode', node: step });
 
-  const config = (api.config ?? {}) as { body?: Id[] };
   dispatch({
     type: 'setNodeConfig',
     nodeId: apiNodeId,
-    config: { ...config, body: [...(config.body ?? []), step.id] },
+    config: { ...((api.config ?? {}) as object), body: [...existing, step.id] },
   });
   select({ kind: 'node', id: step.id });
   return step.id;
