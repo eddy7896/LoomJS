@@ -3,11 +3,15 @@ import {
   createEmptyProject,
   newArtboardId,
   newComponentId,
+  newFlowId,
   type Component,
+  type FlowPayload,
   type Id,
   type Layout,
   type Op,
+  type Param,
   type PropertyValue,
+  type SizeMode,
   type Snapshot,
 } from '@loom/ir';
 import { createComponent, defFor } from '@loom/components';
@@ -18,9 +22,17 @@ import { createComponent, defFor } from '@loom/components';
  * semantic merge possible later. The store never mutates a snapshot in place.
  */
 
+export type Selection =
+  | { kind: 'component'; id: Id }
+  | { kind: 'artboard'; id: Id }
+  | { kind: 'flow'; id: Id }
+  | undefined;
+
 export interface EditorState {
   snapshot: Snapshot;
-  selectedId: Id | undefined;
+  selection: Selection;
+  /** The artboard the canvas is working in — where new components land. */
+  activeArtboardId: Id;
   past: Snapshot[];
   future: Snapshot[];
 }
@@ -29,14 +41,13 @@ type Listener = () => void;
 
 const HISTORY_LIMIT = 100;
 
-function initialSnapshot(): Snapshot {
+function initialSnapshot(): { snapshot: Snapshot; artboardId: Id } {
   const rootId = newComponentId();
   const artboardId = newArtboardId();
   const root = createComponent('Frame', rootId);
   root.name = 'Root';
 
-  const empty = createEmptyProject('Untitled');
-  const withArtboard = applyOp(empty, {
+  const withArtboard = applyOp(createEmptyProject('Untitled'), {
     type: 'addArtboard',
     artboard: { id: artboardId, name: 'Home', root: rootId },
     root,
@@ -46,16 +57,22 @@ function initialSnapshot(): Snapshot {
   heading.name = 'Heading';
   heading.props.content = { kind: 'static', value: 'Hello loomJS' };
 
-  return applyOp(withArtboard, { type: 'addComponent', component: heading, parentId: rootId });
+  return {
+    snapshot: applyOp(withArtboard, {
+      type: 'addComponent',
+      component: heading,
+      parentId: rootId,
+    }),
+    artboardId,
+  };
 }
 
-let state: EditorState = {
-  snapshot: initialSnapshot(),
-  selectedId: undefined,
-  past: [],
-  future: [],
-};
+function freshState(): EditorState {
+  const { snapshot, artboardId } = initialSnapshot();
+  return { snapshot, selection: undefined, activeArtboardId: artboardId, past: [], future: [] };
+}
 
+let state: EditorState = freshState();
 const listeners = new Set<Listener>();
 
 function set(next: EditorState): void {
@@ -83,8 +100,31 @@ export function dispatch(op: Op): void {
   });
 }
 
-export function select(id: Id | undefined): void {
-  set({ ...state, selectedId: id });
+export function select(selection: Selection): void {
+  set({ ...state, selection });
+}
+
+export function selectComponent(id: Id | undefined): void {
+  select(id ? { kind: 'component', id } : undefined);
+}
+
+export function selectedComponentId(s: EditorState = state): Id | undefined {
+  return s.selection?.kind === 'component' ? s.selection.id : undefined;
+}
+
+export function setActiveArtboard(id: Id): void {
+  set({ ...state, activeArtboardId: id, selection: { kind: 'artboard', id } });
+}
+
+function stillExists(snapshot: Snapshot, selection: Selection): Selection {
+  if (!selection) return undefined;
+  const table =
+    selection.kind === 'component'
+      ? snapshot.components
+      : selection.kind === 'artboard'
+        ? snapshot.artboards
+        : snapshot.flows;
+  return table[selection.id] ? selection : undefined;
 }
 
 export function undo(): void {
@@ -95,7 +135,10 @@ export function undo(): void {
     snapshot: previous,
     past: state.past.slice(0, -1),
     future: [state.snapshot, ...state.future],
-    selectedId: previous.components[state.selectedId ?? ''] ? state.selectedId : undefined,
+    selection: stillExists(previous, state.selection),
+    activeArtboardId: previous.artboards[state.activeArtboardId]
+      ? state.activeArtboardId
+      : Object.keys(previous.artboards)[0]!,
   });
 }
 
@@ -107,6 +150,10 @@ export function redo(): void {
     snapshot: next,
     past: [...state.past, state.snapshot],
     future: state.future.slice(1),
+    selection: stillExists(next, state.selection),
+    activeArtboardId: next.artboards[state.activeArtboardId]
+      ? state.activeArtboardId
+      : Object.keys(next.artboards)[0]!,
   });
 }
 
@@ -118,29 +165,45 @@ export function entryArtboardId(snapshot: Snapshot): Id {
   return snapshot.entryArtboard ?? Object.keys(snapshot.artboards)[0]!;
 }
 
-export function rootComponentId(snapshot: Snapshot): Id {
-  return snapshot.artboards[entryArtboardId(snapshot)]!.root;
+/** Root component of the artboard currently being edited. */
+export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArtboardId): Id {
+  return (
+    snapshot.artboards[artboardId]?.root ?? snapshot.artboards[entryArtboardId(snapshot)]!.root
+  );
 }
 
 export function parentOf(snapshot: Snapshot, id: Id): Component | undefined {
   return Object.values(snapshot.components).find((c) => c.children?.includes(id));
 }
 
+/** Which artboard a component belongs to (walks up to a root). */
+export function artboardOf(snapshot: Snapshot, componentId: Id): Id | undefined {
+  let current: Id | undefined = componentId;
+  const seen = new Set<Id>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const owner = Object.entries(snapshot.artboards).find(([, a]) => a.root === current);
+    if (owner) return owner[0];
+    current = parentOf(snapshot, current)?.id;
+  }
+  return undefined;
+}
+
 /** Where a new component should land: inside the selection if it is a container, else beside it. */
-function insertionParent(snapshot: Snapshot, selectedId: Id | undefined): Id {
+function insertionParent(snapshot: Snapshot, selection: Selection): Id {
   const root = rootComponentId(snapshot);
-  if (!selectedId) return root;
-  const selected = snapshot.components[selectedId];
+  if (selection?.kind !== 'component') return root;
+  const selected = snapshot.components[selection.id];
   if (!selected) return root;
-  if (defFor(selected.type)?.isContainer) return selectedId;
-  return parentOf(snapshot, selectedId)?.id ?? root;
+  if (defFor(selected.type)?.isContainer) return selection.id;
+  return parentOf(snapshot, selection.id)?.id ?? root;
 }
 
 export function addComponent(type: string): void {
   const component = createComponent(type, newComponentId());
-  const parentId = insertionParent(state.snapshot, state.selectedId);
+  const parentId = insertionParent(state.snapshot, state.selection);
   dispatch({ type: 'addComponent', component, parentId });
-  select(component.id);
+  selectComponent(component.id);
 }
 
 export function setProp(componentId: Id, key: string, value: PropertyValue): void {
@@ -155,15 +218,27 @@ export function setLayout(componentId: Id, layout: Partial<Layout>): void {
   dispatch({ type: 'setLayout', componentId, layout });
 }
 
+/** Size is nested inside layout, so a partial update has to carry the other axis along. */
+export function setSize(componentId: Id, axis: 'width' | 'height', size: SizeMode): void {
+  const current = state.snapshot.components[componentId]?.layout?.size;
+  const next = {
+    width: axis === 'width' ? size : (current?.width ?? { mode: 'hug' as const }),
+    height: axis === 'height' ? size : (current?.height ?? { mode: 'hug' as const }),
+  };
+  setLayout(componentId, { size: next });
+}
+
 export function rename(componentId: Id, name: string): void {
   dispatch({ type: 'setName', componentId, name });
 }
 
 export function removeComponent(componentId: Id): void {
   // The artboard's root is structural — deleting it would leave an artboard with no tree.
-  if (componentId === rootComponentId(state.snapshot)) return;
+  if (componentId === rootComponentId(state.snapshot, artboardOf(state.snapshot, componentId))) {
+    return;
+  }
   dispatch({ type: 'removeComponent', componentId });
-  if (state.selectedId === componentId) select(undefined);
+  if (selectedComponentId() === componentId) select(undefined);
 }
 
 /** Reorder within the current parent by `delta` positions. */
@@ -176,12 +251,111 @@ export function nudgeOrder(componentId: Id, delta: number): void {
   dispatch({ type: 'moveComponent', componentId, parentId: parent.id, index: target });
 }
 
-/** Reparent (used by the layers panel). */
+/** Reparent / reorder (canvas drag and the layers panel both land here). */
 export function moveComponent(componentId: Id, parentId: Id, index?: number): void {
   dispatch({ type: 'moveComponent', componentId, parentId, index });
 }
 
+// ---------------------------------------------------------------------------
+// Artboards and flows (M2)
+// ---------------------------------------------------------------------------
+
+export function addArtboard(name = 'Screen'): Id {
+  const artboardId = newArtboardId();
+  const root = createComponent('Frame', newComponentId());
+  root.name = 'Root';
+  dispatch({ type: 'addArtboard', artboard: { id: artboardId, name, root: root.id }, root });
+  setActiveArtboard(artboardId);
+  return artboardId;
+}
+
+export function renameArtboard(artboardId: Id, name: string): void {
+  dispatch({ type: 'renameArtboard', artboardId, name });
+}
+
+export function setArtboardParams(artboardId: Id, params: Param[]): void {
+  dispatch({ type: 'setArtboardParams', artboardId, params });
+}
+
+export function setEntryArtboard(artboardId: Id): void {
+  dispatch({ type: 'setEntryArtboard', artboardId });
+}
+
+export function removeArtboard(artboardId: Id): void {
+  if (Object.keys(state.snapshot.artboards).length <= 1) return;
+  dispatch({ type: 'removeArtboard', artboardId });
+  const remaining = Object.keys(state.snapshot.artboards)[0]!;
+  set({
+    ...state,
+    activeArtboardId: state.snapshot.artboards[state.activeArtboardId]
+      ? state.activeArtboardId
+      : remaining,
+    selection: stillExists(state.snapshot, state.selection),
+  });
+}
+
+export function flowFor(snapshot: Snapshot, componentId: Id): Id | undefined {
+  const onClick = snapshot.components[componentId]?.props.onClick;
+  if (onClick?.kind !== 'event' || onClick.handler.kind !== 'navigate') return undefined;
+  return onClick.handler.flowId;
+}
+
+/**
+ * Point a component's click at an artboard: the flow arrow *is* the navigation, so setting the
+ * target creates (or retargets) the flow and wires the handler in one gesture.
+ */
+export function setClickFlow(componentId: Id, targetArtboardId: Id | undefined): void {
+  const existing = flowFor(state.snapshot, componentId);
+
+  if (!targetArtboardId) {
+    if (existing) dispatch({ type: 'removeFlow', flowId: existing });
+    dispatch({ type: 'removeProp', componentId, key: 'onClick' });
+    return;
+  }
+
+  const from = artboardOf(state.snapshot, componentId);
+  if (!from) return;
+
+  if (existing && state.snapshot.flows[existing]) {
+    dispatch({ type: 'removeFlow', flowId: existing });
+  }
+
+  const flowId = newFlowId();
+  const params = state.snapshot.artboards[targetArtboardId]?.params ?? [];
+  dispatch({
+    type: 'addFlow',
+    flow: {
+      id: flowId,
+      from,
+      to: targetArtboardId,
+      // Dynamic destinations need a value per param; seed them so the project still compiles.
+      payload: params.map((p) => ({ kind: 'static' as const, param: p.name, value: '' })),
+    },
+  });
+  dispatch({
+    type: 'setProp',
+    componentId,
+    key: 'onClick',
+    value: { kind: 'event', handler: { kind: 'navigate', flowId } },
+  });
+}
+
+export function setFlowPayload(flowId: Id, payload: FlowPayload[]): void {
+  dispatch({ type: 'setFlowPayload', flowId, payload });
+}
+
+export function removeFlow(flowId: Id): void {
+  // Detach any handler pointing at the flow, or the project would reference a dead arrow.
+  for (const component of Object.values(state.snapshot.components)) {
+    if (flowFor(state.snapshot, component.id) === flowId) {
+      dispatch({ type: 'removeProp', componentId: component.id, key: 'onClick' });
+    }
+  }
+  dispatch({ type: 'removeFlow', flowId });
+  if (state.selection?.kind === 'flow' && state.selection.id === flowId) select(undefined);
+}
+
 /** Test seam: reset the module-level store. */
-export function __resetStore(snapshot: Snapshot = initialSnapshot()): void {
-  set({ snapshot, selectedId: undefined, past: [], future: [] });
+export function __resetStore(): void {
+  set(freshState());
 }

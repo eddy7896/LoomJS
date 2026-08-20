@@ -1,6 +1,6 @@
 import { componentDefs } from '@loom/components';
 import { useEditor } from '../state/useEditor';
-import { addComponent, redo, undo } from '../state/store';
+import { addArtboard, addComponent, redo, undo } from '../state/store';
 
 export function Toolbar({
   previewOpen,
@@ -23,6 +23,10 @@ export function Toolbar({
             + {def.label}
           </button>
         ))}
+      </div>
+
+      <div className="toolbar__group">
+        <button onClick={() => addArtboard()}>+ Screen</button>
       </div>
 
       <div className="toolbar__group">

@@ -26,6 +26,8 @@ export interface ComponentDef {
   isContainer: boolean;
   /** Property schema — the inspector renders straight off this. */
   fields: readonly FieldDef[];
+  /** True when the type can start a flow from a click (its `onClick` accepts a navigate handler). */
+  acceptsClickFlow?: boolean;
   defaultLayout?: Layout;
 }
 
@@ -43,6 +45,18 @@ export const FRAME_DEF: ComponentDef = {
   isContainer: true,
   fields: [],
   defaultLayout: DEFAULT_LAYOUT,
+};
+
+/**
+ * Button is the leaf that starts a flow: its `onClick` holds an event handler, which the
+ * inspector edits as "navigate to <artboard>" rather than as a raw property.
+ */
+export const BUTTON_DEF: ComponentDef = {
+  type: 'Button',
+  label: 'Button',
+  isContainer: false,
+  fields: [{ key: 'label', label: 'Label', control: 'text', default: 'Button' }],
+  acceptsClickFlow: true,
 };
 
 export const TEXT_DEF: ComponentDef = {
@@ -73,7 +87,7 @@ export const LAYOUT_FIELDS: readonly FieldDef[] = [
   },
 ];
 
-const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF];
+const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 
 export function componentDefs(): readonly ComponentDef[] {

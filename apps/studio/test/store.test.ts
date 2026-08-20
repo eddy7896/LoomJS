@@ -2,13 +2,23 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
   __resetStore,
+  addArtboard,
   addComponent,
+  flowFor,
+  removeArtboard,
+  setActiveArtboard,
+  setArtboardParams,
+  setClickFlow,
+  setFlowPayload,
+  setProp,
+  setSize,
   getState,
   nudgeOrder,
   redo,
   removeComponent,
   rootComponentId,
-  select,
+  selectComponent,
+  selectedComponentId,
   setLayout,
   setStaticProp,
   undo,
@@ -27,19 +37,19 @@ describe('editor store', () => {
   });
 
   it('adds a component into the selected container', () => {
-    select(root());
+    selectComponent(root());
     addComponent('Frame');
-    const frameId = getState().selectedId!;
+    const frameId = selectedComponentId()!;
     expect(children()).toContain(frameId);
 
     // A new component lands *inside* the selected container, not beside it.
     addComponent('Text');
-    expect(snapshot().components[frameId]!.children).toContain(getState().selectedId);
+    expect(snapshot().components[frameId]!.children).toContain(selectedComponentId());
   });
 
   it('adds beside a leaf when the selection cannot hold children', () => {
     const textId = children()[0]!;
-    select(textId);
+    selectComponent(textId);
     addComponent('Text');
     expect(children()).toHaveLength(2);
   });
@@ -99,5 +109,99 @@ describe('editor -> compiler', () => {
       source: { nodeId: 'nd_x', portId: 'pt_x' },
     };
     expect(() => compile(snapshot())).toThrow(/not supported yet/);
+  });
+});
+
+describe('artboards and flows (M2)', () => {
+  it('adds an artboard with its own root and makes it active', () => {
+    const homeRoot = root();
+    const detailId = addArtboard('Item Detail');
+    expect(getState().activeArtboardId).toBe(detailId);
+    expect(rootComponentId(snapshot(), detailId)).not.toBe(homeRoot);
+    // New components now land in the new screen, not the old one.
+    addComponent('Text');
+    expect(snapshot().components[rootComponentId(snapshot(), detailId)]!.children).toHaveLength(1);
+  });
+
+  it('pointing a click at another screen creates the flow and wires the handler', () => {
+    const detailId = addArtboard('Item Detail');
+    setActiveArtboard(getState().snapshot.entryArtboard!);
+    selectComponent(root());
+    addComponent('Button');
+    const buttonId = selectedComponentId()!;
+
+    setClickFlow(buttonId, detailId);
+
+    const flowId = flowFor(snapshot(), buttonId)!;
+    expect(flowId).toBeDefined();
+    expect(snapshot().flows[flowId]!.to).toBe(detailId);
+    expect(snapshot().components[buttonId]!.props.onClick).toEqual({
+      kind: 'event',
+      handler: { kind: 'navigate', flowId },
+    });
+  });
+
+  it('clearing the target removes the flow and the handler', () => {
+    const detailId = addArtboard('Item Detail');
+    setActiveArtboard(getState().snapshot.entryArtboard!);
+    selectComponent(root());
+    addComponent('Button');
+    const buttonId = selectedComponentId()!;
+
+    setClickFlow(buttonId, detailId);
+    setClickFlow(buttonId, undefined);
+
+    expect(Object.keys(snapshot().flows)).toHaveLength(0);
+    expect(snapshot().components[buttonId]!.props.onClick).toBeUndefined();
+  });
+
+  it('deleting an artboard takes its flows with it', () => {
+    const detailId = addArtboard('Item Detail');
+    setActiveArtboard(getState().snapshot.entryArtboard!);
+    selectComponent(root());
+    addComponent('Button');
+    setClickFlow(selectedComponentId()!, detailId);
+    expect(Object.keys(snapshot().flows)).toHaveLength(1);
+
+    removeArtboard(detailId);
+    expect(Object.keys(snapshot().flows)).toHaveLength(0);
+  });
+
+  it('setSize keeps the other axis', () => {
+    setSize(root(), 'width', { mode: 'fixed', px: 320 });
+    setSize(root(), 'height', { mode: 'fill' });
+    expect(snapshot().components[root()]!.layout!.size).toEqual({
+      width: { mode: 'fixed', px: 320 },
+      height: { mode: 'fill' },
+    });
+  });
+});
+
+describe('editor -> compiler (M2 routing)', () => {
+  it('compiles two screens and a flow into two routes and a navigate call', () => {
+    const detailId = addArtboard('Item Detail');
+    setArtboardParams(detailId, [{ name: 'id', type: { kind: 'text' } }]);
+
+    selectComponent(rootComponentId(snapshot(), detailId));
+    addComponent('Text');
+    setProp(selectedComponentId()!, 'content', { kind: 'param', name: 'id' });
+
+    setActiveArtboard(getState().snapshot.entryArtboard!);
+    selectComponent(root());
+    addComponent('Button');
+    const buttonId = selectedComponentId()!;
+    setClickFlow(buttonId, detailId);
+    setFlowPayload(flowFor(snapshot(), buttonId)!, [{ kind: 'static', param: 'id', value: '42' }]);
+
+    const { files } = compile(snapshot());
+    const app = files.find((f) => f.path === 'src/App.tsx')!.content;
+    const detail = files.find((f) => f.path === 'src/artboards/ItemDetail.tsx')!.content;
+    const home = files.find((f) => f.path === 'src/artboards/Home.tsx')!.content;
+
+    expect(app).toContain('<Route path="/" element={<Home />} />');
+    expect(app).toContain('<Route path="/item-detail/:id" element={<ItemDetail />} />');
+    expect(home).toContain('useNavigate()');
+    expect(home).toContain('encodeURIComponent(String("42"))');
+    expect(detail).toContain('{params.id ?? ""}');
   });
 });

@@ -1,22 +1,47 @@
-import type { Component, Layout } from '@loom/ir';
+import type { ReactNode } from 'react';
+import type { Component, Layout, SizeMode } from '@loom/ir';
 import { LAYOUT_FIELDS, defFor, type FieldDef } from '@loom/components';
 import { useEditor } from '../state/useEditor';
-import { rename, setLayout, setStaticProp } from '../state/store';
+import {
+  artboardOf,
+  flowFor,
+  removeArtboard,
+  removeFlow,
+  rename,
+  renameArtboard,
+  setArtboardParams,
+  setClickFlow,
+  setEntryArtboard,
+  setFlowPayload,
+  setLayout,
+  setSize,
+  setStaticProp,
+} from '../state/store';
 
 /**
  * The inspector is **schema-driven**: it renders whatever `@loom/components` declares for the
- * selected type, so adding a component type never means touching this file (docs/07).
+ * selected type, so adding a component type never means touching this file (docs/07). Artboards
+ * and flows get their own sections — a flow is a first-class object, not a hidden prop.
  */
 export function Inspector() {
   const snapshot = useEditor((s) => s.snapshot);
-  const selectedId = useEditor((s) => s.selectedId);
-  const component = selectedId ? snapshot.components[selectedId] : undefined;
+  const selection = useEditor((s) => s.selection);
+
+  if (selection?.kind === 'artboard') {
+    return <ArtboardInspector artboardId={selection.id} />;
+  }
+
+  if (selection?.kind === 'flow') {
+    return <FlowInspector flowId={selection.id} />;
+  }
+
+  const component = selection?.kind === 'component' ? snapshot.components[selection.id] : undefined;
 
   if (!component) {
     return (
       <aside className="panel inspector">
         <h2 className="panel__title">Inspector</h2>
-        <p className="panel__empty">Select a component.</p>
+        <p className="panel__empty">Select a component, an artboard, or a flow.</p>
       </aside>
     );
   }
@@ -49,19 +74,28 @@ export function Inspector() {
         </section>
       ) : null}
 
+      {def?.acceptsClickFlow ? <ClickFlowSection component={component} /> : null}
+
       {component.layout ? (
-        <section className="field-group">
-          <h3 className="field-group__title">Layout</h3>
-          {LAYOUT_FIELDS.map((field) => (
-            <LayoutField key={field.key} component={component} field={field} />
-          ))}
-        </section>
+        <>
+          <section className="field-group">
+            <h3 className="field-group__title">Layout</h3>
+            {LAYOUT_FIELDS.map((field) => (
+              <LayoutField key={field.key} component={component} field={field} />
+            ))}
+          </section>
+          <section className="field-group">
+            <h3 className="field-group__title">Size</h3>
+            <SizeField component={component} axis="width" />
+            <SizeField component={component} axis="height" />
+          </section>
+        </>
       ) : null}
     </aside>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="field">
       <span className="field__label">{label}</span>
@@ -73,12 +107,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function PropField({ component, field }: { component: Component; field: FieldDef }) {
   const value = component.props[field.key];
 
-  // Bound and event values belong to M3/M2 — show them read-only rather than pretending
-  // the inspector can edit a data binding it cannot yet compile.
+  // Bound values belong to M3 and params resolve at runtime — show them, do not fake an editor.
   if (value && value.kind !== 'static') {
+    const shown = value.kind === 'param' ? `param: ${value.name}` : `(${value.kind})`;
     return (
       <Field label={field.label}>
-        <input value={`(${value.kind})`} readOnly />
+        <input value={shown} readOnly />
       </Field>
     );
   }
@@ -148,7 +182,9 @@ function LayoutField({ component, field }: { component: Component; field: FieldD
           type="number"
           min={0}
           value={Number(current)}
-          onChange={(e) => setLayout(component.id, { [key]: Number(e.target.value) } as Partial<Layout>)}
+          onChange={(e) =>
+            setLayout(component.id, { [key]: Number(e.target.value) } as Partial<Layout>)
+          }
         />
       </Field>
     );
@@ -167,5 +203,207 @@ function LayoutField({ component, field }: { component: Component; field: FieldD
         ))}
       </select>
     </Field>
+  );
+}
+
+/** hug / fill / fixed per axis (`docs/specs/layout-model.md`). */
+function SizeField({ component, axis }: { component: Component; axis: 'width' | 'height' }) {
+  const size: SizeMode = component.layout?.size?.[axis] ?? { mode: 'hug' };
+
+  return (
+    <Field label={axis === 'width' ? 'Width' : 'Height'}>
+      <div className="field__row">
+        <select
+          value={size.mode}
+          onChange={(e) => {
+            const mode = e.target.value as SizeMode['mode'];
+            setSize(component.id, axis, mode === 'fixed' ? { mode, px: 200 } : { mode });
+          }}
+        >
+          <option value="hug">hug</option>
+          <option value="fill">fill</option>
+          <option value="fixed">fixed</option>
+        </select>
+        {size.mode === 'fixed' ? (
+          <input
+            type="number"
+            min={0}
+            value={size.px}
+            onChange={(e) => setSize(component.id, axis, { mode: 'fixed', px: Number(e.target.value) })}
+          />
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
+/** "On click, go to <artboard>" — the editor-side face of a flow arrow. */
+function ClickFlowSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const flowId = flowFor(snapshot, component.id);
+  const flow = flowId ? snapshot.flows[flowId] : undefined;
+  const ownArtboard = artboardOf(snapshot, component.id);
+  const destination = flow ? snapshot.artboards[flow.to] : undefined;
+
+  return (
+    <section className="field-group">
+      <h3 className="field-group__title">On click</h3>
+      <Field label="Go to">
+        <select
+          value={flow?.to ?? ''}
+          onChange={(e) => setClickFlow(component.id, e.target.value || undefined)}
+        >
+          <option value="">— nothing —</option>
+          {Object.values(snapshot.artboards)
+            .filter((artboard) => artboard.id !== ownArtboard)
+            .map((artboard) => (
+              <option key={artboard.id} value={artboard.id}>
+                {artboard.name}
+              </option>
+            ))}
+        </select>
+      </Field>
+
+      {flow && destination
+        ? (destination.params ?? []).map((param) => {
+            const entry = (flow.payload ?? []).find((p) => p.param === param.name);
+            const value = entry?.kind === 'static' ? String(entry.value ?? '') : '';
+            return (
+              <Field key={param.name} label={param.name}>
+                <input
+                  value={value}
+                  placeholder="value to carry"
+                  onChange={(e) =>
+                    setFlowPayload(flow.id, [
+                      ...(flow.payload ?? []).filter((p) => p.param !== param.name),
+                      { kind: 'static', param: param.name, value: e.target.value },
+                    ])
+                  }
+                />
+              </Field>
+            );
+          })
+        : null}
+    </section>
+  );
+}
+
+function ArtboardInspector({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  const isEntry = (snapshot.entryArtboard ?? '') === artboardId;
+  const canDelete = Object.keys(snapshot.artboards).length > 1;
+
+  if (!artboard) return null;
+
+  const params = artboard.params ?? [];
+
+  return (
+    <aside className="panel inspector">
+      <h2 className="panel__title">Inspector</h2>
+
+      <section className="field-group">
+        <div className="field-group__head">
+          <span className="badge">Artboard</span>
+          <code className="mono id">{artboard.id}</code>
+        </div>
+        <Field label="Name">
+          <input value={artboard.name} onChange={(e) => renameArtboard(artboard.id, e.target.value)} />
+        </Field>
+        <Field label="Entry">
+          <button disabled={isEntry} onClick={() => setEntryArtboard(artboard.id)}>
+            {isEntry ? 'Entry screen (/)' : 'Make entry screen'}
+          </button>
+        </Field>
+      </section>
+
+      <section className="field-group">
+        <h3 className="field-group__title">Params</h3>
+        <p className="panel__hint">
+          A param becomes a dynamic segment in this screen&apos;s route, and flows into it must
+          carry a value.
+        </p>
+        {params.map((param, index) => (
+          <Field key={index} label={`:${param.name}`}>
+            <div className="field__row">
+              <input
+                value={param.name}
+                onChange={(e) =>
+                  setArtboardParams(
+                    artboard.id,
+                    params.map((p, i) => (i === index ? { ...p, name: e.target.value } : p)),
+                  )
+                }
+              />
+              <button
+                onClick={() =>
+                  setArtboardParams(
+                    artboard.id,
+                    params.filter((_, i) => i !== index),
+                  )
+                }
+              >
+                ×
+              </button>
+            </div>
+          </Field>
+        ))}
+        <button
+          onClick={() =>
+            setArtboardParams(artboard.id, [...params, { name: 'id', type: { kind: 'text' } }])
+          }
+        >
+          + Param
+        </button>
+      </section>
+
+      {canDelete ? (
+        <section className="field-group">
+          <button onClick={() => removeArtboard(artboard.id)}>Delete artboard</button>
+        </section>
+      ) : null}
+    </aside>
+  );
+}
+
+function FlowInspector({ flowId }: { flowId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const flow = snapshot.flows[flowId];
+  if (!flow) return null;
+
+  const from = snapshot.artboards[flow.from];
+  const to = snapshot.artboards[flow.to];
+
+  return (
+    <aside className="panel inspector">
+      <h2 className="panel__title">Inspector</h2>
+      <section className="field-group">
+        <div className="field-group__head">
+          <span className="badge">Flow</span>
+          <code className="mono id">{flow.id}</code>
+        </div>
+        <Field label="From">
+          <input value={from?.name ?? '—'} readOnly />
+        </Field>
+        <Field label="To">
+          <input value={to?.name ?? '—'} readOnly />
+        </Field>
+        {(flow.payload ?? []).map((entry) => (
+          <Field key={entry.param} label={entry.param}>
+            <input
+              value={entry.kind === 'static' ? String(entry.value ?? '') : '(bound)'}
+              readOnly={entry.kind !== 'static'}
+              onChange={(e) =>
+                setFlowPayload(flow.id, [
+                  ...(flow.payload ?? []).filter((p) => p.param !== entry.param),
+                  { kind: 'static', param: entry.param, value: e.target.value },
+                ])
+              }
+            />
+          </Field>
+        ))}
+        <button onClick={() => removeFlow(flow.id)}>Delete flow</button>
+      </section>
+    </aside>
   );
 }

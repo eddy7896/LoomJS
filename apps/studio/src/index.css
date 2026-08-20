@@ -354,3 +354,111 @@ select {
 .preview__error p {
   margin: 4px 0 8px;
 }
+
+/* ---- M2: multiple artboards, flow arrows, drag-reorder ---- */
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel__hint {
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+
+.field__row {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--ink-soft);
+  margin-left: 6px;
+}
+
+.chip--mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.artboard-slot {
+  position: absolute;
+  top: 0;
+}
+
+.artboard-slot.is-active .artboard {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+.layer--artboard {
+  font-weight: 600;
+}
+
+.layer--artboard.is-active {
+  background: var(--surface-sunken);
+}
+
+.flow-layer {
+  position: absolute;
+  inset: -2000px;
+  width: 8000px;
+  height: 8000px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.flow-layer > g,
+.flow-layer defs {
+  transform: translate(2000px, 2000px);
+}
+
+.flow {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.flow__hit {
+  stroke: transparent;
+  stroke-width: 14;
+  fill: none;
+}
+
+.flow__line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+}
+
+.flow.is-selected .flow__line {
+  stroke-width: 3.5;
+}
+
+#loom-arrowhead path {
+  fill: var(--accent);
+}
+
+.flow__label {
+  fill: var(--accent);
+  font-size: 11px;
+  text-anchor: middle;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+.drop-marker {
+  position: fixed;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 20;
+}

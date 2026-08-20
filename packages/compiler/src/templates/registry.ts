@@ -1,4 +1,5 @@
 import type { ComponentEmitter } from '../types';
+import { buttonEmitter } from './button';
 import { frameEmitter } from './frame';
 import { textEmitter } from './textComponent';
 
@@ -7,7 +8,7 @@ import { textEmitter } from './textComponent';
  * (docs/02 — "compile = stitch templates + wire data flow"). Growing the vocabulary means
  * adding an emitter here, never branching inside the walker.
  */
-const EMITTERS: ComponentEmitter[] = [frameEmitter, textEmitter];
+const EMITTERS: ComponentEmitter[] = [frameEmitter, textEmitter, buttonEmitter];
 
 const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));
 

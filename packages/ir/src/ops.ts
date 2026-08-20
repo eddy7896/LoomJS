@@ -2,7 +2,9 @@ import type {
   Artboard,
   Component,
   Flow,
+  FlowPayload,
   Layout,
+  Param,
   Node,
   PropertyValue,
   Snapshot,
@@ -22,13 +24,20 @@ export type Op =
   | { type: 'addArtboard'; artboard: Artboard; root: Component }
   | { type: 'addComponent'; component: Component; parentId: string; index?: number }
   | { type: 'setProp'; componentId: string; key: string; value: PropertyValue }
+  | { type: 'removeProp'; componentId: string; key: string }
   | { type: 'setLayout'; componentId: string; layout: Partial<Layout> }
   | { type: 'setName'; componentId: string; name: string }
   | { type: 'moveComponent'; componentId: string; parentId: string; index?: number }
   | { type: 'removeComponent'; componentId: string }
   | { type: 'addNode'; node: Node }
   | { type: 'addWire'; wire: Wire }
-  | { type: 'addFlow'; flow: Flow };
+  | { type: 'addFlow'; flow: Flow }
+  | { type: 'setFlowPayload'; flowId: string; payload: FlowPayload[] }
+  | { type: 'removeFlow'; flowId: string }
+  | { type: 'renameArtboard'; artboardId: string; name: string }
+  | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
+  | { type: 'setEntryArtboard'; artboardId: string }
+  | { type: 'removeArtboard'; artboardId: string };
 
 export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
   const next = structuredClone(snapshot);
@@ -55,6 +64,13 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       const component = next.components[op.componentId];
       if (!component) throw new Error(`setProp: unknown component ${op.componentId}`);
       component.props[op.key] = op.value;
+      return next;
+    }
+
+    case 'removeProp': {
+      const component = next.components[op.componentId];
+      if (!component) throw new Error(`removeProp: unknown component ${op.componentId}`);
+      delete component.props[op.key];
       return next;
     }
 
@@ -128,7 +144,64 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
     }
 
     case 'addFlow': {
+      if (!next.artboards[op.flow.from] || !next.artboards[op.flow.to]) {
+        throw new Error(`addFlow: flow ${op.flow.id} references an unknown artboard`);
+      }
       next.flows[op.flow.id] = op.flow;
+      return next;
+    }
+
+    case 'setFlowPayload': {
+      const flow = next.flows[op.flowId];
+      if (!flow) throw new Error(`setFlowPayload: unknown flow ${op.flowId}`);
+      flow.payload = op.payload;
+      return next;
+    }
+
+    case 'removeFlow': {
+      delete next.flows[op.flowId];
+      return next;
+    }
+
+    case 'renameArtboard': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`renameArtboard: unknown artboard ${op.artboardId}`);
+      artboard.name = op.name;
+      return next;
+    }
+
+    case 'setArtboardParams': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardParams: unknown artboard ${op.artboardId}`);
+      artboard.params = op.params;
+      return next;
+    }
+
+    case 'setEntryArtboard': {
+      if (!next.artboards[op.artboardId]) {
+        throw new Error(`setEntryArtboard: unknown artboard ${op.artboardId}`);
+      }
+      next.entryArtboard = op.artboardId;
+      return next;
+    }
+
+    case 'removeArtboard': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) return next;
+      // The artboard's whole component tree and every flow touching it go with it.
+      for (const id of [artboard.root, ...descendants(next, artboard.root)]) {
+        delete next.components[id];
+        for (const [nodeId, node] of Object.entries(next.nodes)) {
+          if (node.mirrorOf === id) delete next.nodes[nodeId];
+        }
+      }
+      for (const [flowId, flow] of Object.entries(next.flows)) {
+        if (flow.from === op.artboardId || flow.to === op.artboardId) delete next.flows[flowId];
+      }
+      delete next.artboards[op.artboardId];
+      if (next.entryArtboard === op.artboardId) {
+        next.entryArtboard = Object.keys(next.artboards)[0];
+      }
       return next;
     }
   }

@@ -1,5 +1,5 @@
 import { useEditor } from '../state/useEditor';
-import { select } from '../state/store';
+import { selectComponent } from '../state/store';
 import { usePreviewSync } from './usePreviewSync';
 
 /**
@@ -25,7 +25,7 @@ export function PreviewPanel() {
           <strong>Build error</strong>
           <p>{status.error}</p>
           {status.entityId ? (
-            <button onClick={() => select(status.entityId!)}>Reveal {status.entityId}</button>
+            <button onClick={() => selectComponent(status.entityId!)}>Reveal {status.entityId}</button>
           ) : null}
         </div>
       ) : null}

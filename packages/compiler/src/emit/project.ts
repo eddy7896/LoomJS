@@ -8,6 +8,7 @@ import type { EmittedFile } from '../types';
 export const TARGET_DEPS = {
   react: '^18.3.1',
   'react-dom': '^18.3.1',
+  'react-router-dom': '^6.28.0',
 } as const;
 
 export const TARGET_DEV_DEPS = {

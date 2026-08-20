@@ -5,5 +5,9 @@ import { loomPreview } from './vite/preview-plugin';
 export default defineConfig({
   plugins: [react(), loomPreview()],
   server: { port: 5173 },
-  test: { environment: 'jsdom', include: ['test/**/*.test.ts?(x)'] },
+  test: {
+    environment: 'jsdom',
+    include: ['test/**/*.test.ts?(x)'],
+    exclude: ['e2e/**', '.loom-preview/**', 'node_modules/**'],
+  },
 });

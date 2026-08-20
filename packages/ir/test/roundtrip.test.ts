@@ -174,3 +174,65 @@ describe('editing ops', () => {
     expect(next.components[textId]).toBeUndefined();
   });
 });
+
+describe('artboard and flow ops', () => {
+  const twoScreens = (): { snapshot: Snapshot; home: string; detail: string } => {
+    const home = createTrivialSnapshot();
+    const homeId = home.entryArtboard!;
+    const detailRoot: Component = { id: 'cp_d_root', type: 'Frame', props: {}, children: [] };
+    const snapshot = applyOp(home, {
+      type: 'addArtboard',
+      artboard: { id: 'ab_detail', name: 'Detail', root: detailRoot.id },
+      root: detailRoot,
+    });
+    return { snapshot, home: homeId, detail: 'ab_detail' };
+  };
+
+  it('keeps the first artboard as the entry when a second is added', () => {
+    const { snapshot, home } = twoScreens();
+    expect(snapshot.entryArtboard).toBe(home);
+    expect(Object.keys(snapshot.artboards)).toHaveLength(2);
+  });
+
+  it('refuses a flow between artboards that do not exist', () => {
+    const { snapshot, home } = twoScreens();
+    expect(() =>
+      applyOp(snapshot, { type: 'addFlow', flow: { id: 'fl_x', from: home, to: 'ab_ghost' } }),
+    ).toThrow(/unknown artboard/);
+  });
+
+  it('removing an artboard takes its tree and its flows', () => {
+    const { snapshot, home, detail } = twoScreens();
+    const withFlow = applyOp(snapshot, {
+      type: 'addFlow',
+      flow: { id: 'fl_1', from: home, to: detail },
+    });
+    const next = applyOp(withFlow, { type: 'removeArtboard', artboardId: detail });
+    expect(next.artboards[detail]).toBeUndefined();
+    expect(next.components.cp_d_root).toBeUndefined();
+    expect(next.flows.fl_1).toBeUndefined();
+  });
+
+  it('re-points the entry when the entry artboard is removed', () => {
+    const { snapshot, home, detail } = twoScreens();
+    const next = applyOp(snapshot, { type: 'removeArtboard', artboardId: home });
+    expect(next.entryArtboard).toBe(detail);
+  });
+
+  it('removeProp drops a handler entirely rather than leaving an empty one', () => {
+    const { snapshot, home } = twoScreens();
+    const textId = snapshot.components[snapshot.artboards[home]!.root]!.children![0]!;
+    const next = applyOp(snapshot, { type: 'removeProp', componentId: textId, key: 'content' });
+    expect(next.components[textId]!.props.content).toBeUndefined();
+  });
+
+  it('setArtboardParams and setEntryArtboard validate their target', () => {
+    const { snapshot } = twoScreens();
+    expect(() =>
+      applyOp(snapshot, { type: 'setArtboardParams', artboardId: 'ab_ghost', params: [] }),
+    ).toThrow(/unknown artboard/);
+    expect(() => applyOp(snapshot, { type: 'setEntryArtboard', artboardId: 'ab_ghost' })).toThrow(
+      /unknown artboard/,
+    );
+  });
+});

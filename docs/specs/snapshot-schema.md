@@ -87,3 +87,15 @@ Deleting a component also deletes its mirror node (ownership discipline).
   — likely yes, incrementally, as each node's compiler is written.
 - Route/API node as a container holding an internal ordered pipeline vs a flat graph (`03` open) —
   will add a `container`/`children` concept to `Node` if container wins.
+
+## M2 additions (flows carry values, screens read them)
+
+- `PropertyValue` gained a **`param`** kind: `{ kind: 'param', name }` reads one of the owning
+  artboard's declared params. This is *route* data, not a node port — it is deliberately not the
+  `bound` kind, which still waits on the binding runtime (spec 4, M3).
+- `Flow.payload` entries are now a discriminated union: `static` carries a literal chosen in the
+  editor, `bound` reads a node output port (M3). A flow into a screen that declares params must
+  supply a value for each, or the compile fails in the Build tier.
+- Invariant: a payload param must be **declared by the destination artboard**, and a `param`
+  read must be declared by the artboard doing the reading. Both are compile errors otherwise,
+  never silent empties.

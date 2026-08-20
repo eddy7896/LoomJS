@@ -4,7 +4,7 @@ import { Inspector } from './inspector/Inspector';
 import { LayersPanel } from './panels/LayersPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewPanel } from './preview/PreviewPanel';
-import { getState, redo, removeComponent, undo } from './state/store';
+import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
 
 export default function App() {
   const [previewOpen, setPreviewOpen] = useState(true);
@@ -21,11 +21,12 @@ export default function App() {
         return;
       }
       if (!typing && (event.key === 'Delete' || event.key === 'Backspace')) {
-        const { selectedId } = getState();
-        if (selectedId) {
-          event.preventDefault();
-          removeComponent(selectedId);
-        }
+        const { selection } = getState();
+        if (!selection) return;
+        event.preventDefault();
+        if (selection.kind === 'component') removeComponent(selection.id);
+        else if (selection.kind === 'flow') removeFlow(selection.id);
+        else removeArtboard(selection.id);
       }
     };
     window.addEventListener('keydown', onKey);

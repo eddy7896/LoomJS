@@ -78,6 +78,8 @@ export const PropertyValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('static'), value: z.unknown() }),
   z.object({ kind: z.literal('bound'), source: PortRefSchema }),
   z.object({ kind: z.literal('event'), handler: EventHandlerSchema }),
+  /** Reads one of the destination artboard's declared params (route data, not a node port). */
+  z.object({ kind: z.literal('param'), name: z.string() }),
 ]);
 export type PropertyValue = z.infer<typeof PropertyValueSchema>;
 
@@ -166,12 +168,22 @@ export type Wire = z.infer<typeof WireSchema>;
 // Navigation: flows (arrows between artboards)
 // ---------------------------------------------------------------------------
 
+/**
+ * One value carried along a flow into a destination param. `static` is a literal chosen in the
+ * editor; `bound` reads a backend node's output port and needs the binding runtime (M3).
+ */
+export const FlowPayloadSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('static'), param: z.string(), value: z.unknown() }),
+  z.object({ kind: z.literal('bound'), param: z.string(), source: PortRefSchema }),
+]);
+export type FlowPayload = z.infer<typeof FlowPayloadSchema>;
+
 export const FlowSchema = z.object({
   id: IdSchema,
   from: IdSchema,
   to: IdSchema,
   /** payload carried to the destination's declared params. */
-  payload: z.array(z.object({ param: z.string(), source: PortRefSchema })).optional(),
+  payload: z.array(FlowPayloadSchema).optional(),
   guard: IdSchema.optional(),
 });
 export type Flow = z.infer<typeof FlowSchema>;

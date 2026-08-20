@@ -4,3 +4,4 @@ export * from './types';
 export * from './compile';
 export { knownComponentTypes } from './templates/registry';
 export { layoutToStyle } from './emit/layout';
+export { planRoutes, kebabCase, type RouteInfo, type RouteMap } from './emit/routes';

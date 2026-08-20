@@ -4,9 +4,9 @@ Walks a `@loom/ir` **snapshot** and emits a real **Vite + React + TypeScript** r
 This is the core bet of loomJS (`docs/02-system-architecture.md`): compile = stitch per-type
 code templates, not interpret a runtime.
 
-## Status — M0 (compiler skeleton)
+## Status — M2 (flow arrows are the router)
 
-Proves `graph -> files -> runs`. **Static UI only**, driven from tests; no editor involved.
+M0 proved `graph -> files -> runs`; M1 wired it to the editor; M2 adds routing.
 
 | Emitted                    | Notes                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -19,9 +19,10 @@ v0 subset the snapshot schema carries — the full **layout model is spec #5** a
 
 ## Not yet (by design)
 
-- **Bound properties** -> `CompileError` (binding/trigger runtime is spec #4, M3).
-- **Event handlers** -> `CompileError` (flows are M2, triggers M3).
-- Routing (M2), serverless functions (M3), connectors (M4), deploy (M6).
+- **Bound properties** and **`bound` flow payloads** -> `CompileError` (binding runtime is
+  spec #4, M3).
+- **Trigger handlers** -> `CompileError` (trigger runtime, M3).
+- Serverless functions (M3), connectors (M4), deploy (M6).
 
 Failing loudly beats silently dropping a binding: these surface as the **Build** error tier
 with the offending entity id (`CompileError.entityId`) so the editor can map back to the node.

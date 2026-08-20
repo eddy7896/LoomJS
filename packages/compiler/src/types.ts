@@ -1,4 +1,5 @@
-import type { Component, Id, Snapshot } from '@loom/ir';
+import type { Artboard, Component, Id, Snapshot } from '@loom/ir';
+import type { RouteMap } from './emit/routes';
 
 /** One file the compiler emits. `path` is POSIX-relative to the output root. */
 export interface EmittedFile {
@@ -27,10 +28,19 @@ export class CompileError extends Error {
 /** What an emitter can reach while rendering one component. */
 export interface EmitContext {
   snapshot: Snapshot;
+  /** The artboard being emitted — owns the route params in scope. */
+  artboard: Artboard;
+  routes: RouteMap;
   /** Resolve a component id or fail loudly (dangling ids are a compile error, not undefined). */
   component: (id: Id) => Component;
   /** Render a child subtree at the given indent depth. */
   renderChild: (id: Id, depth: number) => string;
+  /** Declare that this module needs `useParams()`; returns the local variable name. */
+  requireParams: () => string;
+  /** Declare that this module needs `useNavigate()`; returns the local variable name. */
+  requireNavigate: () => string;
+  /** The JS expression that navigates along `flowId` (path + payload). */
+  navigateExpr: (flowId: Id, componentId: Id) => string;
 }
 
 /** A component type owns its code template (docs/02 — compile = stitch templates). */
