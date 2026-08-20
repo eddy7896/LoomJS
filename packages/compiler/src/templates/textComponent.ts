@@ -7,7 +7,13 @@ export const textEmitter: ComponentEmitter = {
   type: 'Text',
   emit(component, ctx, depth) {
     const value = component.props.content;
-    const expr = value ? valueExpr(value, ctx, component.id, 'content') : '""';
-    return `${indent(depth)}<span>{${expr}}</span>`;
+    if (!value) return `${indent(depth)}<span>{""}</span>`;
+
+    const expr = valueExpr(value, ctx, component.id, 'content');
+    // Anything that is not plainly text goes through the coercion helper: a record rendered as
+    // a JSX child is a runtime crash, and the compiler knows the type here.
+    const type = ctx.typeOfValue(value);
+    const safe = type && type.kind !== 'text' ? `${ctx.requireTextHelper()}(${expr})` : expr;
+    return `${indent(depth)}<span>{${safe}}</span>`;
   },
 };

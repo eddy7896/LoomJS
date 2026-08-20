@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
-import { pipelineSnapshot, supabaseSnapshot, trivialSnapshot } from './fixtures';
+import { inferredSnapshot, pipelineSnapshot, supabaseSnapshot, trivialSnapshot } from './fixtures';
 
 const run = promisify(execFile);
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -187,6 +187,91 @@ describe('emitted app talks to a Supabase-shaped backend', () => {
       expect(await write.json()).toEqual({
         result: { id: 2, title: 'from the form', body: null },
       });
+
+      stop(child);
+    } finally {
+      stub.close();
+    }
+  });
+});
+
+/**
+ * M5's gate at the compiler level: the pipeline *inference proposed* is a real backend. Nothing
+ * here is written by hand — the document comes out of `inferBackend`, and the same compiler that
+ * handles a hand-wired graph emits it.
+ */
+describe('an inferred backend runs for real', () => {
+  it('validates on the server and inserts the row the form filled', async () => {
+    const rows: Record<string, unknown>[] = [];
+
+    const stub = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      res.setHeader('content-type', 'application/json');
+
+      if (req.method === 'POST' && url.pathname === '/rest/v1/notes') {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+          const inserted = { id: rows.length + 1, body: null, ...body };
+          rows.push(inserted);
+          res.statusCode = 201;
+          const wantsObject = (req.headers.accept ?? '').includes('vnd.pgrst.object+json');
+          res.end(JSON.stringify(wantsObject ? inserted : [inserted]));
+        });
+        return;
+      }
+      res.end(JSON.stringify({ definitions: {} }));
+    });
+
+    const stubPort = takePort();
+    await new Promise<void>((resolve) => stub.listen(stubPort, resolve));
+
+    try {
+      const { snapshot } = inferredSnapshot();
+      snapshot.connectors.cn_supabase!.config = { url: `http://localhost:${stubPort}` };
+
+      const dir = await mkdtemp(join(tmpdir(), 'loom-smoke-'));
+      await writeFiles(compile(snapshot).files, dir, { clean: true });
+      await run(npm, ['install', '--no-audit', '--no-fund'], { cwd: dir, shell: true });
+      // `npm run build` is `tsc --noEmit && vite build`: the inferred code type-checks too.
+      await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+      const port = takePort();
+      const child = spawn(npm, ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
+        cwd: dir,
+        shell: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          SUPABASE_URL: `http://localhost:${stubPort}`,
+          SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key',
+        },
+      });
+      children.push(child);
+
+      expect(await waitForServer(port)).toBe(true);
+
+      const created = await fetch(`http://localhost:${port}/api/createnotes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { title: 'inferred row', body: '' } }),
+      });
+      expect(created.status).toBe(200);
+      expect(await created.json()).toEqual({ result: { id: 1, title: 'inferred row', body: null } });
+
+      // An empty optional column is left out rather than written as an empty string.
+      expect(rows[0]).toEqual({ id: 1, title: 'inferred row', body: null });
+
+      // The required check is server-side, so an empty title never reaches the table.
+      const rejected = await fetch(`http://localhost:${port}/api/createnotes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { title: '', body: 'orphan' } }),
+      });
+      expect(rejected.status).toBe(500);
+      expect(await rejected.json()).toEqual({ error: 'title is required.' });
+      expect(rows).toHaveLength(1);
 
       stop(child);
     } finally {

@@ -21,6 +21,7 @@ import {
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
+import { acceptAuto, backendOffer, detachAuto, generateBackend, withdrawAuto } from '../state/autobackend';
 
 /**
  * The inspector is **schema-driven**: it renders whatever `@loom/components` declares for the
@@ -83,6 +84,8 @@ export function Inspector() {
       ) : null}
 
       {def?.acceptsClickFlow ? <ClickFlowSection component={component} /> : null}
+
+      {component.layout ? <AutoBackendSection component={component} /> : null}
 
       {component.layout ? (
         <>
@@ -281,6 +284,72 @@ function SizeField({ component, axis }: { component: Component; axis: 'width' | 
 }
 
 /** "On click, go to <artboard>" — the editor-side face of a flow arrow. */
+/**
+ * Auto-backend inference (M5). A frame holding inputs and one button is a form, and a form whose
+ * fields name real columns is a backend loom can write. The offer explains itself either way —
+ * a disabled button that will not say why is worse than no button.
+ */
+function AutoBackendSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const offer = backendOffer(snapshot, component.id);
+
+  return (
+    <section className="field-group" data-testid="auto-backend">
+      <h3 className="field-group__title">Backend</h3>
+      {offer.ok ? (
+        <>
+          <p className="panel__hint">
+            Submitting this form can insert into <strong>{offer.table}</strong> (
+            {offer.fields.join(', ')}).
+          </p>
+          {offer.unmatched.length > 0 ? (
+            <p className="panel__hint">
+              No column matches {offer.unmatched.join(', ')} — those inputs stay unwired.
+            </p>
+          ) : null}
+          <button data-testid="generate-backend" onClick={() => generateBackend(component.id)}>
+            Generate backend
+          </button>
+        </>
+      ) : (
+        <p className="panel__hint">{offer.reason}</p>
+      )}
+    </section>
+  );
+}
+
+/** Accept / Detach for a generated pipeline (`docs/06-glossary.md`). */
+function AutoSection({ group, state }: { group: string; state: 'proposed' | 'accepted' }) {
+  return (
+    <section className="field-group" data-testid="auto-controls">
+      <div className="field-group__head">
+        <span className="badge badge--auto">AUTO</span>
+        <span className="mono id">{state}</span>
+      </div>
+      <p className="panel__hint">
+        {state === 'proposed'
+          ? 'loom generated this from your form. Accept to keep it in sync, or detach to take it over.'
+          : 'Kept in sync with the form it came from. Detach to take it over.'}
+      </p>
+      <div className="row-actions">
+        {state === 'proposed' ? (
+          <button data-testid="accept-auto" onClick={() => acceptAuto(group)}>
+            Accept
+          </button>
+        ) : null}
+        <button data-testid="detach-auto" onClick={() => detachAuto(group)}>
+          Detach
+        </button>
+        {state === 'proposed' ? (
+          <button data-testid="discard-auto" onClick={() => withdrawAuto(group)}>
+            Discard
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function ClickFlowSection({ component }: { component: Component }) {
   const snapshot = useEditor((s) => s.snapshot);
   const flowId = flowFor(snapshot, component.id);
@@ -475,6 +544,8 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
           </p>
         ) : null}
       </section>
+
+      {node.auto ? <AutoSection group={node.auto.group} state={node.auto.state} /> : null}
 
       {def && def.fields.length > 0 ? (
         <section className="field-group">

@@ -236,3 +236,81 @@ describe('artboard and flow ops', () => {
     );
   });
 });
+
+describe('AUTO marks (M5)', () => {
+  /** A one-node, one-wire document where both entities are marked AUTO. */
+  const marked = () => {
+    const snapshot = createTrivialSnapshot();
+    const auto = { group: 'au_1', state: 'proposed' as const, sourceId: 'cp_form' };
+    return applyOps(snapshot, [
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_route',
+          category: 'api',
+          kind: 'route',
+          ports: [
+            { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
+            { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'record' } },
+          ],
+          position: { x: 0, y: 0 },
+          config: { method: 'POST', path: 'create', body: ['nd_step'] },
+          auto,
+        },
+      },
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_step',
+          category: 'db',
+          kind: 'insert',
+          ports: [{ id: 'pt_row', name: 'row', direction: 'out', portKind: 'data', type: { kind: 'record' } }],
+          position: { x: 0, y: 120 },
+          config: { table: 'notes' },
+          auto,
+        },
+      },
+      {
+        type: 'addWire',
+        wire: { id: 'wr_a', from: { nodeId: 'nd_step', portId: 'pt_row' }, to: { nodeId: 'nd_route', portId: 'pt_run' }, auto },
+      },
+    ]);
+  };
+
+  it('survives a round trip through JSON', () => {
+    const parsed = deserializeSnapshot(serializeSnapshot(marked()));
+    expect(parsed.nodes.nd_route!.auto).toEqual({
+      group: 'au_1',
+      state: 'proposed',
+      sourceId: 'cp_form',
+    });
+    expect(parsed.wires.wr_a!.auto?.group).toBe('au_1');
+  });
+
+  it('acceptAuto marks the whole group, wires included', () => {
+    const next = applyOp(marked(), { type: 'acceptAuto', group: 'au_1' });
+    expect(next.nodes.nd_route!.auto!.state).toBe('accepted');
+    expect(next.nodes.nd_step!.auto!.state).toBe('accepted');
+    expect(next.wires.wr_a!.auto!.state).toBe('accepted');
+  });
+
+  it('detachAuto leaves the graph intact and only drops the mark', () => {
+    const next = applyOp(marked(), { type: 'detachAuto', group: 'au_1' });
+    expect(next.nodes.nd_route!.auto).toBeUndefined();
+    expect(next.wires.wr_a).toBeDefined();
+    expect(next.wires.wr_a!.auto).toBeUndefined();
+  });
+
+  it('removeAuto withdraws the nodes, their wires, and their slot in a container body', () => {
+    const next = applyOp(marked(), { type: 'removeAuto', group: 'au_1' });
+    expect(next.nodes.nd_route).toBeUndefined();
+    expect(next.nodes.nd_step).toBeUndefined();
+    expect(next.wires.wr_a).toBeUndefined();
+  });
+
+  it('removeAuto cannot touch what has been detached', () => {
+    const detached = applyOp(marked(), { type: 'detachAuto', group: 'au_1' });
+    const next = applyOp(detached, { type: 'removeAuto', group: 'au_1' });
+    expect(next.nodes.nd_route).toBeDefined();
+  });
+});

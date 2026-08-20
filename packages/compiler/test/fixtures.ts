@@ -1,6 +1,7 @@
 import { apiPortsFromBody } from '@loom/components';
+import { inferBackend } from '@loom/inference';
 import { columnPortId, createDbNode } from '@loom/connectors';
-import { SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
+import { applyOps, SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
 
 /**
  * A deterministic twin of `createTrivialSnapshot()` — same shape, fixed ids, so golden-file
@@ -375,3 +376,92 @@ export function supabaseSnapshot(): Snapshot {
     },
   };
 }
+
+/**
+ * The M5 starting point: a form the designer drew, and a connection whose schema is cached —
+ * everything inference reads, and nothing it produces. `inferBackend` turns this into the
+ * pipeline; the compiler then treats the result as an ordinary document, which is the point.
+ */
+export function formSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const homeRoot = base.components.cp_root000001!;
+
+  const titleField: Component = {
+    id: 'cp_title',
+    type: 'TextField',
+    name: 'Title',
+    props: { value: { kind: 'static', value: '' }, placeholder: { kind: 'static', value: 'Title' } },
+  };
+
+  const bodyField: Component = {
+    id: 'cp_body',
+    type: 'TextField',
+    name: 'Body',
+    props: { value: { kind: 'static', value: '' }, placeholder: { kind: 'static', value: 'Body' } },
+  };
+
+  const saveButton: Component = {
+    id: 'cp_save',
+    type: 'Button',
+    name: 'Save',
+    props: { label: { kind: 'static', value: 'Save' } },
+  };
+
+  const form: Component = {
+    id: 'cp_form',
+    type: 'Frame',
+    name: 'New note',
+    props: {},
+    layout: { direction: 'column', gap: 8, padding: 16, align: 'stretch', justify: 'start' },
+    children: [titleField.id, bodyField.id, saveButton.id],
+  };
+
+  const status: Component = {
+    id: 'cp_status',
+    type: 'Text',
+    name: 'Status',
+    props: { content: { kind: 'static', value: '' } },
+  };
+
+  return {
+    ...base,
+    components: {
+      ...base.components,
+      cp_root000001: { ...homeRoot, children: [...(homeRoot.children ?? []), form.id, status.id] },
+      [form.id]: form,
+      [titleField.id]: titleField,
+      [bodyField.id]: bodyField,
+      [saveButton.id]: saveButton,
+      [status.id]: status,
+    },
+    connectors: {
+      cn_supabase: {
+        id: 'cn_supabase',
+        moduleId: 'supabase',
+        // The cached schema is what inference matches the form against; the URL is not a secret.
+        config: { url: 'https://demo.supabase.co', schema: { tables: [NOTES_TABLE] } },
+        credentialRef: 'default',
+      },
+    },
+  };
+}
+
+/** Infer the backend for the form fixture, and bind the status Text to the screen bucket. */
+export function inferredSnapshot(): { snapshot: Snapshot; stateId: string; routePath: string } {
+  const base = formSnapshot();
+  const result = inferBackend(base, { frameId: 'cp_form' });
+  if (!result.ok) throw new Error(result.reason);
+
+  const snapshot = applyOps(base, [
+    ...result.proposal.ops,
+    {
+      type: 'setProp',
+      componentId: 'cp_status',
+      key: 'content',
+      value: { kind: 'bound', source: { nodeId: result.proposal.nodes.state, portId: 'pt_value' } },
+    },
+  ]);
+
+  return { snapshot, stateId: result.proposal.nodes.state, routePath: result.proposal.route };
+}
+

@@ -97,7 +97,71 @@ export const CODE_DEF: NodeDef = {
   ],
 };
 
-const DEFS: readonly NodeDef[] = [API_ROUTE_DEF, COMPUTE_DEF, CODE_DEF];
+
+/** One field a Validate node checks, mirroring the form input it came from. */
+export interface ValidationField {
+  name: string;
+  type: TypeRef;
+  required: boolean;
+}
+
+export interface ValidateConfig {
+  fields: ValidationField[];
+}
+
+/**
+ * Validate is the first step of an inferred write pipeline (M5). Its ports **are** the form's
+ * fields, so the API route that contains it exposes exactly those inputs, and a required field
+ * left empty fails on the server where it cannot be bypassed.
+ *
+ * It has no inspector fields on purpose: its shape is inferred from the form, and hand-editing
+ * the shape is what Detach is for (`docs/06-glossary.md`).
+ */
+export const VALIDATE_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'validate',
+  label: 'Validate',
+  defaultConfig: { fields: [] },
+  fields: [],
+  ports: (config) => {
+    const fields = Array.isArray(config.fields) ? (config.fields as ValidationField[]) : [];
+    const inputs = fields.map((field) =>
+      port(
+        `pt_f_${field.name}`,
+        field.name,
+        'in',
+        'data',
+        field.required ? field.type : { kind: 'optional', of: field.type },
+      ),
+    );
+    return [...inputs, port('pt_values', 'values', 'out', 'data', { kind: 'record' })];
+  },
+};
+
+export interface StateWriteConfig {
+  /** V1 has one scope; the global bucket is a later addition (`docs/06-glossary.md`). */
+  scope: 'screen';
+  key: string;
+}
+
+/**
+ * A screen-bucket write: it holds whatever is wired into it for the rest of the screen's life,
+ * so a pipeline's result outlives the call that produced it. It runs in the browser — it is
+ * React local state, and it is never inside an API route's body.
+ */
+export const STATE_WRITE_DEF: NodeDef = {
+  category: 'state',
+  kind: 'write',
+  label: 'State',
+  defaultConfig: { scope: 'screen', key: 'value' },
+  fields: [{ key: 'key', label: 'Name', control: 'text', default: 'value' }],
+  ports: () => [
+    port('pt_set', 'set', 'in', 'data', { kind: 'any' }),
+    port('pt_value', 'value', 'out', 'data', { kind: 'any' }),
+  ],
+};
+
+const DEFS: readonly NodeDef[] = [API_ROUTE_DEF, COMPUTE_DEF, CODE_DEF, VALIDATE_DEF, STATE_WRITE_DEF];
 const BY_KIND = new Map(DEFS.map((def) => [`${def.category}:${def.kind}`, def]));
 
 export function nodeDefs(): readonly NodeDef[] {

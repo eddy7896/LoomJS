@@ -1,4 +1,4 @@
-import type { Artboard, Component, Id, PortRef, Snapshot } from '@loom/ir';
+import type { Artboard, Component, Id, PortRef, PropertyValue, Snapshot, TypeRef } from '@loom/ir';
 import type { RouteMap } from './emit/routes';
 import type { PipelinePlan } from './emit/pipeline';
 
@@ -52,6 +52,10 @@ export interface EmitContext {
   triggerExpr: (target: PortRef, componentId: Id) => string;
   /** The JS expression that navigates along `flowId` (path + payload). */
   navigateExpr: (flowId: Id, componentId: Id) => string;
+  /** The type a property value carries, when it is knowable (bindings). */
+  typeOfValue: (value: PropertyValue) => TypeRef | undefined;
+  /** Declare that this module needs the text coercion helper; returns its name. */
+  requireTextHelper: () => string;
 }
 
 /** A component type owns its code template (docs/02 — compile = stitch templates). */

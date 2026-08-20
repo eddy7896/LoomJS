@@ -113,6 +113,22 @@ export function dispatch(op: Op): void {
   });
 }
 
+/**
+ * Apply several ops as **one** undoable step. Inference materialises a whole pipeline (M5); a
+ * designer who regrets it presses undo once, not eleven times. The ops are still atomic in the
+ * document — this batches only the history entry.
+ */
+export function dispatchAll(ops: Op[]): void {
+  if (ops.length === 0) return;
+  const snapshot = ops.reduce(applyOp, state.snapshot);
+  set({
+    ...state,
+    snapshot,
+    past: [...state.past, state.snapshot].slice(-HISTORY_LIMIT),
+    future: [],
+  });
+}
+
 export function select(selection: Selection): void {
   set({ ...state, selection });
 }

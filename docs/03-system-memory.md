@@ -123,7 +123,7 @@ STATUS ∈ SETTLED · DEFERRED · OPEN.
   `specs/type-registry.md`, `specs/connector-credentials.md`,
   `specs/binding-trigger-runtime.md`, `specs/layout-model.md`.
 
-## Implementation decisions taken while building M0-M4
+## Implementation decisions taken while building M0-M5
 
 Recorded here because they constrain everything downstream. Each was taken at the phase named.
 
@@ -146,6 +146,23 @@ Recorded here because they constrain everything downstream. Each was taken at th
   generated app to break on a runtime it did not choose.
 - **[M4] Introspected schema is cached in the document**, because table and column names are not
   secret. That is what lets the compiler and the canvas type ports offline.
+- **[M5] AUTO is provenance, not a mode.** An inferred pipeline is ordinary nodes carrying a mark;
+  the compiler emits it identically whether it is proposed, accepted, or detached. The mark exists
+  for the canvas and for regeneration, and **Detach simply deletes it** — an unmarked node is one
+  the designer owns. See `specs/snapshot-schema.md` §M5.
+- **[M5] The whole proposal is one unit.** Accept/Detach/regenerate operate on a group id shared
+  by every node and wire from one inference run, and generating is a single undo step. A pipeline
+  half-owned by loom and half by the designer would be unreadable.
+- **[M5] Inference matches by name and refuses to guess.** A form's fields are matched to columns
+  by normalised name; a table is only proposed if the form covers **every required column**; two
+  buttons means no proposal, because which one submits is not loom's call. Every refusal carries
+  the sentence the designer sees.
+- **[M5] Inference never creates UI.** It reads the artboard and writes only behaviour, so the
+  ownership discipline holds (guardrail 13): mirrors it materialises are views of existing
+  components and are deliberately *not* marked AUTO.
+- **[M5] Validation runs on the server**, inside the route's body, because that is the only place
+  it cannot be bypassed. It also coerces — an `<input>` yields strings and a number column will
+  not take one — and omits an empty optional column rather than writing an empty string.
 
 ## The next specs to write (highest-leverage, in dependency order)
 

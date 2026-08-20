@@ -79,3 +79,19 @@ error *boundaries* in the generated app are explicitly out of scope for V1 (`07`
 - No cross-artboard pipelines: a pipeline belongs to the artboard whose components it touches.
 - Reactive pipelines re-run on input change only — no polling, no subscriptions (Supabase realtime
   is not V1).
+
+## M5 addition — the screen bucket
+
+A pipeline's result is gone the moment the call returns unless something holds it. A **State**
+node (`state:write`, scope `screen`) is that something: wire an API route's `result` into its
+`set` port, and anything on the artboard may bind its `value`.
+
+- It compiles to a `useState` pair in the artboard module, and `set_…(body.result)` in the same
+  success path as the fetch. **No second round trip, no store, no runtime library.**
+- It is **demand-driven** like `pending` and `error`: a bucket nothing binds emits no variable,
+  because the emitted app is built with `noUnusedLocals` and dead state would fail its own build.
+- It runs in the **browser**. Inside an API route's body it would vanish when the response was
+  sent, so the compiler refuses that placement rather than emitting a lie.
+- A bound value is not always text — a bucket often holds the row an insert returned. The Text
+  template asks the compiler for the bound type and routes anything non-text through a small
+  `asText` helper, because an object dropped into JSX as a child crashes React at runtime.

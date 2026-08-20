@@ -681,3 +681,35 @@ select {
   padding: 3px 0;
   color: var(--ink-soft);
 }
+
+/* Node categories are functional colour (guardrail 19): DB and State join UI/FN/API. */
+.nnode--db .nnode__head {
+  background: color-mix(in srgb, #d98a12 14%, transparent);
+}
+
+.nnode--state .nnode__head {
+  background: color-mix(in srgb, #2f7de1 14%, transparent);
+}
+
+/* AUTO: dashed while loom owns it, so provenance is visible without reading a panel. */
+.nnode.is-auto {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.nnode.is-auto--proposed {
+  border-width: 2px;
+}
+
+.badge--auto {
+  background: color-mix(in srgb, var(--busy) 16%, transparent);
+  color: var(--busy);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

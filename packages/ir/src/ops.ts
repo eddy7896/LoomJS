@@ -45,7 +45,10 @@ export type Op =
   | { type: 'removeArtboard'; artboardId: string }
   | { type: 'addConnector'; connector: ConnectorInstance }
   | { type: 'setConnectorConfig'; connectorId: string; config: unknown }
-  | { type: 'removeConnector'; connectorId: string };
+  | { type: 'removeConnector'; connectorId: string }
+  | { type: 'acceptAuto'; group: string }
+  | { type: 'detachAuto'; group: string }
+  | { type: 'removeAuto'; group: string };
 
 export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
   const next = structuredClone(snapshot);
@@ -260,6 +263,69 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
           for (const [wireId, wire] of Object.entries(next.wires)) {
             if (wire.from.nodeId === nodeId || wire.to.nodeId === nodeId) delete next.wires[wireId];
           }
+        }
+      }
+      return next;
+    }
+
+    /**
+     * Accept: keep the pipeline as loom generated it. It stays AUTO, so it keeps up with the
+     * form (`docs/06-glossary.md`) — the badge just stops asking.
+     */
+    case 'acceptAuto': {
+      for (const node of Object.values(next.nodes)) {
+        if (node.auto?.group === op.group) node.auto = { ...node.auto, state: 'accepted' };
+      }
+      for (const wire of Object.values(next.wires)) {
+        if (wire.auto?.group === op.group) wire.auto = { ...wire.auto, state: 'accepted' };
+      }
+      return next;
+    }
+
+    /**
+     * Detach: the designer takes ownership. Losing the mark is the whole operation — from here
+     * the nodes are ordinary nodes and inference will never touch them again. The unit is the
+     * group: a pipeline half-owned by loom and half by the designer is unreadable.
+     */
+    case 'detachAuto': {
+      for (const node of Object.values(next.nodes)) {
+        if (node.auto?.group === op.group) delete node.auto;
+      }
+      for (const wire of Object.values(next.wires)) {
+        if (wire.auto?.group === op.group) delete wire.auto;
+      }
+      return next;
+    }
+
+    /** Withdraw a generated pipeline — used to reject one, and to clear the old one before a
+     * regeneration. Detached members are *not* touched: they are no longer loom's to remove. */
+    case 'removeAuto': {
+      for (const [nodeId, node] of Object.entries(next.nodes)) {
+        if (node.auto?.group !== op.group) continue;
+        delete next.nodes[nodeId];
+        for (const [wireId, wire] of Object.entries(next.wires)) {
+          if (wire.from.nodeId === nodeId || wire.to.nodeId === nodeId) delete next.wires[wireId];
+        }
+        // A trigger handler pointing into a withdrawn node would dangle.
+        for (const component of Object.values(next.components)) {
+          for (const [key, value] of Object.entries(component.props)) {
+            const dangles =
+              (value.kind === 'event' &&
+                value.handler.kind === 'trigger' &&
+                value.handler.target.nodeId === nodeId) ||
+              (value.kind === 'bound' && value.source.nodeId === nodeId);
+            if (dangles) delete component.props[key];
+          }
+        }
+      }
+      for (const [wireId, wire] of Object.entries(next.wires)) {
+        if (wire.auto?.group === op.group) delete next.wires[wireId];
+      }
+      // The withdrawn nodes may have been inside an API route's body.
+      for (const node of Object.values(next.nodes)) {
+        const config = node.config as { body?: string[] } | undefined;
+        if (Array.isArray(config?.body)) {
+          config.body = config.body.filter((id) => Boolean(next.nodes[id]));
         }
       }
       return next;

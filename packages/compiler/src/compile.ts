@@ -111,6 +111,16 @@ function validateServerOnlyWork(snapshot: Snapshot): void {
   }
 
   for (const node of Object.values(snapshot.nodes)) {
+    // A screen bucket is React local state; inside a stateless function it would vanish the
+    // moment the response was sent, which is a lie rather than a limitation.
+    if (node.category === 'state' && insideAnApiBody.has(node.id)) {
+      throw new CompileError(
+        `"${node.name ?? node.id}" writes screen state, so it cannot sit inside an API route. ` +
+          'Screen state lives in the browser.',
+        node.id,
+      );
+    }
+
     if (node.category === 'db' && !insideAnApiBody.has(node.id)) {
       throw new CompileError(
         `"${node.name ?? node.id}" reads the database, so it must sit inside an API route. ` +

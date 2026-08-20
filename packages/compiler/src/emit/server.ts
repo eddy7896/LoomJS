@@ -1,4 +1,4 @@
-import { COMPUTE_OPS } from '@loom/components';
+import { COMPUTE_OPS, type ValidationField } from '@loom/components';
 import type { DbNodeConfig } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
 import { CompileError, type EmittedFile } from '../types';
@@ -51,9 +51,56 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   }`;
 }
 
+/**
+ * A Validate step. Checking runs on the server because that is the only place it cannot be
+ * bypassed: the browser copy is a convenience, this one is the rule. It also coerces — an
+ * `<input>` hands over strings, and a number column will not take one.
+ */
+function emitValidateStep(node: Node): string {
+  const config = (node.config ?? {}) as { fields?: ValidationField[] };
+  const fields = Array.isArray(config.fields) ? config.fields : [];
+  if (fields.length === 0) {
+    throw new CompileError('Validate node has no fields to check.', node.id);
+  }
+
+  const checks = fields.map((field) => {
+    const key = JSON.stringify(field.name);
+    const missing = field.required
+      ? `    if (raw === undefined || raw === null || raw === '') {
+      throw new Error(${JSON.stringify(`${field.name} is required.`)});
+    }`
+      : `    if (raw === undefined || raw === null || raw === '') { delete row[${key}]; }`;
+
+    const coerce =
+      field.type.kind === 'number'
+        ? `    else {
+      const parsed = Number(raw);
+      if (Number.isNaN(parsed)) throw new Error(${JSON.stringify(`${field.name} must be a number.`)});
+      row[${key}] = parsed;
+    }`
+        : field.type.kind === 'boolean'
+          ? `    else { row[${key}] = raw === true || raw === 'true'; }`
+          : `    else { row[${key}] = String(raw); }`;
+
+    return `  {
+    const raw = input[${key}];
+${missing}
+${coerce}
+  }`;
+  });
+
+  return `  {
+    const input = (value ?? {}) as Record<string, unknown>;
+    const row: Record<string, unknown> = { ...input };
+${checks.join('\n')}
+    value = row;
+  }`;
+}
+
 /** One server-side step, as a statement operating on `value`. */
 function emitStep(node: Node, snapshot: Snapshot): string {
   if (node.category === 'db') return emitDbStep(node, snapshot);
+  if (node.kind === 'validate') return emitValidateStep(node);
 
   const config = (node.config ?? {}) as { op?: string; source?: string };
 

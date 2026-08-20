@@ -99,3 +99,30 @@ Deleting a component also deletes its mirror node (ownership discipline).
 - Invariant: a payload param must be **declared by the destination artboard**, and a `param`
   read must be declared by the artboard doing the reading. Both are compile errors otherwise,
   never silent empties.
+
+## M5 additions (AUTO provenance)
+
+Auto-backend inference needs one thing from the document: a record of **who wrote a node**.
+
+- `Node.auto` and `Wire.auto` hold an optional `AutoMark`: `{ group, state, sourceId? }`.
+  - `group` — one id per inference run. Every node and wire from that run shares it, so the
+    pipeline is accepted, detached, regenerated, or withdrawn **as one unit**. A half-owned
+    pipeline is a document nobody can reason about.
+  - `state` — `proposed` (awaiting Accept/Detach) or `accepted` (loom keeps it in sync).
+  - `sourceId` — the component inference read, so a second run knows what it is replacing.
+- Three ops operate on a group: `acceptAuto`, `detachAuto`, `removeAuto`.
+  - **Detach deletes the mark.** An unmarked node is one the designer owns, which is exactly
+    what Detach means; there is no third "detached" state to keep in sync with.
+  - `removeAuto` withdraws the group's nodes, their wires, their slot in a container's body, and
+    any component prop that pointed into them. It cannot touch detached entities — they no
+    longer carry the mark.
+- **AUTO is provenance, not a mode.** Nothing downstream reads it: the compiler emits an inferred
+  document byte-for-byte identically whether it is proposed, accepted, or detached. It exists for
+  the canvas (dashed + badge) and for regeneration.
+
+Also added in M5, both ordinary nodes rather than new concepts:
+
+- `fn:validate` — config `{ fields: [{ name, type, required }] }`. Its ports *are* the fields, so
+  the API route containing it exposes exactly the inputs the form fills.
+- `state:write` — config `{ scope: 'screen', key }`. The screen bucket, compiled to React local
+  state. It runs in the browser; the compiler refuses one inside an API route's body.

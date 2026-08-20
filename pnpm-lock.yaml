@@ -44,6 +44,9 @@ importers:
       '@loom/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
+      '@loom/inference':
+        specifier: workspace:*
+        version: link:../../packages/inference
       '@loom/ir':
         specifier: workspace:*
         version: link:../../packages/ir
@@ -106,6 +109,9 @@ importers:
         specifier: workspace:*
         version: link:../typesys
     devDependencies:
+      '@loom/inference':
+        specifier: workspace:*
+        version: link:../inference
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.43
@@ -124,6 +130,18 @@ importers:
       '@loom/typesys':
         specifier: workspace:*
         version: link:../typesys
+
+  packages/inference:
+    dependencies:
+      '@loom/components':
+        specifier: workspace:*
+        version: link:../components
+      '@loom/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@loom/ir':
+        specifier: workspace:*
+        version: link:../ir
 
   packages/ir:
     dependencies:

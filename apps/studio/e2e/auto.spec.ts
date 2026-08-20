@@ -1,0 +1,176 @@
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+/**
+ * M5's gate: draw a form, ask for a backend, and get a working one — Validate, a POST route, a
+ * Supabase insert, and a screen-bucket write — materialised as AUTO, accepted, and then run for
+ * real in the Preview. The database is the PostgREST stub; everything else is the real thing.
+ */
+
+const STUB = 'http://localhost:5412';
+
+const preview = (page: Page) => page.frameLocator('iframe.preview__frame');
+
+const field = (page: Page, label: string) =>
+  page.locator('.field', { has: page.locator('.field__label', { hasText: label }) });
+
+const graphNode = (page: Page, title: string) =>
+  page.locator('.react-flow__node', { has: page.locator('.nnode__title', { hasText: title }) });
+
+const handle = (node: Locator, portId: string) => node.locator(`[data-handleid="${portId}"]`);
+
+async function drag(page: Page, from: Locator, to: Locator): Promise<void> {
+  await page.locator('.react-flow__controls-fitview').click();
+  const centre = (b: { x: number; y: number; width: number; height: number }) => ({
+    x: b.x + b.width / 2,
+    y: b.y + b.height / 2,
+  });
+  const a = centre((await from.boundingBox())!);
+  const b = centre((await to.boundingBox())!);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 8 });
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.mouse.up();
+}
+
+async function connect(page: Page): Promise<void> {
+  await page.getByTestId('connect-supabase').click();
+  await field(page, 'Project URL').locator('input').fill(STUB);
+  await field(page, 'Anon key').locator('input').fill('stub-anon-key');
+  await field(page, 'Service role key').locator('input').fill('stub-service-key');
+  await page.getByRole('button', { name: 'Connect and read schema' }).click();
+  await expect(page.locator('.table-row')).toContainText('notes');
+}
+
+const rows = async (request: { get: (url: string) => Promise<{ json: () => Promise<unknown> }> }) =>
+  (await (await request.get(`${STUB}/rest/v1/notes`)).json()) as { title: string }[];
+
+/** Draw the form the designer would draw: a frame, two fields named after columns, one button. */
+async function drawForm(page: Page): Promise<void> {
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Frame' }).click();
+  await field(page, 'Name').locator('input').fill('New note');
+
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Title');
+
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Body');
+
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await page.getByRole('button', { name: '+ Button' }).click();
+  await field(page, 'Name').locator('input').fill('Save');
+  await field(page, 'Label').locator('input').fill('Save');
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  await expect(page.locator('.artboard').first()).toBeVisible();
+});
+
+test('the inspector explains what it would build, and why it cannot', async ({ page }) => {
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Frame' }).click();
+  await expect(page.getByTestId('auto-backend')).toContainText('no input fields');
+
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Title');
+  await page.locator('.layer', { hasText: 'Frame' }).first().click();
+  await expect(page.getByTestId('auto-backend')).toContainText('Add a button to submit');
+
+  await page.getByRole('button', { name: '+ Button' }).click();
+  await page.locator('.layer', { hasText: 'Frame' }).first().click();
+  await expect(page.getByTestId('auto-backend')).toContainText('Connect a database first');
+});
+
+test('a form and a click become a working backend', async ({ page, request }) => {
+  await connect(page);
+  await drawForm(page);
+
+  // Somewhere to show what came back, so the screen bucket is visibly read.
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Saved');
+
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await expect(page.getByTestId('auto-backend')).toContainText('notes');
+  await expect(page.getByTestId('auto-backend')).toContainText('title, body');
+
+  await page.getByTestId('generate-backend').click();
+
+  // It lands the designer on the generated route, in Nodes mode, marked as loom's work.
+  await expect(page.locator('.nnode.is-auto')).toHaveCount(2);
+  await expect(page.getByTestId('auto-controls')).toContainText('proposed');
+  const route = graphNode(page, 'Create notes');
+  await expect(route.locator('.nstep')).toHaveCount(2);
+  await expect(route.locator('.nstep').first()).toContainText('Validate');
+  await expect(route.locator('.nstep').last()).toContainText('Insert notes');
+
+  await page.getByTestId('accept-auto').click();
+  await expect(page.getByTestId('auto-controls')).toContainText('accepted');
+
+  // Read the screen bucket from the artboard: the row the insert returned. The Preview is hidden
+  // for the gesture so the graph fits the pane — dragging to a node the viewport has clipped is
+  // a test artefact, not a product problem.
+  await page.getByRole('button', { name: 'Hide preview' }).click();
+  await drag(
+    page,
+    handle(graphNode(page, 'New notes'), 'pt_value'),
+    handle(graphNode(page, 'Saved'), 'pt_content'),
+  );
+  await expect(page.locator('.react-flow__edge')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await expect(preview(page).getByRole('button', { name: 'Save' })).toBeVisible();
+
+  const before = (await rows(request)).length;
+
+  await preview(page).locator('input').first().fill('written by inference');
+  await preview(page).locator('input').nth(1).fill('with a body');
+  await preview(page).getByRole('button', { name: 'Save' }).click();
+
+  await expect
+    .poll(async () => await rows(request))
+    .toContainEqual(expect.objectContaining({ title: 'written by inference', body: 'with a body' }));
+
+  // The inserted row came back and landed in screen state, which the Text reads.
+  await expect(preview(page).locator('span', { hasText: 'written by inference' })).toBeVisible();
+
+  // The required check runs on the server, so an empty title never reaches the table.
+  await preview(page).locator('input').first().fill('');
+  await preview(page).getByRole('button', { name: 'Save' }).click();
+  await page.waitForTimeout(1500);
+  expect(await rows(request)).toHaveLength(before + 1);
+});
+
+test('regenerating replaces the proposal instead of stacking another', async ({ page }) => {
+  await connect(page);
+  await drawForm(page);
+
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await page.getByTestId('generate-backend').click();
+  await expect(graphNode(page, 'Create notes')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Design' }).click();
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await page.getByTestId('generate-backend').click();
+  await expect(graphNode(page, 'Create notes')).toHaveCount(1);
+  await expect(page.getByTestId('auto-controls')).toContainText('proposed');
+});
+
+test('detaching leaves the pipeline in the designer’s hands', async ({ page }) => {
+  await connect(page);
+  await drawForm(page);
+
+  await page.locator('.layer', { hasText: 'New note' }).first().click();
+  await page.getByTestId('generate-backend').click();
+  await page.getByTestId('detach-auto').click();
+
+  // The nodes stay; only the mark goes.
+  await expect(graphNode(page, 'Create notes')).toHaveCount(1);
+  await expect(page.locator('.nnode.is-auto')).toHaveCount(0);
+  await expect(page.getByTestId('auto-controls')).toHaveCount(0);
+});
