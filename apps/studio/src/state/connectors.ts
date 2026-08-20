@@ -91,6 +91,54 @@ export async function readServerEnv(): Promise<ServerEnv> {
   }
 }
 
+/**
+ * How the studio reads a project's schema.
+ *
+ * A hosted Supabase project serves its OpenAPI document **only to the service role key**, which
+ * may never enter a browser. So: try the call directly (a self-hosted project, or a stub, answers
+ * the anon key), and if the project refuses the key, ask the dev server to make the same call
+ * with the key it holds. Only the document comes back — names are not secret, the key is
+ * (`docs/specs/connector-credentials.md`).
+ */
+export const introspectFetch: typeof fetch = async (input, init) => {
+  const endpoint = typeof input === 'string' ? input : String((input as Request).url ?? input);
+
+  let direct: Response | undefined;
+  try {
+    direct = await fetch(input, init);
+  } catch {
+    // A browser cannot reach it: CORS, DNS, or the project is down. The dev server may still.
+  }
+
+  if (direct && direct.status !== 401 && direct.status !== 403) return direct;
+
+  const projectUrl = endpoint.replace(/\/rest\/v1\/?$/, '');
+  // The key that was just refused is not worth sending again; the server uses its own.
+  const relayed = await fetch('/__loom/introspect', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: projectUrl }),
+  });
+
+  const payload = (await relayed.json()) as {
+    ok?: boolean;
+    status?: number;
+    body?: string;
+    error?: string;
+  };
+
+  if (!payload.ok) {
+    // Prefer the project's own refusal over the relay's, when there was one.
+    if (direct) return direct;
+    throw new Error(payload.error ?? 'The dev server could not read the schema.');
+  }
+
+  return new Response(payload.body ?? '', {
+    status: payload.status ?? 200,
+    headers: { 'content-type': 'application/json' },
+  });
+};
+
 export interface ConnectResult {
   ok: boolean;
   error?: string;
@@ -111,6 +159,7 @@ export async function connectSupabase(input: ConnectInput): Promise<ConnectResul
         SUPABASE_ANON_KEY: input.anonKey,
         SUPABASE_SERVICE_ROLE_KEY: input.serviceKey,
       },
+      introspectFetch,
     );
   } catch (error) {
     return { ok: false, error: (error as Error).message };

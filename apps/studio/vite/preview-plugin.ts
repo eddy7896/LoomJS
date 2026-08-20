@@ -202,6 +202,46 @@ export function loomPreview(): Plugin {
         })();
       });
 
+      /**
+       * Schema introspection, run **here** rather than in the browser.
+       *
+       * A hosted Supabase project serves its PostgREST OpenAPI document only to the
+       * `service_role` key ("Only the `service_role` API key can be used for this endpoint"),
+       * and that key may never reach a browser (`docs/specs/connector-credentials.md`). So the
+       * dev server makes the call with the key it holds and returns the document — table and
+       * column names are not secret; the key is. A self-hosted project or a stub that answers
+       * the anon key is read directly by the studio and never gets here.
+       */
+      server.middlewares.use('/__loom/introspect', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+
+        void (async () => {
+          try {
+            const body = JSON.parse(await readBody(req)) as { url?: string; key?: string };
+            const base = String(body.url ?? '').replace(/\/+$/, '');
+            if (!base) return json(res, 200, { ok: false, error: 'No project URL.' });
+
+            // The browser may pass the client-scoped key it already holds; otherwise the
+            // server-scoped one is used, and either way only the document travels back.
+            const key = body.key || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+            if (!key) {
+              return json(res, 200, {
+                ok: false,
+                error: 'No SUPABASE_SERVICE_ROLE_KEY on the dev server. Add it to .env.local.',
+              });
+            }
+
+            const response = await fetch(`${base}/rest/v1/`, {
+              headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' },
+            });
+            const text = await response.text();
+            json(res, 200, { ok: response.ok, status: response.status, body: text });
+          } catch (error) {
+            json(res, 200, { ok: false, error: (error as Error).message });
+          }
+        })();
+      });
+
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });

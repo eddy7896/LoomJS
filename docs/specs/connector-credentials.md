@@ -79,3 +79,19 @@ schema is a re-introspect away, and re-introspecting is how a schema change reac
 - No OAuth flows for any connector.
 - The bucket is not readable from the canvas: the studio can write and test credentials, and can
   tell you a name exists, but never renders a stored value back.
+
+## Correction (found against a real project)
+
+Introspection was designed as a browser call using the **anon** key. A hosted Supabase project
+refuses it: `GET {url}/rest/v1/` answers `401 Invalid API key — Only the service_role API key can
+be used for this endpoint`. The service role key is server-scoped and may not cross into a
+browser, so introspection moved to the dev server:
+
+- The studio tries the direct call first, which still works for a self-hosted project, an older
+  project, or a test stub that accepts the anon key.
+- On `401`/`403` it relays through `POST /__loom/introspect` with **only the project URL**. The
+  refused key is not sent again; the server uses the one it loaded from `.env.local`.
+- The response carries the OpenAPI document and nothing else. Table and column names are not
+  secret — the key is, and it never leaves the process that holds it.
+
+The same shape applies on the platform: the relay becomes a server route, not a browser call.

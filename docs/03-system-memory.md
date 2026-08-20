@@ -160,6 +160,13 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[M5] Inference never creates UI.** It reads the artboard and writes only behaviour, so the
   ownership discipline holds (guardrail 13): mirrors it materialises are views of existing
   components and are deliberately *not* marked AUTO.
+- **[M5, correcting M4] Schema introspection runs on the dev server, not in the browser.** A
+  hosted Supabase project serves its PostgREST OpenAPI document only to the `service_role` key
+  ("Only the `service_role` API key can be used for this endpoint"), and that key may never enter
+  a browser. The studio tries the call directly — a self-hosted project or a stub answers the anon
+  key — and on a 401/403 relays it through `POST /__loom/introspect`, which uses the key the dev
+  server holds and returns **only the document**. Verified against a real project; the anon key
+  alone cannot read it. On the platform (M6) the same relay is a server route.
 - **[M5] Validation runs on the server**, inside the route's body, because that is the only place
   it cannot be bypassed. It also coerces — an `<input>` yields strings and a number column will
   not take one — and omits an empty optional column rather than writing an empty string.
