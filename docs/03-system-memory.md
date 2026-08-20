@@ -191,6 +191,11 @@ Recorded here because they constrain everything downstream. Each was taken at th
   instead of writing `Infinity` or `NaN` into a column — a plausible wrong number is worse than a
   stopped request.
 
+- **[M5.1] A function node outside an API route runs in the browser.** The container boundary is
+  the network boundary in both directions, so a Compute wired from a field into a Text compiles to
+  one `const` — no request, no state. Only Compute qualifies: the record-shaped steps, Validate,
+  Gate and Code each belong inside a route, and each says so by name when placed outside one.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

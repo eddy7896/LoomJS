@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOp, applyOps, type Node, type Snapshot } from '@loom/ir';
+import { applyOp, applyOps, type Node, type Op, type Snapshot } from '@loom/ir';
 import { createComponent, gateMessage, mirrorPortsFor } from '@loom/components';
 import { compile } from '../src/index';
 import { formSnapshot, inferredSnapshot } from './fixtures';
@@ -304,5 +304,157 @@ describe('Compare and Logic', () => {
       'left || right',
     );
     expect(() => withStep('logic', { operator: 'nand' })).toThrow(/unknown operation/);
+  });
+});
+
+/**
+ * The graph a designer draws first: a field, a Compute, a Text. Nothing here is inside an API
+ * route, so all of it runs in the browser.
+ */
+function derivedSnapshot(op = 'length', extra: Op[] = []): Snapshot {
+  const base = formSnapshot();
+  const mirror = (id: string, componentId: string, port: Record<string, unknown>): Op => ({
+    type: 'addNode',
+    node: {
+      id,
+      category: 'ui',
+      kind: 'mirror',
+      name: 'mirror',
+      mirrorOf: componentId,
+      ports: [port as never],
+      position: { x: 0, y: 0 },
+    },
+  });
+
+  return applyOps(base, [
+    mirror('nd_m_title', 'cp_title', {
+      id: 'pt_value',
+      name: 'value',
+      direction: 'out',
+      portKind: 'data',
+      type: { kind: 'text' },
+    }),
+    mirror('nd_m_status', 'cp_status', {
+      id: 'pt_content',
+      name: 'content',
+      direction: 'in',
+      portKind: 'data',
+      type: { kind: 'any' },
+    }),
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_compute',
+        category: 'fn',
+        kind: 'compute',
+        name: 'Compute',
+        ports: [
+          { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
+          // Ports follow the operation, exactly as the editor derives them.
+          {
+            id: 'pt_result',
+            name: 'result',
+            direction: 'out',
+            portKind: 'data',
+            type: op === 'length' ? { kind: 'number' } : { kind: 'text' },
+          },
+        ],
+        position: { x: 0, y: 0 },
+        config: { op },
+      },
+    },
+    {
+      type: 'addWire',
+      wire: {
+        id: 'wr_in',
+        from: { nodeId: 'nd_m_title', portId: 'pt_value' },
+        to: { nodeId: 'nd_compute', portId: 'pt_input' },
+      },
+    },
+    {
+      type: 'setProp',
+      componentId: 'cp_status',
+      key: 'content',
+      value: { kind: 'bound', source: { nodeId: 'nd_compute', portId: 'pt_result' } },
+    },
+    ...extra,
+  ]);
+}
+
+describe('function nodes outside an API route run in the browser', () => {
+  it('compiles a field -> Compute -> Text graph to one local const', () => {
+    const code = home(derivedSnapshot('length'));
+    expect(code).toContain('const derived_nd_compute = String(field_cp_title).length;');
+    // No request, no state, no effect: it is a derivation of what the person typed.
+    expect(code).not.toContain('fetch(');
+    expect(code).not.toContain('useEffect');
+  });
+
+  it('reads the derived value where the property is bound', () => {
+    // The result is a number, so it goes through the text helper rather than into JSX raw.
+    expect(home(derivedSnapshot('length'))).toContain('asText(derived_nd_compute)');
+  });
+
+  it('chains one derivation into the next, in dependency order', () => {
+    const chained = derivedSnapshot('trim', [
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_upper',
+          category: 'fn',
+          kind: 'compute',
+          name: 'Compute',
+          ports: [
+            { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
+            { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+          ],
+          position: { x: 0, y: 0 },
+          config: { op: 'uppercase' },
+        },
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: 'wr_chain',
+          from: { nodeId: 'nd_compute', portId: 'pt_result' },
+          to: { nodeId: 'nd_upper', portId: 'pt_input' },
+        },
+      },
+      {
+        type: 'setProp',
+        componentId: 'cp_status',
+        key: 'content',
+        value: { kind: 'bound', source: { nodeId: 'nd_upper', portId: 'pt_result' } },
+      },
+    ]);
+
+    const code = home(chained);
+    expect(code).toContain('const derived_nd_compute = String(field_cp_title).trim();');
+    expect(code).toContain('const derived_nd_upper = String(derived_nd_compute).toUpperCase();');
+    // Declared before it is used, or the emitted app would not run.
+    expect(code.indexOf('derived_nd_compute =')).toBeLessThan(code.indexOf('derived_nd_upper ='));
+  });
+
+  it('emits nothing for a derivation no property reads', () => {
+    const unread = applyOps(derivedSnapshot('length'), [
+      { type: 'removeProp', componentId: 'cp_status', key: 'content' },
+    ]);
+    expect(home(unread)).not.toContain('derived_nd_compute');
+  });
+
+  it('says why a record-shaped step cannot run in the browser', () => {
+    const misplaced = applyOps(derivedSnapshot('length'), [
+      { type: 'setNodeConfig', nodeId: 'nd_compute', config: { left: 'a', operator: 'add' } },
+    ]);
+    const asMath = {
+      ...misplaced,
+      nodes: { ...misplaced.nodes, nd_compute: { ...misplaced.nodes.nd_compute!, kind: 'math' } },
+    };
+    expect(() => compile(asMath)).toThrow(/Math works on the fields of a request body/);
+  });
+
+  it('refuses a Compute with nothing wired into it, naming the node', () => {
+    const unwired = applyOps(derivedSnapshot('length'), [{ type: 'removeWire', wireId: 'wr_in' }]);
+    expect(() => compile(unwired)).toThrow(/has nothing wired into its input/);
   });
 });

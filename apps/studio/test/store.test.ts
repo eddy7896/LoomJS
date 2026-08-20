@@ -107,7 +107,7 @@ describe('editor -> compiler', () => {
       kind: 'bound',
       source: { nodeId: 'nd_x', portId: 'pt_result' },
     };
-    expect(() => compile(snapshot())).toThrow(/no pipeline on this screen produces/);
+    expect(() => compile(snapshot())).toThrow(/does not produce a value from/);
   });
 });
 

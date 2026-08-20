@@ -30,7 +30,7 @@ export function valueExpr(
       return `${ctx.requireParams()}.${value.name} ?? ""`;
     }
     case 'bound':
-      return bindingExpr(ctx.plans, value.source, componentId);
+      return bindingExpr(ctx.plans, ctx.derived, value.source, componentId);
     case 'item': {
       const item = ctx.itemVar();
       if (!item) {

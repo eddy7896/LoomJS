@@ -596,9 +596,13 @@ select {
 
 .problem {
   position: absolute;
-  left: 12px;
+  /* Clear of the canvas controls, which live in the bottom-left corner. */
+  left: 56px;
   bottom: 12px;
   z-index: 10;
+  /* A Problems message is something to read, never something to click. Left interactive it sits
+     over the zoom and fit buttons and swallows them until the problem is resolved. */
+  pointer-events: none;
   background: color-mix(in srgb, var(--error) 10%, var(--surface));
   border: 1px solid var(--error);
   color: var(--error);

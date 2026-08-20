@@ -101,7 +101,7 @@ describe('pipeline errors (Build tier)', () => {
       kind: 'bound',
       source: { nodeId: 'nd_ghost', portId: 'pt_result' },
     };
-    expect(() => compile(snapshot)).toThrow(/no pipeline on this screen produces/);
+    expect(() => compile(snapshot)).toThrow(/does not produce a value from/);
   });
 
   it('refuses an API route whose body holds a node that cannot run on the server', () => {

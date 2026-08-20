@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { drag, graphNode, handle } from './canvas';
 
 /**
  * M4's gate: connect a Supabase-shaped project, introspect a table, list its rows in the Preview
@@ -13,31 +14,6 @@ const preview = (page: Page) => page.frameLocator('iframe.preview__frame');
 const field = (page: Page, label: string) =>
   page.locator('.field', { has: page.locator('.field__label', { hasText: label }) });
 
-const graphNode = (page: Page, title: string) =>
-  page.locator('.react-flow__node', { has: page.locator('.nnode__title', { hasText: title }) });
-
-const handle = (node: Locator, portId: string) => node.locator(`[data-handleid="${portId}"]`);
-
-async function drag(page: Page, from: Locator, to: Locator): Promise<void> {
-  await page.locator('.react-flow__controls-fitview').click();
-  // Read a box only once both handles are actually on screen: fitView re-lays the canvas, and a
-  // box read mid-layout comes back null and fails the drag for reasons unrelated to the product.
-  await from.waitFor({ state: 'visible' });
-  await to.waitFor({ state: 'visible' });
-  const start = (await from.boundingBox())!;
-  const end = (await to.boundingBox())!;
-  const centre = (b: { x: number; y: number; width: number; height: number }) => ({
-    x: b.x + b.width / 2,
-    y: b.y + b.height / 2,
-  });
-  const a = centre(start);
-  const b = centre(end);
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 8 });
-  await page.mouse.move(b.x, b.y, { steps: 8 });
-  await page.mouse.up();
-}
 
 async function connect(page: Page): Promise<void> {
   await page.getByTestId('connect-supabase').click();

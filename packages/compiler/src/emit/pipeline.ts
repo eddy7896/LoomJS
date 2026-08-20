@@ -1,6 +1,7 @@
 import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, TypeRef, Wire } from '@loom/ir';
 import { canConnect, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
+import type { DerivedPlan } from './derived';
 
 /**
  * The binding & trigger runtime (`docs/specs/binding-trigger-runtime.md`), compiled.
@@ -234,7 +235,24 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
 }
 
 /** The state variable a bound property reads. */
-export function bindingExpr(plans: PipelinePlan[], source: PortRef, componentId: Id): string {
+export function bindingExpr(
+  plans: PipelinePlan[],
+  derived: DerivedPlan[],
+  source: PortRef,
+  componentId: Id,
+): string {
+  // A derived value is a plain local: no request, no state, just the constant computed above.
+  const derivation = derived.find((entry) => entry.node.id === source.nodeId);
+  if (derivation) {
+    if (source.portId !== 'pt_result') {
+      throw new CompileError(
+        `Bound property reads port "${source.portId}", which is not an output of that function.`,
+        componentId,
+      );
+    }
+    return derivation.name;
+  }
+
   // A state node is read directly: the value outlives the call that produced it, which is the
   // whole point of writing it to the screen bucket.
   for (const plan of plans) {
@@ -253,7 +271,9 @@ export function bindingExpr(plans: PipelinePlan[], source: PortRef, componentId:
   const plan = plans.find((candidate) => candidate.node.id === source.nodeId);
   if (!plan) {
     throw new CompileError(
-      `Bound property reads node "${source.nodeId}", which no pipeline on this screen produces.`,
+      `Bound property reads a node this screen does not produce a value from. ` +
+        'A function node only runs when it is inside an API route, or wired from something on ' +
+        'this artboard.',
       componentId,
     );
   }
@@ -279,7 +299,16 @@ export function bindingExpr(plans: PipelinePlan[], source: PortRef, componentId:
  * The type a bound property receives. Emitters use it to render safely — an object dropped into
  * JSX as a child crashes React, so the Text template needs to know before it emits.
  */
-export function boundTypeOf(plans: PipelinePlan[], source: PortRef): TypeRef | undefined {
+export function boundTypeOf(
+  plans: PipelinePlan[],
+  derived: DerivedPlan[],
+  source: PortRef,
+): TypeRef | undefined {
+  const derivation = derived.find((entry) => entry.node.id === source.nodeId);
+  if (derivation) {
+    return derivation.node.ports.find((port) => port.id === source.portId)?.type;
+  }
+
   for (const plan of plans) {
     for (const state of plan.states) {
       if (state.node.id === source.nodeId) return state.valueType;

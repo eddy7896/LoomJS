@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { drag, graphNode, handle } from './canvas';
 
 /**
  * M3's gate: a button in the Preview calls the emitted serverless function and shows the result.
@@ -11,40 +12,6 @@ const preview = (page: Page) => page.frameLocator('iframe.preview__frame');
 const field = (page: Page, label: string) =>
   page.locator('.field', { has: page.locator('.field__label', { hasText: label }) });
 
-/** A node on the Nodes canvas, found by its title. */
-const graphNode = (page: Page, title: string) =>
-  page.locator('.react-flow__node', { has: page.locator('.nnode__title', { hasText: title }) });
-
-const handle = (node: Locator, portId: string) => node.locator(`[data-handleid="${portId}"]`);
-
-/**
- * Wire two ports. The canvas re-renders while a connection is in flight, so this drives the
- * pointer by coordinates rather than by hovering locators whose boxes are still settling.
- */
-async function drag(page: Page, from: Locator, to: Locator): Promise<void> {
-  // Bring the whole graph into view first, the way a user would before reaching for a port.
-  await page.locator('.react-flow__controls-fitview').click();
-  // Read a box only once both handles are actually on screen: fitView re-lays the canvas, and a
-  // box read mid-layout comes back null and fails the drag for reasons unrelated to the product.
-  await from.waitFor({ state: 'visible' });
-  await to.waitFor({ state: 'visible' });
-
-  const start = (await from.boundingBox())!;
-  const end = (await to.boundingBox())!;
-  const centre = (box: { x: number; y: number; width: number; height: number }) => ({
-    x: box.x + box.width / 2,
-    y: box.y + box.height / 2,
-  });
-
-  const a = centre(start);
-  const b = centre(end);
-
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 8 });
-  await page.mouse.move(b.x, b.y, { steps: 8 });
-  await page.mouse.up();
-}
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -94,11 +61,12 @@ test('an illegal wire is refused at the gesture (Problems tier)', async ({ page 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
 
-  // A trigger port cannot feed a data port.
+  // A trigger port cannot feed a data port. The wire must NOT land, so this attempt stands alone.
   await drag(
     page,
     handle(graphNode(page, 'Go'), 'pt_click'),
     handle(graphNode(page, 'API route'), 'pt_input'),
+    { expectWire: false },
   );
 
   await expect(page.locator('.problem')).toContainText('trigger port to a data port');
@@ -113,4 +81,33 @@ test('changing a Compute operation retypes its ports', async ({ page }) => {
   await expect(page.locator('.portline', { hasText: 'input' })).toContainText('text');
   await field(page, 'Operation').locator('select').selectOption('double');
   await expect(page.locator('.portline', { hasText: 'input' })).toContainText('number');
+});
+
+test('a function node outside a route derives a value in the browser', async ({ page }) => {
+  // The graph a designer draws first: a field, a Compute, a Text. No API route anywhere, so all
+  // of it runs in the browser — no request, no server, no state.
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Input');
+
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Length');
+
+  await page.getByRole('button', { name: 'Nodes' }).click();
+  await page.getByRole('button', { name: '+ Compute' }).click();
+  // Retype the ports before wiring: length turns text into a number.
+  await field(page, 'Operation').locator('select').selectOption('length');
+
+  const compute = graphNode(page, 'Compute');
+  await drag(page, handle(graphNode(page, 'Input'), 'pt_value'), handle(compute, 'pt_input'));
+  await drag(page, handle(compute, 'pt_result'), handle(graphNode(page, 'Length'), 'pt_content'));
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await preview(page).locator('input').fill('hello');
+
+  // It updates as the person types: a derived value is a const recomputed on render.
+  await expect(preview(page).locator('span', { hasText: '5' })).toBeVisible();
+  await preview(page).locator('input').fill('hello there');
+  await expect(preview(page).locator('span', { hasText: '11' })).toBeVisible();
 });

@@ -139,3 +139,21 @@ result type shifts underneath you reads worse than three that each mean one thin
   actually reads the record. The emitted app builds with `noUnusedLocals`, so an unconditional
   declaration would turn "left blank, right a literal" into a broken build — covered by a smoke
   gate that builds a route body holding one of every operator step.
+
+## Derived values — the browser half of the FN family
+
+The container boundary is the network boundary, and that cuts both ways: a function node
+**inside** an API route runs on the server, and one **outside** it runs in the browser. A Compute
+wired from a field's mirror into a Text is a derivation of local state, and it compiles to what a
+developer would write — one `const` recomputed on render. No request, no state, no effect.
+
+- **Demand-driven**, like every other local: the compiler starts from the properties that
+  actually read something and walks *backwards* along the wires. A derivation nobody binds is not
+  emitted, because a dead `const` fails the emitted app's own `noUnusedLocals` build.
+- **Chains** are emitted in dependency order; a cycle is a Build error naming the nodes.
+- A derivation may read a **field's mirror**, **another derivation**, or an **API route's
+  result** — reading a route's result marks that route's result as bound, so the state it needs
+  exists.
+- **Only Compute runs in the browser.** Math, Compare and Logic read named fields of a request
+  body; Validate must not be bypassable; a Gate stops a request; a Code node's body may await.
+  Each of those outside a route is a Build error that says which, and why.
