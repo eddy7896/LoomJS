@@ -101,14 +101,13 @@ describe('editor -> compiler', () => {
     expect(home).toContain('gap: 32');
   });
 
-  it('surfaces an unsupported edit as a Build error rather than emitting nonsense', () => {
+  it('surfaces a binding with no pipeline behind it as a Build error', () => {
     const textId = children()[0]!;
-    // A binding cannot compile until M3; the studio shows this as the Build error tier.
     getState().snapshot.components[textId]!.props.content = {
       kind: 'bound',
-      source: { nodeId: 'nd_x', portId: 'pt_x' },
+      source: { nodeId: 'nd_x', portId: 'pt_result' },
     };
-    expect(() => compile(snapshot())).toThrow(/not supported yet/);
+    expect(() => compile(snapshot())).toThrow(/no pipeline on this screen produces/);
   });
 });
 

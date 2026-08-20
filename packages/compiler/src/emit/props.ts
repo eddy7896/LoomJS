@@ -1,12 +1,13 @@
 import type { Component, PropertyValue } from '@loom/ir';
 import { CompileError, type EmitContext } from '../types';
+import { bindingExpr } from './pipeline';
 
 /**
  * A property value becomes a JS expression.
  *
- * `static` is a literal; `param` reads the artboard's route data (M2). `bound` needs the
- * binding/trigger runtime (spec 4, M3) and `event` is handled by the emitters that own the
- * event, not here. Failing loudly beats silently dropping a binding.
+ * `static` is a literal, `param` reads the artboard's route data (M2), and `bound` reads a
+ * pipeline's output state (M3, spec 4). `event` is handled by the emitters that own the event,
+ * not here. Failing loudly beats silently dropping a binding.
  */
 export function valueExpr(
   value: PropertyValue,
@@ -28,10 +29,7 @@ export function valueExpr(
       return `${ctx.requireParams()}.${value.name} ?? ""`;
     }
     case 'bound':
-      throw new CompileError(
-        `Bound property "${key}" is not supported yet (binding runtime lands in M3).`,
-        componentId,
-      );
+      return bindingExpr(ctx.plans, value.source, componentId);
     case 'event':
       throw new CompileError(
         `Property "${key}" holds an event handler but "${componentId}" does not accept one here.`,

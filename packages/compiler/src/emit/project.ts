@@ -1,4 +1,5 @@
 import type { EmittedFile } from '../types';
+import { DEV_API_PLUGIN } from './server';
 
 /**
  * The emitted app's fixed scaffold: a real Vite + React + TypeScript SPA (docs/07 — the V1
@@ -12,6 +13,7 @@ export const TARGET_DEPS = {
 } as const;
 
 export const TARGET_DEV_DEPS = {
+  '@types/node': '^20.11.0',
   '@types/react': '^18.3.12',
   '@types/react-dom': '^18.3.1',
   '@vitejs/plugin-react': '^4.3.4',
@@ -58,7 +60,7 @@ export function scaffoldFiles(projectName: string, appTitle: string): EmittedFil
       skipLibCheck: true,
       resolveJsonModule: true,
     },
-    include: ['src', 'vite.config.ts'],
+    include: ['src', 'api', 'vite.config.ts'],
   };
 
   return [
@@ -66,11 +68,11 @@ export function scaffoldFiles(projectName: string, appTitle: string): EmittedFil
     { path: 'tsconfig.json', content: `${JSON.stringify(tsconfig, null, 2)}\n` },
     {
       path: 'vite.config.ts',
-      content: `import { defineConfig } from 'vite';
+      content: `import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-
+${DEV_API_PLUGIN}
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), loomDevApi()],
 });
 `,
     },

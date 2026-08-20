@@ -26,10 +26,16 @@ export type Selection =
   | { kind: 'component'; id: Id }
   | { kind: 'artboard'; id: Id }
   | { kind: 'flow'; id: Id }
+  | { kind: 'node'; id: Id }
+  | { kind: 'wire'; id: Id }
   | undefined;
+
+/** Which canvas is on screen. A view concern, so it lives beside the document, not inside it. */
+export type Mode = 'design' | 'nodes';
 
 export interface EditorState {
   snapshot: Snapshot;
+  mode: Mode;
   selection: Selection;
   /** The artboard the canvas is working in — where new components land. */
   activeArtboardId: Id;
@@ -69,7 +75,14 @@ function initialSnapshot(): { snapshot: Snapshot; artboardId: Id } {
 
 function freshState(): EditorState {
   const { snapshot, artboardId } = initialSnapshot();
-  return { snapshot, selection: undefined, activeArtboardId: artboardId, past: [], future: [] };
+  return {
+    snapshot,
+    mode: 'design',
+    selection: undefined,
+    activeArtboardId: artboardId,
+    past: [],
+    future: [],
+  };
 }
 
 let state: EditorState = freshState();
@@ -116,15 +129,22 @@ export function setActiveArtboard(id: Id): void {
   set({ ...state, activeArtboardId: id, selection: { kind: 'artboard', id } });
 }
 
+const SELECTION_TABLES = {
+  component: 'components',
+  artboard: 'artboards',
+  flow: 'flows',
+  node: 'nodes',
+  wire: 'wires',
+} as const;
+
 function stillExists(snapshot: Snapshot, selection: Selection): Selection {
   if (!selection) return undefined;
-  const table =
-    selection.kind === 'component'
-      ? snapshot.components
-      : selection.kind === 'artboard'
-        ? snapshot.artboards
-        : snapshot.flows;
+  const table = snapshot[SELECTION_TABLES[selection.kind]] as Record<string, unknown>;
   return table[selection.id] ? selection : undefined;
+}
+
+export function setMode(mode: Mode): void {
+  set({ ...state, mode });
 }
 
 export function undo(): void {

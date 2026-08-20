@@ -2,13 +2,14 @@ import type { ComponentEmitter } from '../types';
 import { buttonEmitter } from './button';
 import { frameEmitter } from './frame';
 import { textEmitter } from './textComponent';
+import { textFieldEmitter } from './textField';
 
 /**
  * The component template registry: each component type owns exactly one code template
  * (docs/02 — "compile = stitch templates + wire data flow"). Growing the vocabulary means
  * adding an emitter here, never branching inside the walker.
  */
-const EMITTERS: ComponentEmitter[] = [frameEmitter, textEmitter, buttonEmitter];
+const EMITTERS: ComponentEmitter[] = [frameEmitter, textEmitter, buttonEmitter, textFieldEmitter];
 
 const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));
 

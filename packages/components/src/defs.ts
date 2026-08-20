@@ -87,7 +87,18 @@ export const LAYOUT_FIELDS: readonly FieldDef[] = [
   },
 ];
 
-const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF];
+/** A text input: the usual source of data flowing into a pipeline (spec 4). */
+export const TEXT_FIELD_DEF: ComponentDef = {
+  type: 'TextField',
+  label: 'Text field',
+  isContainer: false,
+  fields: [
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+    { key: 'placeholder', label: 'Placeholder', control: 'text', default: 'Type here' },
+  ],
+};
+
+const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF, TEXT_FIELD_DEF];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 
 export function componentDefs(): readonly ComponentDef[] {

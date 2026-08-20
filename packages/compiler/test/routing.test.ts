@@ -87,13 +87,13 @@ describe('flow errors (Build tier)', () => {
     expect(error!.message).toMatch(/unknown artboard/);
   });
 
-  it('rejects a trigger handler until M3', () => {
+  it('rejects a trigger that points at no pipeline on this screen', () => {
     const snapshot = masterDetailSnapshot();
     snapshot.components.cp_button!.props.onClick = {
       kind: 'event',
-      handler: { kind: 'trigger', target: { nodeId: 'nd_x', portId: 'pt_x' } },
+      handler: { kind: 'trigger', target: { nodeId: 'nd_ghost', portId: 'pt_run' } },
     };
-    expect(() => compile(snapshot)).toThrow(/trigger runtime lands in M3/);
+    expect(() => compile(snapshot)).toThrow(/not a pipeline on this screen/);
   });
 });
 

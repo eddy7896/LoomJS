@@ -1,5 +1,6 @@
-import type { Artboard, Component, Id, Snapshot } from '@loom/ir';
+import type { Artboard, Component, Id, PortRef, Snapshot } from '@loom/ir';
 import type { RouteMap } from './emit/routes';
+import type { PipelinePlan } from './emit/pipeline';
 
 /** One file the compiler emits. `path` is POSIX-relative to the output root. */
 export interface EmittedFile {
@@ -31,6 +32,8 @@ export interface EmitContext {
   /** The artboard being emitted — owns the route params in scope. */
   artboard: Artboard;
   routes: RouteMap;
+  /** Pipelines touching this artboard (spec 4). */
+  plans: PipelinePlan[];
   /** Resolve a component id or fail loudly (dangling ids are a compile error, not undefined). */
   component: (id: Id) => Component;
   /** Render a child subtree at the given indent depth. */
@@ -39,6 +42,10 @@ export interface EmitContext {
   requireParams: () => string;
   /** Declare that this module needs `useNavigate()`; returns the local variable name. */
   requireNavigate: () => string;
+  /** Declare local state for a controlled input; returns its variable name. */
+  requireFieldState: (componentId: Id, initial: string) => string;
+  /** The JS expression that fires the pipeline reached through `target`. */
+  triggerExpr: (target: PortRef, componentId: Id) => string;
   /** The JS expression that navigates along `flowId` (path + payload). */
   navigateExpr: (flowId: Id, componentId: Id) => string;
 }

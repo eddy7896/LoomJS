@@ -22,10 +22,11 @@
     "test:smoke": "vitest run --config vitest.smoke.config.ts"
   },
   "dependencies": {
-    "@loom/ir": "workspace:*"
+    "@loom/components": "workspace:*",
+    "@loom/ir": "workspace:*",
+    "@loom/typesys": "workspace:*"
   },
   "devDependencies": {
-    "@loom/components": "workspace:*",
     "@types/node": "^20.11.0"
   }
 }

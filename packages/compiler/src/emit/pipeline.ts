@@ -1,0 +1,288 @@
+import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, Wire } from '@loom/ir';
+import { canConnect } from '@loom/typesys';
+import { CompileError } from '../types';
+
+/**
+ * The binding & trigger runtime (`docs/specs/binding-trigger-runtime.md`), compiled.
+ *
+ * A pipeline is an API route node plus the wires around it. Everything **inside** the API node's
+ * body runs on the server, in the emitted Vercel function; everything outside runs in the browser.
+ * The container boundary *is* the network boundary — that is why the API node is a container and
+ * not a flat sub-graph (`03` open decision 3).
+ *
+ * Nothing here ships a runtime library: a bound property compiles to a plain state read, and a
+ * pipeline compiles to an async function a developer would recognise as hand-written.
+ */
+
+export interface PipelinePlan {
+  /** The API route node. */
+  node: Node;
+  /** Route path, e.g. `/api/run`. */
+  routePath: string;
+  method: 'GET' | 'POST';
+  /** Server-side function nodes, in execution order. */
+  body: Node[];
+  /** Component whose event fires this pipeline, if it is triggered rather than reactive. */
+  trigger: { componentId: Id; event: string } | undefined;
+  /** Component supplying the input value, if any. */
+  input: { componentId: Id; port: Port } | undefined;
+  /** Which output ports something on this artboard binds. Unbound outputs emit no state. */
+  binds: { result: boolean; pending: boolean; error: boolean };
+  /** Local identifiers used in the emitted module. */
+  names: { state: string; pending: string; error: string; run: string };
+}
+
+/** Output ports of an API route node that a property may bind to. */
+const OUTPUT_PORTS = { pt_result: 'result', pt_pending: 'pending', pt_error: 'error' } as const;
+type OutputPortId = keyof typeof OUTPUT_PORTS;
+
+const jsIdent = (id: string): string => id.replace(/[^a-zA-Z0-9_]/g, '_');
+
+export function stateNameForComponent(componentId: Id): string {
+  return `field_${jsIdent(componentId)}`;
+}
+
+function portOf(node: Node, portId: Id): Port | undefined {
+  return node.ports.find((port) => port.id === portId);
+}
+
+function resolvePort(snapshot: Snapshot, ref: PortRef, wireId: Id): { node: Node; port: Port } {
+  const node = snapshot.nodes[ref.nodeId];
+  if (!node) throw new CompileError(`Wire "${wireId}" references unknown node ${ref.nodeId}.`, wireId);
+  const port = portOf(node, ref.portId);
+  if (!port) {
+    throw new CompileError(`Wire "${wireId}" references unknown port ${ref.portId}.`, wireId);
+  }
+  return { node, port };
+}
+
+/**
+ * Every wire is checked before anything is emitted: direction, port kind, then type. An
+ * incompatible wire is a Build error carrying the wire's id, never a runtime surprise
+ * (`docs/specs/type-registry.md`).
+ */
+export function validateWires(snapshot: Snapshot): void {
+  for (const wire of Object.values(snapshot.wires)) {
+    const from = resolvePort(snapshot, wire.from, wire.id);
+    const to = resolvePort(snapshot, wire.to, wire.id);
+    const check = canConnect(from.port, to.port);
+    if (!check.ok) {
+      throw new CompileError(`Wire "${wire.id}" is invalid: ${check.reason}`, wire.id);
+    }
+  }
+}
+
+const wiresInto = (snapshot: Snapshot, nodeId: Id, portId: Id): Wire[] =>
+  Object.values(snapshot.wires).filter(
+    (wire) => wire.to.nodeId === nodeId && wire.to.portId === portId,
+  );
+
+/** Components belonging to one artboard, by id. */
+function componentsOf(snapshot: Snapshot, artboard: Artboard): Set<Id> {
+  const ids = new Set<Id>();
+  const walk = (id: Id): void => {
+    ids.add(id);
+    for (const child of snapshot.components[id]?.children ?? []) walk(child);
+  };
+  walk(artboard.root);
+  return ids;
+}
+
+/** The component a mirror node stands for, if it lives on this artboard. */
+function mirrorComponent(
+  snapshot: Snapshot,
+  node: Node,
+  owned: Set<Id>,
+): Component | undefined {
+  if (node.category !== 'ui' || !node.mirrorOf) return undefined;
+  if (!owned.has(node.mirrorOf)) return undefined;
+  return snapshot.components[node.mirrorOf];
+}
+
+/**
+ * Plan the pipelines that touch one artboard. A pipeline is *triggered* when a trigger port is
+ * wired into its run port and *reactive* otherwise — derived, never configured.
+ */
+export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelinePlan[] {
+  const owned = componentsOf(snapshot, artboard);
+  const plans: PipelinePlan[] = [];
+
+  const apiNodes = Object.values(snapshot.nodes)
+    .filter((node) => node.category === 'api')
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const node of apiNodes) {
+    const config = (node.config ?? {}) as { method?: string; path?: string; body?: Id[] };
+    const routeName = String(config.path ?? 'run').replace(/[^a-zA-Z0-9_-]/g, '') || 'run';
+    const method = config.method === 'GET' ? 'GET' : 'POST';
+
+    const body = (config.body ?? [])
+      .map((id) => snapshot.nodes[id])
+      .filter((child): child is Node => Boolean(child));
+
+    for (const child of config.body ?? []) {
+      if (!snapshot.nodes[child]) {
+        throw new CompileError(`API route "${node.name ?? node.id}" contains a missing node.`, node.id);
+      }
+    }
+
+    // Trigger: a UI mirror's trigger port wired into this node's run port.
+    let trigger: PipelinePlan['trigger'];
+    for (const wire of wiresInto(snapshot, node.id, 'pt_run')) {
+      const source = snapshot.nodes[wire.from.nodeId];
+      const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
+      if (!component) continue;
+      trigger = { componentId: component.id, event: 'onClick' };
+    }
+
+    // Input: a UI mirror's data port wired into this node's input port.
+    let input: PipelinePlan['input'];
+    for (const wire of wiresInto(snapshot, node.id, 'pt_input')) {
+      const source = snapshot.nodes[wire.from.nodeId];
+      const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
+      if (!component || !source) continue;
+      const port = portOf(source, wire.from.portId);
+      if (port) input = { componentId: component.id, port };
+    }
+
+    const binds = { result: false, pending: false, error: false };
+    for (const component of Object.values(snapshot.components)) {
+      if (!owned.has(component.id)) continue;
+      for (const value of Object.values(component.props)) {
+        if (value.kind !== 'bound' || value.source.nodeId !== node.id) continue;
+        const name = OUTPUT_PORTS[value.source.portId as OutputPortId];
+        if (!name) {
+          throw new CompileError(
+            `Property binds port "${value.source.portId}", which is not an output of the API route.`,
+            component.id,
+          );
+        }
+        binds[name] = true;
+      }
+    }
+
+    const bound = binds.result || binds.pending || binds.error;
+
+    // A pipeline this artboard neither fires nor reads belongs to another screen.
+    if (!trigger && !input && !bound) continue;
+
+    const ident = jsIdent(node.id);
+    plans.push({
+      node,
+      routePath: `/api/${routeName}`,
+      method,
+      body,
+      trigger,
+      input,
+      binds,
+      names: {
+        state: `result_${ident}`,
+        pending: `pending_${ident}`,
+        error: `error_${ident}`,
+        run: `run_${ident}`,
+      },
+    });
+  }
+
+  return plans;
+}
+
+/** The state variable a bound property reads. */
+export function bindingExpr(plans: PipelinePlan[], source: PortRef, componentId: Id): string {
+  const plan = plans.find((candidate) => candidate.node.id === source.nodeId);
+  if (!plan) {
+    throw new CompileError(
+      `Bound property reads node "${source.nodeId}", which no pipeline on this screen produces.`,
+      componentId,
+    );
+  }
+
+  switch (source.portId as OutputPortId) {
+    case 'pt_result':
+      return `${plan.names.state} ?? ""`;
+    case 'pt_pending':
+      return `${plan.names.pending} ? "true" : "false"`;
+    case 'pt_error':
+      return `${plan.names.error} ?? ""`;
+    default:
+      throw new CompileError(
+        `Bound property reads port "${source.portId}", which is not an output of the API route.`,
+        componentId,
+      );
+  }
+}
+
+/**
+ * The `useState` / `run` prelude for every pipeline on an artboard.
+ *
+ * State is **demand-driven**: an output nobody binds emits no variable, because the emitted app
+ * type-checks with `noUnusedLocals` and dead state would fail its own build. An unbound failure
+ * still surfaces — it goes to the console instead of a state nobody reads.
+ */
+export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
+  const lines: string[] = [];
+
+  for (const plan of plans) {
+    if (plan.binds.result) {
+      lines.push(
+        `  const [${plan.names.state}, set_${plan.names.state}] = useState<string | null>(null);`,
+      );
+    }
+    if (plan.binds.pending) {
+      lines.push(`  const [${plan.names.pending}, set_${plan.names.pending}] = useState(false);`);
+    }
+    if (plan.binds.error) {
+      lines.push(
+        `  const [${plan.names.error}, set_${plan.names.error}] = useState<string | null>(null);`,
+      );
+    }
+  }
+
+  for (const plan of plans) {
+    const payload = plan.input ? `{ input: ${stateNameForComponent(plan.input.componentId)} }` : '{}';
+    const call =
+      plan.method === 'GET'
+        ? `await fetch(${JSON.stringify(plan.routePath)} + "?input=" + encodeURIComponent(String(${
+            plan.input ? stateNameForComponent(plan.input.componentId) : '""'
+          })))`
+        : `await fetch(${JSON.stringify(plan.routePath)}, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(${payload}),
+      })`;
+
+    const start = plan.binds.pending ? `    set_${plan.names.pending}(true);\n` : '';
+    const clearError = plan.binds.error ? `    set_${plan.names.error}(null);\n` : '';
+    const store = plan.binds.result
+      ? `      set_${plan.names.state}(body.result === undefined || body.result === null ? null : String(body.result));`
+      : '      void body;';
+    const onError = plan.binds.error
+      ? `      set_${plan.names.error}(error instanceof Error ? error.message : String(error));`
+      : '      console.error(error);';
+    const settle = plan.binds.pending
+      ? `    } finally {\n      set_${plan.names.pending}(false);\n    }`
+      : '    }';
+
+    lines.push(`
+  const ${plan.names.run} = useCallback(async () => {
+${start}${clearError}    try {
+      const response = ${call};
+      if (!response.ok) throw new Error("Request failed with " + response.status);
+      const body = (await response.json()) as { result?: unknown };
+${store}
+    } catch (error) {
+${onError}
+${settle}
+  }, [${plan.input ? stateNameForComponent(plan.input.componentId) : ''}]);`);
+
+    // No trigger wired in means the pipeline is reactive: run on mount and on input change.
+    if (!plan.trigger) {
+      lines.push(`
+  useEffect(() => {
+    void ${plan.names.run}();
+  }, [${plan.names.run}]);`);
+    }
+  }
+
+  return lines;
+}

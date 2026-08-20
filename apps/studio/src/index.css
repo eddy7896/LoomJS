@@ -462,3 +462,168 @@ select {
   pointer-events: none;
   z-index: 20;
 }
+
+/* ---- M3: Nodes mode ---- */
+.nodes-canvas {
+  position: relative;
+  min-width: 0;
+  background: var(--surface-sunken);
+}
+
+.nodes-canvas .react-flow__attribution {
+  display: none;
+}
+
+.nnode {
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%);
+  font-size: 12px;
+}
+
+.nnode.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Functional hues: UI mirrors, server routes and functions read differently at a glance. */
+.nnode--ui .nnode__head {
+  background: color-mix(in srgb, #6366f1 12%, transparent);
+}
+
+.nnode--api .nnode__head {
+  background: color-mix(in srgb, #16a34a 14%, transparent);
+}
+
+.nnode--fn .nnode__head {
+  background: color-mix(in srgb, #d97706 14%, transparent);
+}
+
+.nnode__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.nnode__title {
+  font-weight: 600;
+}
+
+.nnode__kind {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.nnode__body {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nnode__body-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.nstep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 3px 8px;
+}
+
+.nstep__index {
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.nstep__op {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.nnode__ports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.nport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+}
+
+.nport--out {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.nport__type {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.nhandle--trigger {
+  background: var(--busy);
+  border-radius: 2px;
+}
+
+.nhandle--data {
+  background: var(--accent);
+}
+
+.nedge path {
+  stroke: var(--ink-soft);
+}
+
+.problem {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 10;
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+  border: 1px solid var(--error);
+  color: var(--error);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  max-width: 460px;
+}
+
+.portline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.dot--data {
+  background: var(--accent);
+}
+
+.dot--trigger {
+  background: var(--busy);
+  border-radius: 2px;
+}
+
+.toolbar__modes button {
+  border-radius: 6px;
+}

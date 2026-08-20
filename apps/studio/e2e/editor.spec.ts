@@ -28,7 +28,7 @@ test('an edit in the editor shows up in the Preview', async ({ page }) => {
 });
 
 test('placing a component adds it to the running app', async ({ page }) => {
-  await page.getByRole('button', { name: '+ Text' }).click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
   const content = field(page, 'Content').locator('input');
   await content.fill('Second line');
 
@@ -53,7 +53,7 @@ test('a flow arrow becomes a route you can click through (M2)', async ({ page })
 
   // A Text on the detail screen that reads the param is M3-adjacent; instead assert the route
   // itself, which is what M2 promises: navigation between two compiled routes.
-  await page.getByRole('button', { name: '+ Text' }).click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Content').locator('input').fill('Detail screen');
 
   // Back to Home, add a Button whose click follows a flow to the detail screen.

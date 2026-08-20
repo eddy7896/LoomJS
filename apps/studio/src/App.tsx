@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Canvas } from './canvas/Canvas';
+import { NodesCanvas } from './nodes/NodesCanvas';
 import { Inspector } from './inspector/Inspector';
 import { LayersPanel } from './panels/LayersPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewPanel } from './preview/PreviewPanel';
 import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
+import { removeNode, removeWire } from './state/graph';
+import { useEditor } from './state/useEditor';
 
 export default function App() {
   const [previewOpen, setPreviewOpen] = useState(true);
+  const mode = useEditor((s) => s.mode);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -26,6 +30,8 @@ export default function App() {
         event.preventDefault();
         if (selection.kind === 'component') removeComponent(selection.id);
         else if (selection.kind === 'flow') removeFlow(selection.id);
+        else if (selection.kind === 'node') removeNode(selection.id);
+        else if (selection.kind === 'wire') removeWire(selection.id);
         else removeArtboard(selection.id);
       }
     };
@@ -38,7 +44,7 @@ export default function App() {
       <Toolbar previewOpen={previewOpen} onTogglePreview={() => setPreviewOpen((v) => !v)} />
       <main className={`workspace ${previewOpen ? 'workspace--preview' : ''}`}>
         <LayersPanel />
-        <Canvas />
+        {mode === 'design' ? <Canvas /> : <NodesCanvas />}
         {previewOpen ? <PreviewPanel /> : null}
         <Inspector />
       </main>

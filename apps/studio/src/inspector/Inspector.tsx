@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Component, Layout, SizeMode } from '@loom/ir';
-import { LAYOUT_FIELDS, defFor, type FieldDef } from '@loom/components';
+import { LAYOUT_FIELDS, defFor, defForNode, type FieldDef } from '@loom/components';
+import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import {
   artboardOf,
@@ -17,6 +18,7 @@ import {
   setSize,
   setStaticProp,
 } from '../state/store';
+import { removeNode, setNodeConfig } from '../state/graph';
 
 /**
  * The inspector is **schema-driven**: it renders whatever `@loom/components` declares for the
@@ -33,6 +35,10 @@ export function Inspector() {
 
   if (selection?.kind === 'flow') {
     return <FlowInspector flowId={selection.id} />;
+  }
+
+  if (selection?.kind === 'node') {
+    return <NodeInspector nodeId={selection.id} />;
   }
 
   const component = selection?.kind === 'component' ? snapshot.components[selection.id] : undefined;
@@ -404,6 +410,84 @@ function FlowInspector({ flowId }: { flowId: string }) {
         ))}
         <button onClick={() => removeFlow(flow.id)}>Delete flow</button>
       </section>
+    </aside>
+  );
+}
+
+/** A graph node: its config drives its port types, so editing here retypes the ports. */
+function NodeInspector({ nodeId }: { nodeId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const node = snapshot.nodes[nodeId];
+  if (!node) return null;
+
+  const def = defForNode(node);
+  const config = (node.config ?? {}) as Record<string, unknown>;
+
+  return (
+    <aside className="panel inspector">
+      <h2 className="panel__title">Inspector</h2>
+
+      <section className="field-group">
+        <div className="field-group__head">
+          <span className="badge">{def?.label ?? `${node.category}:${node.kind}`}</span>
+          <code className="mono id">{node.id}</code>
+        </div>
+        {node.mirrorOf ? (
+          <p className="panel__hint">
+            A mirror of a component on the artboard. Edit what it looks like in Design mode.
+          </p>
+        ) : null}
+      </section>
+
+      {def && def.fields.length > 0 ? (
+        <section className="field-group">
+          <h3 className="field-group__title">Config</h3>
+          {def.fields.map((field) => {
+            const current = config[field.key] ?? field.default;
+            if (field.control === 'select') {
+              return (
+                <Field key={field.key} label={field.label}>
+                  <select
+                    value={String(current)}
+                    onChange={(e) => setNodeConfig(node.id, { [field.key]: e.target.value })}
+                  >
+                    {(field.options ?? []).map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              );
+            }
+            return (
+              <Field key={field.key} label={field.label}>
+                <input
+                  value={String(current)}
+                  onChange={(e) => setNodeConfig(node.id, { [field.key]: e.target.value })}
+                />
+              </Field>
+            );
+          })}
+        </section>
+      ) : null}
+
+      <section className="field-group">
+        <h3 className="field-group__title">Ports</h3>
+        {node.ports.map((port) => (
+          <div key={port.id} className="portline">
+            <span className={`dot dot--${port.portKind}`} />
+            <span>{port.name}</span>
+            <span className="mono id">{formatType(port.type)}</span>
+          </div>
+        ))}
+      </section>
+
+      {node.mirrorOf ? null : (
+        <section className="field-group">
+          <button onClick={() => removeNode(node.id)}>Delete node</button>
+        </section>
+      )}
     </aside>
   );
 }

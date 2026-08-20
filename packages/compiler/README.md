@@ -4,9 +4,10 @@ Walks a `@loom/ir` **snapshot** and emits a real **Vite + React + TypeScript** r
 This is the core bet of loomJS (`docs/02-system-architecture.md`): compile = stitch per-type
 code templates, not interpret a runtime.
 
-## Status — M2 (flow arrows are the router)
+## Status — M3 (the graph emits a running backend)
 
-M0 proved `graph -> files -> runs`; M1 wired it to the editor; M2 adds routing.
+M0 proved `graph -> files -> runs`; M1 wired it to the editor; M2 added routing; M3 adds the
+server.
 
 | Emitted                    | Notes                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -19,10 +20,8 @@ v0 subset the snapshot schema carries — the full **layout model is spec #5** a
 
 ## Not yet (by design)
 
-- **Bound properties** and **`bound` flow payloads** -> `CompileError` (binding runtime is
-  spec #4, M3).
-- **Trigger handlers** -> `CompileError` (trigger runtime, M3).
-- Serverless functions (M3), connectors (M4), deploy (M6).
+- **`bound` flow payloads** -> `CompileError`: they read a node port, which needs M4's typed data.
+- Connectors (M4), auto-backend inference (M5), deploy (M6).
 
 Failing loudly beats silently dropping a binding: these surface as the **Build** error tier
 with the offending entity id (`CompileError.entityId`) so the editor can map back to the node.
@@ -38,6 +37,16 @@ const { files } = compile(createTrivialSnapshot());
 await writeFiles(files, './out', { clean: true });
 // cd out && npm install && npm run build
 ```
+
+**Backend (M3).** An API route node is a container: the function nodes inside its body run in the
+emitted serverless function, and the container boundary *is* the network boundary
+(`docs/specs/binding-trigger-runtime.md`). Around it, the compiler emits plain React — `useState`
+for each **bound** output, a `useCallback` that fetches, and either the component's event handler
+(triggered) or a `useEffect` (reactive). No runtime library ships with the app.
+
+State is demand-driven: an output nobody binds emits no variable, because the emitted app builds
+with `noUnusedLocals` and dead state would fail its own `tsc`. Every wire is type-checked with
+`@loom/typesys` before emission (`docs/specs/type-registry.md`).
 
 ## Tests
 

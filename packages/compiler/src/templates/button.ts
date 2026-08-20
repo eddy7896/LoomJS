@@ -5,8 +5,8 @@ import { valueExpr } from '../emit/props';
 
 /**
  * Button = the leaf that starts a flow. Its `onClick` property holds an event handler; a
- * `navigate` handler compiles to react-router navigation along the flow arrow (M2). A `trigger`
- * handler fires a backend pipeline and lands with the trigger runtime (M3).
+ * `navigate` handler compiles to react-router navigation along the flow arrow (M2); a `trigger`
+ * handler fires a backend pipeline (M3).
  */
 export const buttonEmitter: ComponentEmitter = {
   type: 'Button',
@@ -24,13 +24,10 @@ export const buttonEmitter: ComponentEmitter = {
           component.id,
         );
       }
-      if (onClick.handler.kind === 'trigger') {
-        throw new CompileError(
-          'Trigger handlers are not supported yet (trigger runtime lands in M3).',
-          component.id,
-        );
-      }
-      handler = ` onClick={() => ${ctx.navigateExpr(onClick.handler.flowId, component.id)}}`;
+      handler =
+        onClick.handler.kind === 'trigger'
+          ? ` onClick={() => ${ctx.triggerExpr(onClick.handler.target, component.id)}}`
+          : ` onClick={() => ${ctx.navigateExpr(onClick.handler.flowId, component.id)}}`;
     }
 
     return `${indent(depth)}<button type="button"${handler}>{${labelExpr}}</button>`;

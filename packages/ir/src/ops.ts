@@ -30,6 +30,10 @@ export type Op =
   | { type: 'moveComponent'; componentId: string; parentId: string; index?: number }
   | { type: 'removeComponent'; componentId: string }
   | { type: 'addNode'; node: Node }
+  | { type: 'setNodeConfig'; nodeId: string; config: unknown; ports?: Node['ports'] }
+  | { type: 'setNodePosition'; nodeId: string; position: { x: number; y: number } }
+  | { type: 'removeNode'; nodeId: string }
+  | { type: 'removeWire'; wireId: string }
   | { type: 'addWire'; wire: Wire }
   | { type: 'addFlow'; flow: Flow }
   | { type: 'setFlowPayload'; flowId: string; payload: FlowPayload[] }
@@ -135,6 +139,51 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'addNode': {
       next.nodes[op.node.id] = op.node;
+      return next;
+    }
+
+    case 'setNodeConfig': {
+      const node = next.nodes[op.nodeId];
+      if (!node) throw new Error(`setNodeConfig: unknown node ${op.nodeId}`);
+      node.config = op.config;
+      // Config drives port types (inference over annotation), so retyped ports come with it.
+      if (op.ports) {
+        node.ports = op.ports;
+        const valid = new Set(op.ports.map((port) => port.id));
+        for (const [wireId, wire] of Object.entries(next.wires)) {
+          const touches =
+            (wire.from.nodeId === op.nodeId && !valid.has(wire.from.portId)) ||
+            (wire.to.nodeId === op.nodeId && !valid.has(wire.to.portId));
+          if (touches) delete next.wires[wireId];
+        }
+      }
+      return next;
+    }
+
+    case 'setNodePosition': {
+      const node = next.nodes[op.nodeId];
+      if (!node) throw new Error(`setNodePosition: unknown node ${op.nodeId}`);
+      node.position = op.position;
+      return next;
+    }
+
+    case 'removeNode': {
+      delete next.nodes[op.nodeId];
+      // A node's wires cannot outlive it, and neither can its slot in a container's body.
+      for (const [wireId, wire] of Object.entries(next.wires)) {
+        if (wire.from.nodeId === op.nodeId || wire.to.nodeId === op.nodeId) delete next.wires[wireId];
+      }
+      for (const node of Object.values(next.nodes)) {
+        const config = node.config as { body?: string[] } | undefined;
+        if (Array.isArray(config?.body)) {
+          config.body = config.body.filter((id) => id !== op.nodeId);
+        }
+      }
+      return next;
+    }
+
+    case 'removeWire': {
+      delete next.wires[op.wireId];
       return next;
     }
 

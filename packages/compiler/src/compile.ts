@@ -2,23 +2,36 @@ import type { Artboard, Snapshot } from '@loom/ir';
 import { CompileError, type CompileResult, type EmittedFile } from './types';
 import { emitArtboardModule } from './emit/artboard';
 import { planRoutes, type RouteInfo } from './emit/routes';
+import { planPipelines, validateWires } from './emit/pipeline';
+import { emitApiFunction } from './emit/server';
 import { scaffoldFiles } from './emit/project';
 
 /**
  * Compile a snapshot into the file set of a runnable Vite + React + TS app.
  *
- * M0 emitted static UI; M2 adds the router: every artboard is a route, flow arrows compile to
- * react-router navigation, and an artboard that declares params gets a dynamic path. Backend
- * nodes (M3) and connectors (M4) plug in here later. Nothing in the snapshot carries a secret
- * (guardrail 1), so nothing secret can reach the emitted repo.
+ * M0 emitted static UI; M2 added the router; M3 adds the backend: an API route node becomes a
+ * Vercel serverless function, and the pipelines around it become state, handlers and fetches
+ * inside the artboard module. Connectors (M4) plug in here later. Nothing in the snapshot carries
+ * a secret (guardrail 1), so nothing secret can reach the emitted repo.
  */
 export function compile(snapshot: Snapshot): CompileResult {
   const entry = resolveEntryArtboard(snapshot);
   const routes = planRoutes(snapshot, entry);
 
   validateFlows(snapshot);
+  validateWires(snapshot);
 
   const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name);
+
+  // One serverless function per API route node, emitted once even if several screens call it.
+  const emittedRoutes = new Set<string>();
+  for (const [, artboard] of sortedArtboards(snapshot)) {
+    for (const plan of planPipelines(snapshot, artboard)) {
+      if (emittedRoutes.has(plan.routePath)) continue;
+      emittedRoutes.add(plan.routePath);
+      files.push(emitApiFunction(plan));
+    }
+  }
 
   for (const [artboardId, artboard] of sortedArtboards(snapshot)) {
     const route = routes.get(artboardId)!;

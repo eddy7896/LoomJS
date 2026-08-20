@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION, type Component, type Snapshot } from '@loom/ir';
+import { SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
 
 /**
  * A deterministic twin of `createTrivialSnapshot()` — same shape, fixed ids, so golden-file
@@ -93,6 +93,138 @@ export function masterDetailSnapshot(): Snapshot {
         from: 'ab_home000001',
         to: 'ab_detail00001',
         payload: [{ kind: 'static', param: 'id', value: '42' }],
+      },
+    },
+  };
+}
+
+/**
+ * The M3 shape: a TextField feeding an API route node whose body uppercases the value, fired by
+ * a Button's trigger, with a Text bound to the result.
+ */
+export function pipelineSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const homeRoot = base.components.cp_root000001!;
+
+  const field: Component = {
+    id: 'cp_field',
+    type: 'TextField',
+    name: 'Name',
+    props: {
+      value: { kind: 'static', value: '' },
+      placeholder: { kind: 'static', value: 'Your name' },
+    },
+  };
+
+  const button: Component = {
+    id: 'cp_send',
+    type: 'Button',
+    name: 'Send',
+    props: {
+      label: { kind: 'static', value: 'Send' },
+      onClick: {
+        kind: 'event',
+        handler: { kind: 'trigger', target: { nodeId: 'nd_api', portId: 'pt_run' } },
+      },
+    },
+  };
+
+  const output: Component = {
+    id: 'cp_output',
+    type: 'Text',
+    name: 'Result',
+    props: { content: { kind: 'bound', source: { nodeId: 'nd_api', portId: 'pt_result' } } },
+  };
+
+  const mirrorButton: Node = {
+    id: 'nd_mirror_button',
+    category: 'ui',
+    kind: 'mirror',
+    mirrorOf: button.id,
+    position: { x: 0, y: 0 },
+    ports: [
+      {
+        id: 'pt_click',
+        name: 'onClick',
+        direction: 'out',
+        portKind: 'trigger',
+        type: { kind: 'trigger' },
+      },
+    ],
+  };
+
+  const mirrorField: Node = {
+    id: 'nd_mirror_field',
+    category: 'ui',
+    kind: 'mirror',
+    mirrorOf: field.id,
+    position: { x: 0, y: 120 },
+    ports: [
+      { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+    ],
+  };
+
+  const compute: Node = {
+    id: 'nd_compute',
+    category: 'fn',
+    kind: 'compute',
+    name: 'Uppercase',
+    position: { x: 320, y: 60 },
+    config: { op: 'uppercase' },
+    ports: [
+      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
+      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+    ],
+  };
+
+  const api: Node = {
+    id: 'nd_api',
+    category: 'api',
+    kind: 'route',
+    name: 'Shout',
+    position: { x: 280, y: 0 },
+    config: { method: 'POST', path: 'shout', body: [compute.id] },
+    ports: [
+      {
+        id: 'pt_run',
+        name: 'run',
+        direction: 'in',
+        portKind: 'trigger',
+        type: { kind: 'trigger' },
+      },
+      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
+      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+    ],
+  };
+
+  return {
+    ...base,
+    components: {
+      ...base.components,
+      cp_root000001: {
+        ...homeRoot,
+        children: [...(homeRoot.children ?? []), field.id, button.id, output.id],
+      },
+      [field.id]: field,
+      [button.id]: button,
+      [output.id]: output,
+    },
+    nodes: {
+      [mirrorButton.id]: mirrorButton,
+      [mirrorField.id]: mirrorField,
+      [compute.id]: compute,
+      [api.id]: api,
+    },
+    wires: {
+      wr_trigger: {
+        id: 'wr_trigger',
+        from: { nodeId: mirrorButton.id, portId: 'pt_click' },
+        to: { nodeId: api.id, portId: 'pt_run' },
+      },
+      wr_input: {
+        id: 'wr_input',
+        from: { nodeId: mirrorField.id, portId: 'pt_value' },
+        to: { nodeId: api.id, portId: 'pt_input' },
       },
     },
   };
