@@ -157,3 +157,27 @@ developer would write — one `const` recomputed on render. No request, no state
 - **Only Compute runs in the browser.** Math, Compare and Logic read named fields of a request
   body; Validate must not be bypassable; a Gate stops a request; a Code node's body may await.
   Each of those outside a route is a Build error that says which, and why.
+
+## Triggered derivations, and Math's two environments
+
+**Triggered vs reactive is read from the wiring on the canvas too**, exactly as it is for
+pipelines. A function node outside an API route carries a `run` trigger port:
+
+- **nothing wired to `run`** — the value recomputes as its inputs change, and compiles to a
+  `const`. It simply *is* a function of its inputs.
+- **a trigger wired in** — the value is held in state and only updated when that trigger fires,
+  compiling to a `useState` pair plus the function the trigger calls. The last answer stays on
+  screen until the next press.
+
+Either way a bound property reads it the same way, so wiring a button in later changes when the
+value updates and nothing else.
+
+**Math resolves its operands from whatever its environment has.** On the canvas it takes 2–5
+wired inputs and folds them left to right, so `a + b + c` is one node rather than a chain of two.
+Inside an API route's body there are no wires between steps — a body is one value flowing through
+ordered steps — so there it reads named fields of the request body from its config. Same operator
+vocabulary; the Inspector shows only the fields that apply where the node actually sits.
+
+Division on the canvas goes through an emitted `safeDivide` helper that returns `NaN` for a zero
+divisor. `Infinity` is a plausible wrong number, and a plausible wrong number is worse than a
+visibly wrong one — the same judgement the server-side step makes by throwing.

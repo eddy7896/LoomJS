@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 import type { Component, Layout, SizeMode, Snapshot } from '@loom/ir';
-import { LAYOUT_FIELDS, defFor, defForNode, type FieldDef } from '@loom/components';
+import {
+  LAYOUT_FIELDS,
+  MATH_BODY_FIELDS,
+  MATH_CANVAS_FIELDS,
+  defFor,
+  defForNode,
+  type FieldDef,
+} from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import {
@@ -531,10 +538,21 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
   const config = (node.config ?? {}) as Record<string, unknown>;
   // A database node's fields come from the connector, not the node vocabulary: a read is a
   // query, and how many rows in what order is part of it.
+  const insideRoute = Object.values(snapshot.nodes).some(
+    (candidate) =>
+      candidate.category === 'api' &&
+      (((candidate.config ?? {}) as { body?: string[] }).body ?? []).includes(node.id),
+  );
+
+  // Math means different things in the two environments, so it shows different fields. On the
+  // canvas its operands are wires; inside a route's body they are named fields of the request.
+  const applicable = new Set<string>(insideRoute ? MATH_BODY_FIELDS : MATH_CANVAS_FIELDS);
   const fields =
     node.category === 'db'
       ? dbNodeFields(node.kind === 'select' ? 'select' : 'insert')
-      : (def?.fields ?? []);
+      : node.kind === 'math'
+        ? (def?.fields ?? []).filter((entry) => applicable.has(entry.key))
+        : (def?.fields ?? []);
 
   return (
     <aside className="panel inspector">

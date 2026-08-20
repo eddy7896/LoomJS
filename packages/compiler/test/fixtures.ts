@@ -553,3 +553,100 @@ export function operatorPipelineSnapshot(): Snapshot {
     },
   ]);
 }
+
+/**
+ * A button-fired Math node folding two number fields into a Text. Its job is the emitted app's
+ * own `tsc`: a triggered derivation emits state, a setter function and a helper, and any of the
+ * three can be wrong in a way no string match here would notice.
+ */
+export function triggeredMathSnapshot(): Snapshot {
+  const base = formSnapshot();
+
+  const numberField = (id: string, name: string): Component => ({
+    id,
+    type: 'NumberField',
+    name,
+    props: { value: { kind: 'static', value: 0 } },
+  });
+
+  const mirror = (id: string, componentId: string): Node => ({
+    id,
+    category: 'ui',
+    kind: 'mirror',
+    mirrorOf: componentId,
+    ports: [
+      { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+    ],
+    position: { x: 0, y: 0 },
+  });
+
+  return applyOps(base, [
+    { type: 'addComponent', parentId: 'cp_form', component: numberField('cp_a', 'A') },
+    { type: 'addComponent', parentId: 'cp_form', component: numberField('cp_b', 'B') },
+    { type: 'addNode', node: mirror('nd_ma', 'cp_a') },
+    { type: 'addNode', node: mirror('nd_mb', 'cp_b') },
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_go',
+        category: 'ui',
+        kind: 'mirror',
+        mirrorOf: 'cp_save',
+        ports: [
+          {
+            id: 'pt_click',
+            name: 'onClick',
+            direction: 'out',
+            portKind: 'trigger',
+            type: { kind: 'trigger' },
+          },
+        ],
+        position: { x: 0, y: 0 },
+      },
+    },
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_math',
+        category: 'fn',
+        kind: 'math',
+        name: 'Math',
+        ports: [
+          { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
+          { id: 'pt_in_0', name: 'input 1', direction: 'in', portKind: 'data', type: { kind: 'number' } },
+          { id: 'pt_in_1', name: 'input 2', direction: 'in', portKind: 'data', type: { kind: 'number' } },
+          { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+        ],
+        position: { x: 0, y: 0 },
+        config: { operator: 'divide', inputs: 2 },
+      },
+    },
+    {
+      type: 'addWire',
+      wire: { id: 'wr_a', from: { nodeId: 'nd_ma', portId: 'pt_value' }, to: { nodeId: 'nd_math', portId: 'pt_in_0' } },
+    },
+    {
+      type: 'addWire',
+      wire: { id: 'wr_b', from: { nodeId: 'nd_mb', portId: 'pt_value' }, to: { nodeId: 'nd_math', portId: 'pt_in_1' } },
+    },
+    {
+      type: 'addWire',
+      wire: { id: 'wr_go', from: { nodeId: 'nd_go', portId: 'pt_click' }, to: { nodeId: 'nd_math', portId: 'pt_run' } },
+    },
+    {
+      type: 'setProp',
+      componentId: 'cp_save',
+      key: 'onClick',
+      value: {
+        kind: 'event',
+        handler: { kind: 'trigger', target: { nodeId: 'nd_math', portId: 'pt_run' } },
+      },
+    },
+    {
+      type: 'setProp',
+      componentId: 'cp_status',
+      key: 'content',
+      value: { kind: 'bound', source: { nodeId: 'nd_math', portId: 'pt_result' } },
+    },
+  ]);
+}

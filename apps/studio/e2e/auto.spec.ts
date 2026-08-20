@@ -93,17 +93,15 @@ test('a form and a click become a working backend', async ({ page, request }) =>
   await page.getByTestId('accept-auto').click();
   await expect(page.getByTestId('auto-controls')).toContainText('accepted');
 
-  // Read the screen bucket from the artboard: the row the insert returned. The Preview is hidden
-  // for the gesture so the graph fits the pane — dragging to a node the viewport has clipped is
-  // a test artefact, not a product problem.
-  await page.getByRole('button', { name: 'Hide preview' }).click();
+  // Read the screen bucket from the artboard: the row the insert returned. The drag helper
+  // retries, so the Preview can stay open — toggling it remounts the iframe and races the
+  // assertions that follow.
   await drag(
     page,
     handle(graphNode(page, 'New notes'), 'pt_value'),
     handle(graphNode(page, 'Saved'), 'pt_content'),
   );
   await expect(page.locator('.react-flow__edge')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Preview', exact: true }).click();
 
   await expect(page.locator('.preview__state')).toHaveText('live');
   await expect(preview(page).getByRole('button', { name: 'Save' })).toBeVisible();

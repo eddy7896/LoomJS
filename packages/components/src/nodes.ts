@@ -80,6 +80,10 @@ export const COMPUTE_DEF: NodeDef = {
       String(config.op ?? 'uppercase')
     ];
     return [
+      // Wire something into `run` and the value only updates when that fires; leave it unwired
+      // and it recomputes as its input changes. Derived from the wiring, never configured
+      // (`docs/specs/binding-trigger-runtime.md`).
+      port('pt_run', 'run', 'in', 'trigger', { kind: 'trigger' }),
       port('pt_input', 'input', 'in', 'data', op?.in ?? { kind: 'any' }),
       port('pt_result', 'result', 'out', 'data', op?.out ?? { kind: 'any' }),
     ];
@@ -278,13 +282,40 @@ export const MATH_OPERATORS = {
 
 export type MathOperator = keyof typeof MATH_OPERATORS;
 
+/** How many operands a Math node takes on the canvas. Two is the common case; five is plenty. */
+export const MATH_MIN_INPUTS = 2;
+export const MATH_MAX_INPUTS = 5;
+
+export const mathInputPortId = (index: number): string => `pt_in_${index}`;
+
+export function mathInputCount(config: Record<string, unknown>): number {
+  const raw = Number(config.inputs ?? MATH_MIN_INPUTS);
+  if (!Number.isFinite(raw)) return MATH_MIN_INPUTS;
+  return Math.min(MATH_MAX_INPUTS, Math.max(MATH_MIN_INPUTS, Math.round(raw)));
+}
+
+/**
+ * Math takes its operands **from wires on the canvas** and folds them left to right, so
+ * `a + b + c` is one node rather than a chain of two.
+ *
+ * Inside an API route's body it works differently, and deliberately: a body is one value flowing
+ * through ordered steps with no wires between them, so there the operands are named fields of the
+ * request body (`left` / `right` in config). Same operator vocabulary, resolved from whatever the
+ * surrounding environment actually has.
+ */
 export const MATH_DEF: NodeDef = {
   category: 'fn',
   kind: 'math',
   label: 'Math',
-  defaultConfig: { left: '', operator: 'add', rightKind: 'value', right: '0', into: '' },
+  defaultConfig: {
+    inputs: MATH_MIN_INPUTS,
+    left: '',
+    operator: 'add',
+    rightKind: 'value',
+    right: '0',
+    into: '',
+  },
   fields: [
-    { key: 'left', label: 'Left', control: 'text', default: '' },
     {
       key: 'operator',
       label: 'Operation',
@@ -292,13 +323,22 @@ export const MATH_DEF: NodeDef = {
       options: Object.keys(MATH_OPERATORS),
       default: 'add',
     },
+    { key: 'inputs', label: 'Inputs', control: 'number', default: MATH_MIN_INPUTS },
+    { key: 'left', label: 'Left', control: 'text', default: '' },
     ...operandFields('Right').filter((field) => field.key !== 'left'),
   ],
-  ports: () => [
-    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
-    port('pt_result', 'result', 'out', 'data', { kind: 'any' }),
+  ports: (config) => [
+    port('pt_run', 'run', 'in', 'trigger', { kind: 'trigger' }),
+    ...Array.from({ length: mathInputCount(config) }, (_, index) =>
+      port(mathInputPortId(index), `input ${index + 1}`, 'in', 'data', { kind: 'number' }),
+    ),
+    port('pt_result', 'result', 'out', 'data', { kind: 'number' }),
   ],
 };
+
+/** Config keys that apply on the canvas, and the ones that apply inside an API route's body. */
+export const MATH_CANVAS_FIELDS = ['operator', 'inputs'] as const;
+export const MATH_BODY_FIELDS = ['operator', 'left', 'rightKind', 'right', 'into'] as const;
 
 /** Comparison. Where a Gate stops the pipeline, a Compare hands the answer on as a boolean. */
 export const COMPARE_OPERATORS = {

@@ -111,3 +111,44 @@ test('a function node outside a route derives a value in the browser', async ({ 
   await preview(page).locator('input').fill('hello there');
   await expect(preview(page).locator('span', { hasText: '11' })).toBeVisible();
 });
+
+test('a trigger holds a derivation until the button is pressed', async ({ page }) => {
+  // Same graph as above, plus a button wired into the Compute's run port. The value should now
+  // stay put while typing and only catch up on a click.
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Input');
+
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Button' }).click();
+  await field(page, 'Name').locator('input').fill('Go');
+  await field(page, 'Label').locator('input').fill('Go');
+
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Length');
+
+  await page.getByRole('button', { name: 'Nodes' }).click();
+  await page.getByRole('button', { name: '+ Compute' }).click();
+  await field(page, 'Operation').locator('select').selectOption('length');
+
+  const compute = graphNode(page, 'Compute');
+  await drag(page, handle(graphNode(page, 'Input'), 'pt_value'), handle(compute, 'pt_input'));
+  await drag(page, handle(compute, 'pt_result'), handle(graphNode(page, 'Length'), 'pt_content'));
+  await drag(page, handle(graphNode(page, 'Go'), 'pt_click'), handle(compute, 'pt_run'));
+  await expect(page.locator('.react-flow__edge')).toHaveCount(3);
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await preview(page).locator('input').fill('hello');
+
+  // Typing no longer recomputes: the held value is still its starting one.
+  await expect(preview(page).locator('span', { hasText: '0' })).toBeVisible();
+
+  await preview(page).getByRole('button', { name: 'Go' }).click();
+  await expect(preview(page).locator('span', { hasText: '5' })).toBeVisible();
+
+  // And it stays at 5 until the next press, however much the field changes.
+  await preview(page).locator('input').fill('hello there');
+  await expect(preview(page).locator('span', { hasText: '5' })).toBeVisible();
+  await preview(page).getByRole('button', { name: 'Go' }).click();
+  await expect(preview(page).locator('span', { hasText: '11' })).toBeVisible();
+});

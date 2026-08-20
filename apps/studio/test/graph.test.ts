@@ -114,10 +114,13 @@ describe('nodes-mode graph', () => {
   it('retypes ports when a Compute node changes operation, dropping wires that no longer fit', () => {
     const apiId = addGraphNode('api', 'route');
     const stepId = addBodyStep(apiId, 'compute')!;
-    expect(snapshot().nodes[stepId]!.ports[0]!.type).toEqual({ kind: 'text' });
+    // By id, not by index: a Compute also carries a `run` port, and the order is not the contract.
+    const inputType = () =>
+      snapshot().nodes[stepId]!.ports.find((port) => port.id === 'pt_input')!.type;
 
+    expect(inputType()).toEqual({ kind: 'text' });
     setNodeConfig(stepId, { op: 'double' });
-    expect(snapshot().nodes[stepId]!.ports[0]!.type).toEqual({ kind: 'number' });
+    expect(inputType()).toEqual({ kind: 'number' });
   });
 
   it('deleting a node takes its wires and the handlers pointing at it', () => {

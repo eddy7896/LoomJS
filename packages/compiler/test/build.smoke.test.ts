@@ -10,6 +10,7 @@ import { writeFiles } from '../src/node';
 import {
   everyComponentSnapshot,
   operatorPipelineSnapshot,
+  triggeredMathSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
   supabaseSnapshot,
@@ -105,6 +106,17 @@ describe('emitted app builds for real', () => {
     expect(api).toContain('const answer = left * right;');
     expect(api).toContain('Number(left) >= Number(right)');
     expect(api).toContain('const answer = left || right;');
+  });
+
+  it('type-checks a button-fired derivation with no backend at all', async () => {
+    const dir = await emitProject(triggeredMathSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    expect(home).toContain('const [derived_nd_math, set_derived_nd_math] = useState<number>(0);');
+    expect(home).toContain('safeDivide');
+    // Nothing here talks to a server: the whole derivation runs in the browser.
+    expect(home).not.toContain('fetch(');
   });
 
   it('type-checks and builds an app with a backend pipeline', async () => {

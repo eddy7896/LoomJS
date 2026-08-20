@@ -443,18 +443,196 @@ describe('function nodes outside an API route run in the browser', () => {
   });
 
   it('says why a record-shaped step cannot run in the browser', () => {
-    const misplaced = applyOps(derivedSnapshot('length'), [
-      { type: 'setNodeConfig', nodeId: 'nd_compute', config: { left: 'a', operator: 'add' } },
-    ]);
-    const asMath = {
-      ...misplaced,
-      nodes: { ...misplaced.nodes, nd_compute: { ...misplaced.nodes.nd_compute!, kind: 'math' } },
+    const base = derivedSnapshot('length');
+    // Compare reads named fields of a request body, so outside a route it has nothing to read.
+    const asCompare = {
+      ...base,
+      nodes: { ...base.nodes, nd_compute: { ...base.nodes.nd_compute!, kind: 'compare' } },
     };
-    expect(() => compile(asMath)).toThrow(/Math works on the fields of a request body/);
+    expect(() => compile(asCompare)).toThrow(/Compare works on the fields of a request body/);
   });
 
   it('refuses a Compute with nothing wired into it, naming the node', () => {
     const unwired = applyOps(derivedSnapshot('length'), [{ type: 'removeWire', wireId: 'wr_in' }]);
-    expect(() => compile(unwired)).toThrow(/has nothing wired into its input/);
+    expect(() => compile(unwired)).toThrow(/has nothing wired into it/);
+  });
+});
+
+/** A canvas Math node folding N wired operands, optionally fired by a button. */
+function mathSnapshot(options: {
+  operator?: string;
+  inputs?: number;
+  triggered?: boolean;
+} = {}): Snapshot {
+  const inputs = options.inputs ?? 2;
+  const base = formSnapshot();
+
+  const numberFields = Array.from({ length: inputs }, (_, index) => `cp_n${index}`);
+  const components: Op[] = numberFields.map((id) => ({
+    type: 'addComponent',
+    parentId: 'cp_form',
+    component: {
+      id,
+      type: 'NumberField',
+      name: `N${id}`,
+      props: { value: { kind: 'static', value: 0 } },
+    },
+  }));
+
+  const mirrors: Op[] = numberFields.map((componentId, index) => ({
+    type: 'addNode',
+    node: {
+      id: `nd_m${index}`,
+      category: 'ui',
+      kind: 'mirror',
+      mirrorOf: componentId,
+      ports: [
+        { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+      ],
+      position: { x: 0, y: 0 },
+    },
+  }));
+
+  const wires: Op[] = numberFields.map((_, index) => ({
+    type: 'addWire',
+    wire: {
+      id: `wr_in${index}`,
+      from: { nodeId: `nd_m${index}`, portId: 'pt_value' },
+      to: { nodeId: 'nd_math', portId: `pt_in_${index}` },
+    },
+  }));
+
+  const trigger: Op[] = options.triggered
+    ? [
+        {
+          type: 'addNode',
+          node: {
+            id: 'nd_m_go',
+            category: 'ui',
+            kind: 'mirror',
+            mirrorOf: 'cp_save',
+            ports: [
+              {
+                id: 'pt_click',
+                name: 'onClick',
+                direction: 'out',
+                portKind: 'trigger',
+                type: { kind: 'trigger' },
+              },
+            ],
+            position: { x: 0, y: 0 },
+          },
+        },
+        {
+          type: 'addWire',
+          wire: {
+            id: 'wr_run',
+            from: { nodeId: 'nd_m_go', portId: 'pt_click' },
+            to: { nodeId: 'nd_math', portId: 'pt_run' },
+          },
+        },
+        {
+          type: 'setProp',
+          componentId: 'cp_save',
+          key: 'onClick',
+          value: {
+            kind: 'event',
+            handler: { kind: 'trigger', target: { nodeId: 'nd_math', portId: 'pt_run' } },
+          },
+        },
+      ]
+    : [];
+
+  return applyOps(base, [
+    ...components,
+    ...mirrors,
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_math',
+        category: 'fn',
+        kind: 'math',
+        name: 'Math',
+        ports: [
+          { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
+          ...numberFields.map((_, index) => ({
+            id: `pt_in_${index}`,
+            name: `input ${index + 1}`,
+            direction: 'in' as const,
+            portKind: 'data' as const,
+            type: { kind: 'number' as const },
+          })),
+          { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+        ],
+        position: { x: 0, y: 0 },
+        config: { operator: options.operator ?? 'add', inputs },
+      },
+    },
+    ...wires,
+    ...trigger,
+    {
+      type: 'setProp',
+      componentId: 'cp_status',
+      key: 'content',
+      value: { kind: 'bound', source: { nodeId: 'nd_math', portId: 'pt_result' } },
+    },
+  ]);
+}
+
+describe('Math on the canvas takes its operands from wires', () => {
+  it('folds two wired inputs', () => {
+    expect(home(mathSnapshot())).toContain(
+      'const derived_nd_math = (Number(field_cp_n0) + Number(field_cp_n1));',
+    );
+  });
+
+  it('folds more than two, so a + b + c is one node rather than a chain', () => {
+    const code = home(mathSnapshot({ inputs: 4 }));
+    expect(code).toContain(
+      'Number(field_cp_n0) + Number(field_cp_n1) + Number(field_cp_n2) + Number(field_cp_n3)',
+    );
+  });
+
+  it('folds min and max across every operand at once', () => {
+    expect(home(mathSnapshot({ operator: 'max', inputs: 3 }))).toContain(
+      'Math.max(Number(field_cp_n0), Number(field_cp_n1), Number(field_cp_n2))',
+    );
+  });
+
+  it('divides through a helper, so a zero divisor is visibly wrong rather than Infinity', () => {
+    const code = home(mathSnapshot({ operator: 'divide', inputs: 3 }));
+    expect(code).toContain('safeDivide(safeDivide(Number(field_cp_n0), Number(field_cp_n1)), Number(field_cp_n2))');
+    expect(code).toContain('return right === 0 ? Number.NaN : left / right;');
+  });
+
+  it('names which input is missing a wire', () => {
+    const missing = applyOps(mathSnapshot({ inputs: 3 }), [{ type: 'removeWire', wireId: 'wr_in2' }]);
+    expect(() => compile(missing)).toThrow(/input 3 of "Math" has nothing wired into it/);
+  });
+});
+
+describe('a trigger turns a derivation from recomputed into held', () => {
+  it('with nothing wired to run, the value is a const that follows its inputs', () => {
+    const code = home(mathSnapshot());
+    expect(code).toContain('const derived_nd_math = (');
+    expect(code).not.toContain('set_derived_nd_math');
+  });
+
+  it('with a trigger wired, it holds its last answer in state', () => {
+    const code = home(mathSnapshot({ triggered: true }));
+    expect(code).toContain('const [derived_nd_math, set_derived_nd_math] = useState<number>(0);');
+    expect(code).toContain(
+      'const run_derived_nd_math = () => set_derived_nd_math((Number(field_cp_n0) + Number(field_cp_n1)));',
+    );
+  });
+
+  it('the button that fires it calls that function', () => {
+    const code = home(mathSnapshot({ triggered: true }));
+    expect(code).toContain('run_derived_nd_math()');
+  });
+
+  it('is read the same way either way, so binding does not care', () => {
+    expect(home(mathSnapshot({ triggered: true }))).toContain('asText(derived_nd_math)');
+    expect(home(mathSnapshot())).toContain('asText(derived_nd_math)');
   });
 });

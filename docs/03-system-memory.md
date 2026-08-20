@@ -196,6 +196,13 @@ Recorded here because they constrain everything downstream. Each was taken at th
   one `const` — no request, no state. Only Compute qualifies: the record-shaped steps, Validate,
   Gate and Code each belong inside a route, and each says so by name when placed outside one.
 
+- **[M5.1] Canvas derivations follow the same triggered/reactive rule as pipelines.** A `run`
+  port left unwired means the value recomputes with its inputs (a `const`); a trigger wired in
+  means it is held in state until fired. Read from the wiring, never configured.
+- **[M5.1] Math takes wired operands on the canvas and config fields inside a route body.** Two
+  environments, one operator vocabulary: a canvas has wires, a route body has one value flowing
+  through ordered steps. The Inspector shows only the fields that apply where the node sits.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

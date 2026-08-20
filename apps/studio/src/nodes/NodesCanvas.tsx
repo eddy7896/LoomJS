@@ -253,6 +253,10 @@ export function NodesCanvas() {
           setProblem(undefined);
         }}
         fitView
+        // React Flow stops zooming out at 0.5 by default, which is not far enough to fit a
+        // pipeline and its mirrors into the pane while the Preview is open — "Fit view" would
+        // quietly leave nodes off screen.
+        minZoom={0.15}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={20} />
