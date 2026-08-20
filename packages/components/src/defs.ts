@@ -28,6 +28,8 @@ export interface ComponentDef {
   fields: readonly FieldDef[];
   /** True when the type can start a flow from a click (its `onClick` accepts a navigate handler). */
   acceptsClickFlow?: boolean;
+  /** True when the type renders its template once per row of a bound list. */
+  acceptsItems?: boolean;
   defaultLayout?: Layout;
 }
 
@@ -98,7 +100,21 @@ export const TEXT_FIELD_DEF: ComponentDef = {
   ],
 };
 
-const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF, TEXT_FIELD_DEF];
+/**
+ * A List renders its first child once per row of the data bound to `items` — the implicit map
+ * (`04-hallucination-check.md`: loops are never nodes). Inside that template, a property can read
+ * a field of the current row.
+ */
+export const LIST_DEF: ComponentDef = {
+  type: 'List',
+  label: 'List',
+  isContainer: true,
+  fields: [{ key: 'empty', label: 'Empty text', control: 'text', default: 'Nothing yet' }],
+  defaultLayout: { direction: 'column', gap: 8, padding: 0, align: 'stretch', justify: 'start' },
+  acceptsItems: true,
+};
+
+const DEFS: readonly ComponentDef[] = [FRAME_DEF, TEXT_DEF, BUTTON_DEF, TEXT_FIELD_DEF, LIST_DEF];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 
 export function componentDefs(): readonly ComponentDef[] {

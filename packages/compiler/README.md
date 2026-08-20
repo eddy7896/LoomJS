@@ -4,10 +4,10 @@ Walks a `@loom/ir` **snapshot** and emits a real **Vite + React + TypeScript** r
 This is the core bet of loomJS (`docs/02-system-architecture.md`): compile = stitch per-type
 code templates, not interpret a runtime.
 
-## Status — M3 (the graph emits a running backend)
+## Status — M4 (typed data, from a real schema)
 
-M0 proved `graph -> files -> runs`; M1 wired it to the editor; M2 added routing; M3 adds the
-server.
+M0 proved `graph -> files -> runs`; M1 wired it to the editor; M2 added routing; M3 added the
+server; M4 adds the database.
 
 | Emitted                    | Notes                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |

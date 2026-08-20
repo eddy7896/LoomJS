@@ -26,6 +26,8 @@ describe('backend graph -> serverless (M3)', () => {
   it('emits the client pipeline as plain state and a fetch, with no runtime library', () => {
     const home = fileAt(pipelineSnapshot(), 'src/artboards/Home.tsx');
     expect(home).toContain("import { useCallback, useState } from 'react'");
+    // The result state is typed from the route's result port, which the container took from
+    // its body: an uppercase step returns text.
     expect(home).toContain(
       'const [result_nd_api, set_result_nd_api] = useState<string | null>(null)',
     );

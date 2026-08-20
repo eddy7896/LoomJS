@@ -1,5 +1,5 @@
-import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, Wire } from '@loom/ir';
-import { canConnect } from '@loom/typesys';
+import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, TypeRef, Wire } from '@loom/ir';
+import { canConnect, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 
 /**
@@ -24,8 +24,10 @@ export interface PipelinePlan {
   body: Node[];
   /** Component whose event fires this pipeline, if it is triggered rather than reactive. */
   trigger: { componentId: Id; event: string } | undefined;
-  /** Component supplying the input value, if any. */
-  input: { componentId: Id; port: Port } | undefined;
+  /** Components supplying input values, one per wired input port. */
+  inputs: { componentId: Id; port: Port }[];
+  /** The type the route returns, taken from its `result` port. */
+  resultType: TypeRef;
   /** Which output ports something on this artboard binds. Unbound outputs emit no state. */
   binds: { result: boolean; pending: boolean; error: boolean };
   /** Local identifiers used in the emitted module. */
@@ -135,14 +137,16 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
       trigger = { componentId: component.id, event: 'onClick' };
     }
 
-    // Input: a UI mirror's data port wired into this node's input port.
-    let input: PipelinePlan['input'];
-    for (const wire of wiresInto(snapshot, node.id, 'pt_input')) {
-      const source = snapshot.nodes[wire.from.nodeId];
-      const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
-      if (!component || !source) continue;
-      const port = portOf(source, wire.from.portId);
-      if (port) input = { componentId: component.id, port };
+    // Inputs: every UI mirror data port wired into one of this node's data inputs. The route's
+    // input ports come from its body (a form wires straight into the columns an insert needs).
+    const inputs: PipelinePlan['inputs'] = [];
+    for (const inputPort of node.ports.filter((p) => p.direction === 'in' && p.portKind === 'data')) {
+      for (const wire of wiresInto(snapshot, node.id, inputPort.id)) {
+        const source = snapshot.nodes[wire.from.nodeId];
+        const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
+        if (!component || !source) continue;
+        if (portOf(source, wire.from.portId)) inputs.push({ componentId: component.id, port: inputPort });
+      }
     }
 
     const binds = { result: false, pending: false, error: false };
@@ -164,7 +168,7 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
     const bound = binds.result || binds.pending || binds.error;
 
     // A pipeline this artboard neither fires nor reads belongs to another screen.
-    if (!trigger && !input && !bound) continue;
+    if (!trigger && inputs.length === 0 && !bound) continue;
 
     const ident = jsIdent(node.id);
     plans.push({
@@ -173,7 +177,8 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
       method,
       body,
       trigger,
-      input,
+      inputs,
+      resultType: portOf(node, 'pt_result')?.type ?? { kind: 'any' },
       binds,
       names: {
         state: `result_${ident}`,
@@ -199,7 +204,9 @@ export function bindingExpr(plans: PipelinePlan[], source: PortRef, componentId:
 
   switch (source.portId as OutputPortId) {
     case 'pt_result':
-      return `${plan.names.state} ?? ""`;
+      // Fall back in the shape the reader expects: an empty list renders as nothing, an empty
+      // string renders as nothing, and neither crashes the tree while the call is in flight.
+      return `${plan.names.state} ?? ${plan.resultType.kind === 'list' ? '[]' : '""'}`;
     case 'pt_pending':
       return `${plan.names.pending} ? "true" : "false"`;
     case 'pt_error':
@@ -224,8 +231,9 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
 
   for (const plan of plans) {
     if (plan.binds.result) {
+      const type = tsTypeOf(plan.resultType);
       lines.push(
-        `  const [${plan.names.state}, set_${plan.names.state}] = useState<string | null>(null);`,
+        `  const [${plan.names.state}, set_${plan.names.state}] = useState<${type} | null>(null);`,
       );
     }
     if (plan.binds.pending) {
@@ -239,11 +247,21 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
   }
 
   for (const plan of plans) {
-    const payload = plan.input ? `{ input: ${stateNameForComponent(plan.input.componentId)} }` : '{}';
+    const single = plan.inputs.length === 1 && plan.inputs[0]!.port.id === 'pt_input';
+    // One unnamed input travels as itself; named inputs (an insert's columns) travel as a record
+    // keyed by port name, which is exactly the row the server inserts.
+    const payload = single
+      ? `{ input: ${stateNameForComponent(plan.inputs[0]!.componentId)} }`
+      : plan.inputs.length > 0
+        ? `{ input: { ${plan.inputs
+            .map((input) => `${JSON.stringify(input.port.name)}: ${stateNameForComponent(input.componentId)}`)
+            .join(', ')} } }`
+        : '{}';
+
     const call =
       plan.method === 'GET'
         ? `await fetch(${JSON.stringify(plan.routePath)} + "?input=" + encodeURIComponent(String(${
-            plan.input ? stateNameForComponent(plan.input.componentId) : '""'
+            single ? stateNameForComponent(plan.inputs[0]!.componentId) : '""'
           })))`
         : `await fetch(${JSON.stringify(plan.routePath)}, {
         method: "POST",
@@ -254,7 +272,7 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
     const start = plan.binds.pending ? `    set_${plan.names.pending}(true);\n` : '';
     const clearError = plan.binds.error ? `    set_${plan.names.error}(null);\n` : '';
     const store = plan.binds.result
-      ? `      set_${plan.names.state}(body.result === undefined || body.result === null ? null : String(body.result));`
+      ? `      set_${plan.names.state}((body.result ?? null) as ${tsTypeOf(plan.resultType)} | null);`
       : '      void body;';
     const onError = plan.binds.error
       ? `      set_${plan.names.error}(error instanceof Error ? error.message : String(error));`
@@ -273,7 +291,7 @@ ${store}
     } catch (error) {
 ${onError}
 ${settle}
-  }, [${plan.input ? stateNameForComponent(plan.input.componentId) : ''}]);`);
+  }, [${[...new Set(plan.inputs.map((input) => stateNameForComponent(input.componentId)))].join(', ')}]);`);
 
     // No trigger wired in means the pipeline is reactive: run on mount and on input change.
     if (!plan.trigger) {

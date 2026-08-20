@@ -41,12 +41,18 @@ importers:
       '@loom/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@loom/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@loom/ir':
         specifier: workspace:*
         version: link:../../packages/ir
       '@loom/typesys':
         specifier: workspace:*
         version: link:../../packages/typesys
+      '@supabase/postgrest-js':
+        specifier: ^2.112.3
+        version: 2.112.3
       '@xyflow/react':
         specifier: ^12.3.6
         version: 12.11.3(@types/react-dom@18.3.7)(@types/react@18.3.31)(react-dom@18.3.1)(react@18.3.1)
@@ -90,6 +96,9 @@ importers:
       '@loom/components':
         specifier: workspace:*
         version: link:../components
+      '@loom/connectors':
+        specifier: workspace:*
+        version: link:../connectors
       '@loom/ir':
         specifier: workspace:*
         version: link:../ir
@@ -106,6 +115,15 @@ importers:
       '@loom/ir':
         specifier: workspace:*
         version: link:../ir
+
+  packages/connectors:
+    dependencies:
+      '@loom/ir':
+        specifier: workspace:*
+        version: link:../ir
+      '@loom/typesys':
+        specifier: workspace:*
+        version: link:../typesys
 
   packages/ir:
     dependencies:
@@ -925,6 +943,13 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
+
+  /@supabase/postgrest-js@2.112.3:
+    resolution: {integrity: sha512-+Mf6uCpzr00bqxwX8hTK2X2L9eAL/1vuOjdEjx6upz9ulb0RmQT16XeU/JkMUlVHw/B46ZnPa2busY4Kd9YCzw==}
+    engines: {node: '>=22.0.0'}
+    dependencies:
+      tslib: 2.8.1
+    dev: false
 
   /@turbo/darwin-64@2.10.11:
     resolution: {integrity: sha512-v3R+1R/Ysozyo+p7Ri8MCIbndOvYt3DgPFrGLhrhQHfvyvbxyH3WyJj+A/2JTNmNleuAlh3JUyCV0iSVHIONTA==}
@@ -2564,6 +2589,10 @@ packages:
     dependencies:
       typescript: 5.9.3
     dev: true
+
+  /tslib@2.8.1:
+    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+    dev: false
 
   /turbo@2.10.11:
     resolution: {integrity: sha512-yQfwQVoRXwOuyX1LxiJFBFNg6VfuYh+/RyZLd82+isgyLkBXw3S5XRRzvcck1FAjSCG5sVyLd+O1eDMvYa3J7g==}

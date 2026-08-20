@@ -3,9 +3,9 @@
 The loom editor: the platform shell plus the Design and Nodes canvases, one Vite + React + TS
 SPA (`docs/09-implementation-plan.md`).
 
-## Status — M3 (Nodes mode emits a running backend)
+## Status — M4 (typed data from a connected project)
 
-Design something, wire what it does, and watch it run against a real serverless function.
+Design something, wire what it does, and watch it run against a real database.
 
 - **Design canvas** — artboards rendered as real DOM behind a pan/zoom transform, with a
   floating selection overlay. Not a raster canvas: the artboard must render real React
@@ -21,6 +21,13 @@ Design something, wire what it does, and watch it run against a real serverless 
 - **Canvas drag** — dragging a component reorders or reparents it. Layout is flex-first, so a
   drag is a tree operation, never an x/y (`docs/specs/layout-model.md`).
 - **Sizing** — hug / fill / fixed per axis on any container.
+- **Connections** — connect a Supabase project by URL and keys; connecting introspects the
+  schema and lists its tables. The keys go to the **env bucket** (this browser, plus the Preview's
+  dev server, injected by name); the project keeps the URL, the cached schema and a credential
+  *name*. The panel can prove a key works but never reads a stored value back out.
+- **Database steps** — with an API route selected, add a read or an insert for any table. The
+  route's ports are derived from its body, so an insert's columns become the route's inputs,
+  ready to wire a form into. A `List` renders rows, and a Text inside it picks a column.
 - **Nodes mode** — the behaviour canvas (React Flow). UI components appear as **mirrors**, which
   are materialised into the document on their first wire rather than up front. An API route node
   is a **container**: the function steps inside it are what runs on the server. Wiring is checked
@@ -36,10 +43,14 @@ Design something, wire what it does, and watch it run against a real serverless 
 
 ## Not yet
 
-Connectors and app auth (M4), auto-backend inference (M5), deploy (M6). `bound` flow payloads
-still refuse to compile — they need a node port to read, which is M4's typed-data territory.
-State buckets, Gate/Guard/Validate nodes and the reusable-component vocabulary are also still
-ahead.
+Supabase **app auth** for the generated app's end users, auto-backend inference (M5), deploy
+(M6). `bound` flow payloads still refuse to compile. A write does not invalidate a reactive read:
+a reactive pipeline re-runs on input change, so a list refreshes on the next mount rather than
+right after an insert (`docs/specs/binding-trigger-runtime.md`). State buckets, Gate/Guard/
+Validate nodes, update and delete nodes, filters and ordering are all still ahead.
+
+Nothing persists yet either — a reload starts a fresh document, and the platform layer
+(accounts, projects, saved snapshots) is unbuilt.
 
 ## Tests
 

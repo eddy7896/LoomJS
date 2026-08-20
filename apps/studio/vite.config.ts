@@ -15,6 +15,7 @@ const workspaceAliases = [
   { find: '@loom/compiler/node', replacement: pkg('compiler/src/node.ts') },
   { find: '@loom/compiler', replacement: pkg('compiler/src/index.ts') },
   { find: '@loom/components', replacement: pkg('components/src/index.ts') },
+  { find: '@loom/connectors', replacement: pkg('connectors/src/index.ts') },
   { find: '@loom/typesys', replacement: pkg('typesys/src/index.ts') },
   { find: '@loom/ir', replacement: pkg('ir/src/index.ts') },
 ];

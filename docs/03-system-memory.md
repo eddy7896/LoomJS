@@ -114,12 +114,38 @@ STATUS ∈ SETTLED · DEFERRED · OPEN.
 
 - **[OPEN] Preview database strategy:** dev branch/seeded project vs. writing to the connected
   Supabase (warn user). Clean answer = connector holds a dev + prod connection. Decide before
-  Preview is real.
-- **[OPEN] Route/API node as container vs. flat graph** for multi-step mutations. Container
-  keeps top-level readable; decide before the API node's compiler is built.
-- **[OPEN] Exact snapshot schema, type registry format, connector credential record shape,
-  binding/trigger runtime spec, layout model spec.** These are the named "next specs"; none
-  written yet. See `07-v1-scope.md` build order.
+  Preview is real. *(Still open as of M4: the Preview writes to whatever project is connected.)*
+- **[SETTLED — M3] Route/API node is a container.** The nodes inside its body run on the server;
+  everything outside runs in the browser. The container boundary *is* the network boundary, which
+  is also the line a server-only credential may not cross. See
+  `specs/binding-trigger-runtime.md`.
+- **[SETTLED — M0-M4] The five named specs are written**: `specs/snapshot-schema.md`,
+  `specs/type-registry.md`, `specs/connector-credentials.md`,
+  `specs/binding-trigger-runtime.md`, `specs/layout-model.md`.
+
+## Implementation decisions taken while building M0-M4
+
+Recorded here because they constrain everything downstream. Each was taken at the phase named.
+
+- **[M1] Preview run model: a child Vite dev server** serving the emitted app in an iframe. The
+  studio compiles *in the browser* and posts the emitted files to the dev server, which only
+  writes them — a Build error then surfaces against the offending node with no round trip.
+- **[M2] Routes are derived, never authored.** Each artboard is a route, the entry artboard is
+  `/`, and an artboard that declares params gets a dynamic path. A flow arrow carrying an empty
+  value is a Build error, not an empty URL segment.
+- **[M3] Pipeline state is demand-driven.** An output nobody binds emits no variable — the
+  emitted app builds with `noUnusedLocals`, so dead state would fail its own `tsc`.
+- **[M4] Introspection reads the PostgREST OpenAPI document** at `{project}/rest/v1/`, not the
+  Management API. Every project serves it, it needs only a URL and a key the designer already
+  has, and it keeps manual-connection-with-validation as the baseline that `04` demands. The
+  parser is defensive: an unrecognised column type becomes `unknown`, never a guess. Ingesting
+  `supabase gen types` output stays a later accelerator, not the spine.
+- **[M4] Emitted server code uses `@supabase/postgrest-js`, not `@supabase/supabase-js`.**
+  The umbrella package builds a realtime client on import, which needs Node 22's native
+  WebSocket and is dead weight in a stateless function. Same query API; one fewer reason for a
+  generated app to break on a runtime it did not choose.
+- **[M4] Introspected schema is cached in the document**, because table and column names are not
+  secret. That is what lets the compiler and the canvas type ports offline.
 
 ## The next specs to write (highest-leverage, in dependency order)
 

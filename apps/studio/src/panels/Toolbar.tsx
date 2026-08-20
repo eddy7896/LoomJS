@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { componentDefs, nodeDefs } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { addArtboard, addComponent, redo, setMode, undo } from '../state/store';
 import { addBodyStep, addGraphNode } from '../state/graph';
+import { addDbStep, connectedTables } from '../state/connectors';
 
 export function Toolbar({
   previewOpen,
@@ -10,6 +12,7 @@ export function Toolbar({
   previewOpen: boolean;
   onTogglePreview: () => void;
 }) {
+  const [table, setTable] = useState('');
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const mode = useEditor((s) => s.mode);
@@ -21,6 +24,8 @@ export function Toolbar({
     selection?.kind === 'node' && snapshot.nodes[selection.id]?.category === 'api'
       ? selection.id
       : undefined;
+
+  const tables = connectedTables(snapshot);
 
   return (
     <header className="toolbar">
@@ -67,6 +72,28 @@ export function Toolbar({
               + {def.label}
             </button>
           ))}
+
+          {containerId && tables.length > 0 ? (
+            <>
+              <select
+                value={table}
+                onChange={(event) => setTable(event.target.value)}
+                aria-label="Table"
+              >
+                {tables.map((candidate) => (
+                  <option key={candidate.name} value={candidate.name}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </select>
+              <button onClick={() => addDbStep(containerId, table || tables[0]!.name, 'select')}>
+                + Read rows
+              </button>
+              <button onClick={() => addDbStep(containerId, table || tables[0]!.name, 'insert')}>
+                + Insert row
+              </button>
+            </>
+          ) : null}
         </div>
       )}
 

@@ -11,3 +11,4 @@ Thumbs.db
 .loom-preview/
 test-results/
 playwright-report/
+vite.config.ts.timestamp-*

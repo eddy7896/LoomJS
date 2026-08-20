@@ -627,3 +627,57 @@ select {
 .toolbar__modes button {
   border-radius: 6px;
 }
+
+/* ---- M4: connections ---- */
+.data-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.connection__url {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connect-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.field--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.connect-form__error {
+  color: var(--error);
+  font-size: 11px;
+  margin: 0;
+}
+
+.tables {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.table-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  color: var(--ink-soft);
+}

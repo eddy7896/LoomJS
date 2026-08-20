@@ -20,8 +20,10 @@ export function compile(snapshot: Snapshot): CompileResult {
 
   validateFlows(snapshot);
   validateWires(snapshot);
+  validateServerOnlyWork(snapshot);
 
-  const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name);
+  const usesDatabase = Object.values(snapshot.nodes).some((node) => node.category === 'db');
+  const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, { usesDatabase });
 
   // One serverless function per API route node, emitted once even if several screens call it.
   const emittedRoutes = new Set<string>();
@@ -29,7 +31,7 @@ export function compile(snapshot: Snapshot): CompileResult {
     for (const plan of planPipelines(snapshot, artboard)) {
       if (emittedRoutes.has(plan.routePath)) continue;
       emittedRoutes.add(plan.routePath);
-      files.push(emitApiFunction(plan));
+      files.push(emitApiFunction(plan, snapshot));
     }
   }
 
@@ -42,6 +44,17 @@ export function compile(snapshot: Snapshot): CompileResult {
   }
 
   files.push({ path: 'src/App.tsx', content: emitApp(entry, routes) });
+
+  if (usesDatabase) {
+    // Names only. The values live in the env bucket and are injected at deploy
+    // (docs/specs/connector-credentials.md).
+    files.push({
+      path: '.env.example',
+      content: `SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+`,
+    });
+  }
 
   files.sort((a, b) => a.path.localeCompare(b.path));
   return { files };
@@ -81,6 +94,44 @@ ${routeElements}
   );
 }
 `;
+}
+
+/**
+ * Database work runs on the server, full stop. A db node outside an API route's body would mean
+ * a service-role key in the browser, so the compiler refuses rather than warns — security is a
+ * build-time gate (`docs/specs/connector-credentials.md`, guardrails 1-4).
+ */
+function validateServerOnlyWork(snapshot: Snapshot): void {
+  const insideAnApiBody = new Set<string>();
+  for (const node of Object.values(snapshot.nodes)) {
+    if (node.category !== 'api') continue;
+    for (const id of ((node.config ?? {}) as { body?: string[] }).body ?? []) {
+      insideAnApiBody.add(id);
+    }
+  }
+
+  for (const node of Object.values(snapshot.nodes)) {
+    if (node.category === 'db' && !insideAnApiBody.has(node.id)) {
+      throw new CompileError(
+        `"${node.name ?? node.id}" reads the database, so it must sit inside an API route. ` +
+          'Database work never runs in the browser.',
+        node.id,
+      );
+    }
+  }
+
+  // A secret has no place in the document; a connector carries a name, never a value.
+  for (const connector of Object.values(snapshot.connectors)) {
+    const config = (connector.config ?? {}) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(config)) {
+      if (/key|secret|token|password/i.test(key) && typeof value === 'string' && value.length > 0) {
+        throw new CompileError(
+          `Connector "${connector.id}" carries "${key}" in the document. Credentials are referenced by name, never stored.`,
+          connector.id,
+        );
+      }
+    }
+  }
 }
 
 /** Structural checks a flow must pass before any template touches it. */

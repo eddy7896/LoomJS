@@ -140,6 +140,34 @@ export function createNode(
 }
 
 /**
+ * An API route node's ports are **derived from its body**: the container exposes its body's
+ * edges. The first step's inputs become the route's inputs (so a form wires straight into the
+ * columns an insert needs), and the last step's output types the route's result.
+ *
+ * This is what makes the container honest — its shape is exactly what the server side needs and
+ * returns, rather than a generic `any` in and `any` out.
+ */
+export function apiPortsFromBody(body: Node[]): Port[] {
+  const ports: Port[] = [port('pt_run', 'run', 'in', 'trigger', { kind: 'trigger' })];
+
+  const first = body[0];
+  const inputs = (first?.ports ?? []).filter((p) => p.direction === 'in' && p.portKind === 'data');
+  if (inputs.length > 0) {
+    ports.push(...inputs.map((p) => ({ ...p, direction: 'in' as const })));
+  } else {
+    ports.push(port('pt_input', 'input', 'in', 'data', { kind: 'any' }));
+  }
+
+  const last = body[body.length - 1];
+  const output = (last?.ports ?? []).find((p) => p.direction === 'out' && p.portKind === 'data');
+  ports.push(port('pt_result', 'result', 'out', 'data', output?.type ?? { kind: 'any' }));
+  ports.push(port('pt_pending', 'pending', 'out', 'data', { kind: 'boolean' }));
+  ports.push(port('pt_error', 'error', 'out', 'data', { kind: 'optional', of: { kind: 'text' } }));
+
+  return ports;
+}
+
+/**
  * Ports a UI component exposes when mirrored into Nodes mode. The component stays on the
  * artboard — the mirror is a view of it, never a second copy (guardrail 13).
  */
@@ -151,6 +179,8 @@ export function mirrorPortsFor(componentType: string): Port[] {
       return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
     case 'Text':
       return [port('pt_content', 'content', 'in', 'data', { kind: 'any' })];
+    case 'List':
+      return [port('pt_items', 'items', 'in', 'data', { kind: 'list', of: { kind: 'record' } })];
     default:
       return [];
   }

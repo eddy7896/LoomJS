@@ -1,3 +1,5 @@
+import { apiPortsFromBody } from '@loom/components';
+import { columnPortId, createDbNode } from '@loom/connectors';
 import { SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
 
 /**
@@ -184,17 +186,8 @@ export function pipelineSnapshot(): Snapshot {
     name: 'Shout',
     position: { x: 280, y: 0 },
     config: { method: 'POST', path: 'shout', body: [compute.id] },
-    ports: [
-      {
-        id: 'pt_run',
-        name: 'run',
-        direction: 'in',
-        portKind: 'trigger',
-        type: { kind: 'trigger' },
-      },
-      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
-      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
-    ],
+    // The container exposes its body's edges: the compute step's input and output.
+    ports: apiPortsFromBody([compute]),
   };
 
   return {
@@ -225,6 +218,159 @@ export function pipelineSnapshot(): Snapshot {
         id: 'wr_input',
         from: { nodeId: mirrorField.id, portId: 'pt_value' },
         to: { nodeId: api.id, portId: 'pt_input' },
+      },
+    },
+  };
+}
+
+const NOTES_TABLE = {
+  name: 'notes',
+  columns: [
+    { name: 'id', type: { kind: 'number' as const }, required: false, primaryKey: true, generated: true },
+    { name: 'title', type: { kind: 'text' as const }, required: true, primaryKey: false, generated: false },
+    { name: 'body', type: { kind: 'text' as const }, required: false, primaryKey: false, generated: false },
+  ],
+};
+
+/**
+ * The M4 shape: a connected Supabase, a reactive read that fills a List, and a form whose submit
+ * inserts a row. Both database nodes sit inside API routes — database work never runs in the
+ * browser (`docs/specs/connector-credentials.md`).
+ */
+export function supabaseSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const homeRoot = base.components.cp_root000001!;
+
+  const rowText: Component = {
+    id: 'cp_row_text',
+    type: 'Text',
+    name: 'Row title',
+    props: { content: { kind: 'item', field: 'title' } },
+  };
+
+  const list: Component = {
+    id: 'cp_list',
+    type: 'List',
+    name: 'Notes',
+    props: {
+      empty: { kind: 'static', value: 'No notes yet' },
+      items: { kind: 'bound', source: { nodeId: 'nd_read', portId: 'pt_result' } },
+    },
+    layout: { direction: 'column', gap: 8, padding: 0, align: 'stretch', justify: 'start' },
+    children: [rowText.id],
+  };
+
+  const titleField: Component = {
+    id: 'cp_title',
+    type: 'TextField',
+    name: 'Title',
+    props: { value: { kind: 'static', value: '' }, placeholder: { kind: 'static', value: 'Title' } },
+  };
+
+  const saveButton: Component = {
+    id: 'cp_save',
+    type: 'Button',
+    name: 'Save',
+    props: {
+      label: { kind: 'static', value: 'Save' },
+      onClick: {
+        kind: 'event',
+        handler: { kind: 'trigger', target: { nodeId: 'nd_write', portId: 'pt_run' } },
+      },
+    },
+  };
+
+  const selectNode = createDbNode('nd_select', { x: 0, y: 0 }, 'cn_supabase', NOTES_TABLE, 'select');
+  const insertNode = createDbNode('nd_insert', { x: 0, y: 200 }, 'cn_supabase', NOTES_TABLE, 'insert');
+
+  const readRoute: Node = {
+    id: 'nd_read',
+    category: 'api',
+    kind: 'route',
+    name: 'List notes',
+    position: { x: 320, y: 0 },
+    config: { method: 'POST', path: 'notes', body: [selectNode.id] },
+    ports: apiPortsFromBody([selectNode]),
+  };
+
+  const writeRoute: Node = {
+    id: 'nd_write',
+    category: 'api',
+    kind: 'route',
+    name: 'Create note',
+    position: { x: 320, y: 200 },
+    config: { method: 'POST', path: 'createnote', body: [insertNode.id] },
+    ports: apiPortsFromBody([insertNode]),
+  };
+
+  const mirrorTitle: Node = {
+    id: 'nd_mirror_title',
+    category: 'ui',
+    kind: 'mirror',
+    mirrorOf: titleField.id,
+    position: { x: 0, y: 320 },
+    ports: [
+      { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+    ],
+  };
+
+  const mirrorSave: Node = {
+    id: 'nd_mirror_save',
+    category: 'ui',
+    kind: 'mirror',
+    mirrorOf: saveButton.id,
+    position: { x: 0, y: 420 },
+    ports: [
+      {
+        id: 'pt_click',
+        name: 'onClick',
+        direction: 'out',
+        portKind: 'trigger',
+        type: { kind: 'trigger' },
+      },
+    ],
+  };
+
+  return {
+    ...base,
+    components: {
+      ...base.components,
+      cp_root000001: {
+        ...homeRoot,
+        children: [...(homeRoot.children ?? []), list.id, titleField.id, saveButton.id],
+      },
+      [list.id]: list,
+      [rowText.id]: rowText,
+      [titleField.id]: titleField,
+      [saveButton.id]: saveButton,
+    },
+    nodes: {
+      [selectNode.id]: selectNode,
+      [insertNode.id]: insertNode,
+      [readRoute.id]: readRoute,
+      [writeRoute.id]: writeRoute,
+      [mirrorTitle.id]: mirrorTitle,
+      [mirrorSave.id]: mirrorSave,
+    },
+    wires: {
+      wr_save: {
+        id: 'wr_save',
+        from: { nodeId: mirrorSave.id, portId: 'pt_click' },
+        to: { nodeId: writeRoute.id, portId: 'pt_run' },
+      },
+      wr_title: {
+        id: 'wr_title',
+        from: { nodeId: mirrorTitle.id, portId: 'pt_value' },
+        to: { nodeId: writeRoute.id, portId: columnPortId('title') },
+      },
+    },
+    connectors: {
+      cn_supabase: {
+        id: 'cn_supabase',
+        moduleId: 'supabase',
+        // Config carries the project URL and the cached schema. Never a key.
+        config: { url: 'https://demo.supabase.co' },
+        credentialRef: 'default',
       },
     },
   };

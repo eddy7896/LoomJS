@@ -28,6 +28,7 @@ export function emitArtboardModule(
 
   const seen = new Set<Id>();
   const hooks = { params: false, navigate: false };
+  const itemScope: string[] = [];
   const fields = new Map<Id, string>();
   const plans = planPipelines(snapshot, artboard);
 
@@ -38,6 +39,15 @@ export function emitArtboardModule(
     plans,
     component,
     renderChild: (id, depth) => render(id, depth),
+    itemVar: () => itemScope[itemScope.length - 1],
+    withItem: (item, render) => {
+      itemScope.push(item);
+      try {
+        return render();
+      } finally {
+        itemScope.pop();
+      }
+    },
     requireParams: () => {
       hooks.params = true;
       return PARAMS_VAR;

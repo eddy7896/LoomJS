@@ -1,6 +1,7 @@
 import type {
   Artboard,
   Component,
+  ConnectorInstance,
   Flow,
   FlowPayload,
   Layout,
@@ -41,7 +42,10 @@ export type Op =
   | { type: 'renameArtboard'; artboardId: string; name: string }
   | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
   | { type: 'setEntryArtboard'; artboardId: string }
-  | { type: 'removeArtboard'; artboardId: string };
+  | { type: 'removeArtboard'; artboardId: string }
+  | { type: 'addConnector'; connector: ConnectorInstance }
+  | { type: 'setConnectorConfig'; connectorId: string; config: unknown }
+  | { type: 'removeConnector'; connectorId: string };
 
 export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
   const next = structuredClone(snapshot);
@@ -231,6 +235,33 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         throw new Error(`setEntryArtboard: unknown artboard ${op.artboardId}`);
       }
       next.entryArtboard = op.artboardId;
+      return next;
+    }
+
+    case 'addConnector': {
+      next.connectors[op.connector.id] = op.connector;
+      return next;
+    }
+
+    case 'setConnectorConfig': {
+      const connector = next.connectors[op.connectorId];
+      if (!connector) throw new Error(`setConnectorConfig: unknown connector ${op.connectorId}`);
+      connector.config = op.config;
+      return next;
+    }
+
+    case 'removeConnector': {
+      delete next.connectors[op.connectorId];
+      // Database nodes without a connection cannot compile; drop them with it.
+      for (const [nodeId, node] of Object.entries(next.nodes)) {
+        const config = (node.config ?? {}) as { connectorId?: string };
+        if (node.category === 'db' && config.connectorId === op.connectorId) {
+          delete next.nodes[nodeId];
+          for (const [wireId, wire] of Object.entries(next.wires)) {
+            if (wire.from.nodeId === nodeId || wire.to.nodeId === nodeId) delete next.wires[wireId];
+          }
+        }
+      }
       return next;
     }
 

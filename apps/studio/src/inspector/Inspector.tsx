@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Component, Layout, SizeMode } from '@loom/ir';
+import type { Component, Layout, SizeMode, Snapshot } from '@loom/ir';
 import { LAYOUT_FIELDS, defFor, defForNode, type FieldDef } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
@@ -15,10 +15,12 @@ import {
   setEntryArtboard,
   setFlowPayload,
   setLayout,
+  setProp,
   setSize,
   setStaticProp,
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
+import { connectedTables } from '../state/connectors';
 
 /**
  * The inspector is **schema-driven**: it renders whatever `@loom/components` declares for the
@@ -111,7 +113,42 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function PropField({ component, field }: { component: Component; field: FieldDef }) {
+  const snapshot = useEditor((s) => s.snapshot);
   const value = component.props[field.key];
+
+  // Inside a List, a text property can read a column of the current row instead of holding a
+  // literal — the implicit map's one authoring affordance.
+  const rowFields = field.control === 'text' ? rowFieldsFor(snapshot, component.id) : [];
+  if (rowFields.length > 0) {
+    const current = value?.kind === 'item' ? value.field : '';
+    return (
+      <Field label={field.label}>
+        <div className="field__row">
+          <select
+            value={current}
+            onChange={(e) =>
+              e.target.value
+                ? setProp(component.id, field.key, { kind: 'item', field: e.target.value })
+                : setStaticProp(component.id, field.key, '')
+            }
+          >
+            <option value="">— text —</option>
+            {rowFields.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          {value?.kind === 'item' ? null : (
+            <input
+              value={value?.kind === 'static' ? String(value.value ?? '') : ''}
+              onChange={(e) => setStaticProp(component.id, field.key, e.target.value)}
+            />
+          )}
+        </div>
+      </Field>
+    );
+  }
 
   // Bound values belong to M3 and params resolve at runtime — show them, do not fake an editor.
   if (value && value.kind !== 'static') {
@@ -490,4 +527,40 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
       )}
     </aside>
   );
+}
+
+/**
+ * The columns available to a component inside a List: follow the List's `items` binding back to
+ * the API route that produces them, and read the table its body reads.
+ */
+function rowFieldsFor(snapshot: Snapshot, componentId: string): string[] {
+  let current: string | undefined = componentId;
+  const seen = new Set<string>();
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const parent: Component | undefined = Object.values(snapshot.components).find((candidate) =>
+      candidate.children?.includes(current!),
+    );
+    if (!parent) return [];
+
+    if (parent.type === 'List') {
+      const items = parent.props.items;
+      if (items?.kind !== 'bound') return [];
+      const route = snapshot.nodes[items.source.nodeId];
+      const body = ((route?.config ?? {}) as { body?: string[] }).body ?? [];
+      for (const stepId of body) {
+        const step = snapshot.nodes[stepId];
+        const config = (step?.config ?? {}) as { table?: string };
+        if (step?.category !== 'db' || !config.table) continue;
+        const table = connectedTables(snapshot).find((t) => t.name === config.table);
+        if (table) return table.columns.map((column) => column.name);
+      }
+      return [];
+    }
+
+    current = parent.id;
+  }
+
+  return [];
 }

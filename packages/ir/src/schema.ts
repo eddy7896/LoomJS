@@ -80,6 +80,8 @@ export const PropertyValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('event'), handler: EventHandlerSchema }),
   /** Reads one of the destination artboard's declared params (route data, not a node port). */
   z.object({ kind: z.literal('param'), name: z.string() }),
+  /** Reads a field of the current row, inside a List's template (implicit map, docs/04). */
+  z.object({ kind: z.literal('item'), field: z.string() }),
 ]);
 export type PropertyValue = z.infer<typeof PropertyValueSchema>;
 

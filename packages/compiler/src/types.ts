@@ -42,6 +42,10 @@ export interface EmitContext {
   requireParams: () => string;
   /** Declare that this module needs `useNavigate()`; returns the local variable name. */
   requireNavigate: () => string;
+  /** The current row variable, when emitting inside a List template; undefined outside one. */
+  itemVar: () => string | undefined;
+  /** Emit `render` with `item` in scope, for a List's per-row template. */
+  withItem: <T>(item: string, render: () => T) => T;
   /** Declare local state for a controlled input; returns its variable name. */
   requireFieldState: (componentId: Id, initial: string) => string;
   /** The JS expression that fires the pipeline reached through `target`. */

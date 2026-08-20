@@ -30,7 +30,16 @@ export function npmName(input: string): string {
   return slug.length > 0 ? slug : 'loom-app';
 }
 
-export function scaffoldFiles(projectName: string, appTitle: string): EmittedFile[] {
+export interface ScaffoldOptions {
+  /** Adds the Supabase client, which only a project with database nodes needs. */
+  usesDatabase?: boolean;
+}
+
+export function scaffoldFiles(
+  projectName: string,
+  appTitle: string,
+  options: ScaffoldOptions = {},
+): EmittedFile[] {
   const pkg = {
     name: npmName(projectName),
     private: true,
@@ -41,7 +50,10 @@ export function scaffoldFiles(projectName: string, appTitle: string): EmittedFil
       build: 'tsc --noEmit && vite build',
       preview: 'vite preview',
     },
-    dependencies: { ...TARGET_DEPS },
+    dependencies: {
+      ...TARGET_DEPS,
+      ...(options.usesDatabase ? { '@supabase/postgrest-js': '^2.112.3' } : {}),
+    },
     devDependencies: { ...TARGET_DEV_DEPS },
   };
 

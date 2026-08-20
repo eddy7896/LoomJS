@@ -1,4 +1,5 @@
 import type { Id, Snapshot } from '@loom/ir';
+import { DataPanel } from './DataPanel';
 import { useEditor } from '../state/useEditor';
 import {
   addArtboard,
@@ -46,6 +47,8 @@ export function LayersPanel() {
           />
         </div>
       ))}
+
+      <DataPanel />
     </aside>
   );
 }
