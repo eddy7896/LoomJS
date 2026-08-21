@@ -1,6 +1,7 @@
 import type { ComponentEmitter } from '../types';
 import { layoutToStyle } from '../emit/layout';
-import { indent, styleExpr } from '../emit/text';
+import { styleAttr } from '../emit/style';
+import { indent } from '../emit/text';
 import { staticString, valueExpr } from '../emit/props';
 
 /**
@@ -14,7 +15,7 @@ export const listEmitter: ComponentEmitter = {
     const items = component.props.items;
     const itemsExpr = items ? valueExpr(items, ctx, component.id, 'items') : '[]';
 
-    const style = component.layout ? layoutToStyle(component.layout) : { display: 'flex' };
+    const attrs = styleAttr(component, ctx, component.layout ? layoutToStyle(component.layout) : { display: 'flex' });
     const itemVar = `item_${component.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     const empty = staticString(component, 'empty');
 
@@ -24,14 +25,14 @@ export const listEmitter: ComponentEmitter = {
     // state rather than refusing to build. Nothing is lost: there is no row template to emit.
     const templateId = (component.children ?? [])[0];
     if (!templateId) {
-      return `${indent(depth)}<div style=${styleExpr(style)}>
+      return `${indent(depth)}<div${attrs}>
 ${indent(depth + 1)}<span>{${JSON.stringify(empty)}}</span>
 ${indent(depth)}</div>`;
     }
 
     const template = ctx.withItem(itemVar, () => ctx.renderChild(templateId, depth + 3));
 
-    return `${indent(depth)}<div style=${styleExpr(style)}>
+    return `${indent(depth)}<div${attrs}>
 ${indent(depth + 1)}{(${itemsExpr}).length === 0 ? (
 ${indent(depth + 2)}<span>{${JSON.stringify(empty)}}</span>
 ${indent(depth + 1)}) : (

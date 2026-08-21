@@ -52,6 +52,9 @@ export function ComponentView({
     },
     onPointerDown: (event: PointerEvent) => onPointerDown(id, event),
     'data-dragging': draggingId === id ? 'true' : undefined,
+    // The canvas has no runtime values, so a conditional component is drawn and *marked* rather
+    // than hidden — the Preview is where conditions actually run (`docs/specs/conditions.md`).
+    'data-conditional': component.visibleWhen ? 'true' : undefined,
   };
 
   const style = componentStyle(component) as CSSProperties;

@@ -225,6 +225,20 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P0] Opening a document starts history empty.** Undo must not walk back into a session the
   designer was not part of.
 
+- **[P1] A condition is a reference to a boolean, not an expression.** Composition happens in
+  Compare, Logic and Compute nodes on the canvas; the inspector only *points at* the result. A
+  second expression language in a property is how a domain-specific tool becomes a general-purpose
+  one, and it would be invisible on the canvas besides. See `specs/conditions.md`.
+- **[P1] Invisible means not rendered.** `visibleWhen` removes the element from the tree rather
+  than setting `display: none` — a hidden element that still occupies layout, still takes focus and
+  still ships its contents is a bug waiting to be filed, and for an auth-gated panel it is a leak.
+- **[P1] The condition picker materialises what it offers.** A checkbox can be conditioned on the
+  moment it is drawn; its mirror is created when the condition is picked. Requiring a trip to Nodes
+  mode to wire a box to nothing first would be a rule nobody could guess.
+- **[P1] The canvas marks conditional components rather than hiding them.** Design mode has no
+  runtime values, so it draws everything and outlines what is conditional; the Preview is where
+  conditions actually run. Simulating a condition on the canvas is a later idea, deliberately.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

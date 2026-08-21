@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
 import {
+  conditionalSnapshot,
   everyComponentSnapshot,
   operatorPipelineSnapshot,
   triggeredMathSnapshot,
@@ -125,6 +126,16 @@ describe('emitted app builds for real', () => {
     expect(home).toContain('safeDivide');
     // Nothing here talks to a server: the whole derivation runs in the browser.
     expect(home).not.toContain('fetch(');
+  });
+
+  it('type-checks a screen whose parts appear and restyle with a condition', async () => {
+    const dir = await emitProject(conditionalSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    expect(home).toContain('{isOn(field_cp_agree) ? (');
+    expect(home).toContain('...(isOn(field_cp_agree) ?');
+    expect(home).toContain('...(!isOn(field_cp_agree) ?');
   });
 
   it('type-checks and builds an app with a backend pipeline', async () => {

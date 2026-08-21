@@ -1,8 +1,7 @@
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { staticString } from '../emit/props';
-import { styleToCss } from '../emit/style';
-import { styleExpr } from '../emit/text';
+import { styleAttr } from '../emit/style';
 
 /**
  * TextField = a controlled input. Its value is local component state, which is also what a
@@ -15,9 +14,7 @@ export const textFieldEmitter: ComponentEmitter = {
     const placeholder = staticString(component, 'placeholder');
     const state = ctx.requireFieldState(component.id, initial);
 
-    const style = styleToCss(component);
-    const styled = Object.keys(style).length > 0 ? `
-${indent(depth + 1)}style=${styleExpr(style)}` : '';
+    const styled = styleAttr(component, ctx);
 
     return `${indent(depth)}<input${styled}
 ${indent(depth + 1)}value={${state}}

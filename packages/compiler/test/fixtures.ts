@@ -677,3 +677,71 @@ export function triggeredMathSnapshot(): Snapshot {
     },
   ]);
 }
+
+/**
+ * A screen whose parts appear, disappear and restyle with a checkbox. Its job is the emitted
+ * app's own `tsc`: a visibility wrap and a conditional style spread are both real TSX, and either
+ * can be malformed in a way no string match here would notice.
+ */
+export function conditionalSnapshot(): Snapshot {
+  const base = formSnapshot();
+
+  return applyOps(base, [
+    {
+      type: 'addComponent',
+      parentId: 'cp_form',
+      component: {
+        id: 'cp_agree',
+        type: 'Checkbox',
+        name: 'Agree',
+        props: {
+          value: { kind: 'static', value: false },
+          label: { kind: 'static', value: 'Agree' },
+        },
+      },
+    },
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_m_agree',
+        category: 'ui',
+        kind: 'mirror',
+        mirrorOf: 'cp_agree',
+        ports: [
+          {
+            id: 'pt_value',
+            name: 'checked',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'boolean' },
+          },
+        ],
+        position: { x: 0, y: 0 },
+      },
+    },
+    {
+      type: 'setVisibleWhen',
+      componentId: 'cp_status',
+      condition: { source: { nodeId: 'nd_m_agree', portId: 'pt_value' } },
+    },
+    {
+      type: 'setStyle',
+      componentId: 'cp_form',
+      style: { background: { kind: 'token', token: 'color.surface' } },
+    },
+    {
+      type: 'setConditionalStyles',
+      componentId: 'cp_form',
+      styles: [
+        {
+          when: { source: { nodeId: 'nd_m_agree', portId: 'pt_value' } },
+          style: { background: { kind: 'token', token: 'color.brand-tint' } },
+        },
+        {
+          when: { source: { nodeId: 'nd_m_agree', portId: 'pt_value' }, test: 'not' },
+          style: { radius: { kind: 'token', token: 'radius.pill' } },
+        },
+      ],
+    },
+  ]);
+}

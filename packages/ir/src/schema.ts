@@ -166,6 +166,31 @@ export const StyleSchema = z.object({
 export type Style = z.infer<typeof StyleSchema>;
 
 // ---------------------------------------------------------------------------
+// Conditions (spec 6) — a reference to a boolean, optionally inverted
+// ---------------------------------------------------------------------------
+
+/**
+ * A condition is **a reference to a boolean somewhere on this screen**, and nothing more. There is
+ * no `and`, no comparison, no chained operator: composition happens in Compare, Logic and Compute
+ * nodes on the canvas, which produce a boolean this then reads (`docs/specs/conditions.md`).
+ * A second expression language in the inspector is how a domain-specific tool becomes a
+ * general-purpose one, and it would be invisible on the canvas besides.
+ */
+export const ConditionSchema = z.object({
+  source: PortRefSchema,
+  /** `is` shows when the value is on; `not` inverts it. Words, because a flag reads as noise. */
+  test: z.enum(['is', 'not']).optional(),
+});
+export type Condition = z.infer<typeof ConditionSchema>;
+
+/** One conditional override: this style, merged over the base, while the condition holds. */
+export const ConditionalStyleSchema = z.object({
+  when: ConditionSchema,
+  style: StyleSchema,
+});
+export type ConditionalStyle = z.infer<typeof ConditionalStyleSchema>;
+
+// ---------------------------------------------------------------------------
 // Design mode: components + artboards
 // ---------------------------------------------------------------------------
 
@@ -177,6 +202,10 @@ export const ComponentSchema = z.object({
   props: z.record(z.string(), PropertyValueSchema),
   layout: LayoutSchema.optional(),
   style: StyleSchema.optional(),
+  /** Absent means always rendered. False means not rendered at all — never `display: none`. */
+  visibleWhen: ConditionSchema.optional(),
+  /** Overrides merged over `style`, in order, for each condition that holds. */
+  conditionalStyles: z.array(ConditionalStyleSchema).optional(),
   children: z.array(IdSchema).optional(),
 });
 export type Component = z.infer<typeof ComponentSchema>;

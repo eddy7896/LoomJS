@@ -1,4 +1,13 @@
-import type { Artboard, Component, Id, PortRef, PropertyValue, Snapshot, TypeRef } from '@loom/ir';
+import type {
+  Artboard,
+  Component,
+  Condition,
+  Id,
+  PortRef,
+  PropertyValue,
+  Snapshot,
+  TypeRef,
+} from '@loom/ir';
 import type { RouteMap } from './emit/routes';
 import type { PipelinePlan } from './emit/pipeline';
 import type { DerivedPlan } from './emit/derived';
@@ -63,6 +72,8 @@ export interface EmitContext {
   typeOfValue: (value: PropertyValue) => TypeRef | undefined;
   /** Declare that this module needs the text coercion helper; returns its name. */
   requireTextHelper: () => string;
+  /** The JS expression a condition compiles to, already truthy-coerced (spec 6). */
+  conditionExpr: (condition: Condition, componentId: Id) => string;
 }
 
 /** A component type owns its code template (docs/02 — compile = stitch templates). */

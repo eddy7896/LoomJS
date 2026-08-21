@@ -1,6 +1,7 @@
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { staticString } from '../emit/props';
+import { styleAttr } from '../emit/style';
 
 /**
  * The input vocabulary beyond text: a number, a boolean, and a choice.
@@ -25,7 +26,7 @@ export const numberFieldEmitter: ComponentEmitter = {
 
     // An empty box reads as 0 rather than NaN: NaN would travel down the wire and land in a
     // column as null, which is a different fact from "the designer left it empty".
-    return `${indent(depth)}<input
+    return `${indent(depth)}<input${styleAttr(component, ctx)}
 ${indent(depth + 1)}type="number"
 ${indent(depth + 1)}value={${state}}
 ${indent(depth + 1)}placeholder={${JSON.stringify(placeholder)}}
@@ -41,7 +42,7 @@ export const checkboxEmitter: ComponentEmitter = {
     const label = staticString(component, 'label', 'Yes');
     const state = ctx.requireFieldState(component.id, initial);
 
-    return `${indent(depth)}<label>
+    return `${indent(depth)}<label${styleAttr(component, ctx)}>
 ${indent(depth + 1)}<input
 ${indent(depth + 2)}type="checkbox"
 ${indent(depth + 2)}checked={${state}}
@@ -76,7 +77,7 @@ export const selectEmitter: ComponentEmitter = {
       )
       .join('\n');
 
-    return `${indent(depth)}<select value={${state}} onChange={(event) => set_${state}(event.target.value)}>
+    return `${indent(depth)}<select${styleAttr(component, ctx)} value={${state}} onChange={(event) => set_${state}(event.target.value)}>
 ${items}
 ${indent(depth)}</select>`;
   },

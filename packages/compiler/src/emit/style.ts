@@ -1,7 +1,8 @@
 import type { Component, Style, StyleValue } from '@loom/ir';
 import { tokenById, tokenVar } from '@loom/ui';
-import { CompileError } from '../types';
+import { CompileError, type EmitContext } from '../types';
 import { layoutToStyle } from './layout';
+import { styleExpr, styleObject } from './text';
 
 /**
  * Style emission: a component's styled properties become CSS, in the app's own token variables.
@@ -74,4 +75,32 @@ export function styleToCss(component: Component): Record<string, string | number
 export function componentStyle(component: Component): Record<string, string | number> {
   const layout = component.layout ? layoutToStyle(component.layout) : {};
   return { ...layout, ...styleToCss(component) };
+}
+
+/**
+ * The `style={{…}}` attribute for a component, conditional overrides included.
+ *
+ * Overrides spread over the base **in order**, so two conditions can set two different properties
+ * without fighting — the same rule CSS itself uses, which is what a designer already expects.
+ */
+export function styleAttr(
+  component: Component,
+  ctx: EmitContext,
+  base: Record<string, string | number> = {},
+): string {
+  const own = { ...base, ...styleToCss(component) };
+  const conditionals = component.conditionalStyles ?? [];
+
+  if (conditionals.length === 0) {
+    return Object.keys(own).length > 0 ? ` style=${styleExpr(own)}` : '';
+  }
+
+  const spreads = conditionals.map((entry) => {
+    const css = styleToCss({ ...component, style: entry.style, conditionalStyles: undefined });
+    return `...(${ctx.conditionExpr(entry.when, component.id)} ? ${styleObject(css)} : {})`;
+  });
+
+  const baseLiteral = styleObject(own);
+  const parts = baseLiteral === '{}' ? spreads : [baseLiteral.slice(2, -2), ...spreads];
+  return ` style={{ ${parts.join(', ')} }}`;
 }

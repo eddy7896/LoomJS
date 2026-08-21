@@ -37,6 +37,15 @@ import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
 import { dbNodeFields } from '@loom/connectors';
 import { TOKENS, tokenValue, tokensIn, type TokenGroup } from '@loom/ui';
+import type { Condition } from '@loom/ir';
+import {
+  addConditionalStyle,
+  conditionFromKey,
+  conditionKey,
+  conditionSources,
+  setConditionalStyles,
+  setVisibleWhen,
+} from '../state/conditions';
 import { acceptAuto, backendOffer, detachAuto, generateBackend, withdrawAuto } from '../state/autobackend';
 
 /**
@@ -102,6 +111,8 @@ export function Inspector() {
       {def?.acceptsClickFlow ? <ClickFlowSection component={component} /> : null}
 
       <StyleSection component={component} />
+
+      <ConditionsSection component={component} />
 
       {component.layout ? <AutoBackendSection component={component} /> : null}
 
@@ -455,14 +466,20 @@ const STYLE_FIELDS = [
  * it — that is what makes this a design system rather than a styling panel
  * (`docs/05-guardrails.md` 19-24).
  */
-function StyleSection({ component }: { component: Component }) {
-  const snapshot = useEditor((s) => s.snapshot);
-  const style = component.style ?? {};
+/** The token pickers, shared by the base style and by every conditional override. */
+function StyleFields({
+  style,
+  onChange,
+  testPrefix,
+}: {
+  style: Style;
+  onChange: (patch: Partial<Style>) => void;
+  testPrefix: string;
+}) {
+  const theme = useEditor((s) => s.snapshot.theme);
 
   return (
-    <section className="field-group" data-testid="style-section">
-      <h3 className="field-group__title">Style</h3>
-
+    <>
       {STYLE_FIELDS.map((entry) => {
         const current = style[entry.key];
         const value = current?.kind === 'token' ? current.token : '';
@@ -470,10 +487,10 @@ function StyleSection({ component }: { component: Component }) {
           <Field key={entry.key} label={entry.label}>
             <div className="field__row">
               <select
-                data-testid={`style-${entry.key}`}
+                data-testid={`${testPrefix}${entry.key}`}
                 value={value}
                 onChange={(event) =>
-                  setStyle(component.id, {
+                  onChange({
                     [entry.key]: event.target.value
                       ? { kind: 'token', token: event.target.value }
                       : undefined,
@@ -490,7 +507,7 @@ function StyleSection({ component }: { component: Component }) {
               {entry.group === 'color' && value ? (
                 <span
                   className="swatch"
-                  style={{ background: tokenValue(value, snapshot.theme) }}
+                  style={{ background: tokenValue(value, theme) }}
                   title={value}
                 />
               ) : null}
@@ -498,6 +515,151 @@ function StyleSection({ component }: { component: Component }) {
           </Field>
         );
       })}
+    </>
+  );
+}
+
+/**
+ * Conditions (spec 6): show-when, plus style overrides that hold while a condition does. The
+ * picker only offers booleans this screen actually produces — a list including sources the
+ * compiler would refuse is worse than a short one.
+ */
+function ConditionsSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const activeArtboardId = useEditor((s) => s.activeArtboardId);
+  const sources = conditionSources(snapshot, activeArtboardId);
+  const conditionals = component.conditionalStyles ?? [];
+
+  const picker = (
+    condition: Condition | undefined,
+    onPick: (next: Condition | undefined) => void,
+    testId: string,
+  ) => (
+    <div className="field__row">
+      <select
+        data-testid={testId}
+        value={conditionKey(condition)}
+        onChange={(event) => onPick(conditionFromKey(event.target.value, condition?.test))}
+      >
+        <option value="">Always</option>
+        {sources.map((source) => (
+          <option key={source.key} value={source.key}>
+            {source.label}
+          </option>
+        ))}
+      </select>
+      {condition ? (
+        <select
+          data-testid={`${testId}-test`}
+          value={condition.test ?? 'is'}
+          onChange={(event) =>
+            onPick(
+              event.target.value === 'not'
+                ? { source: condition.source, test: 'not' }
+                : { source: condition.source },
+            )
+          }
+        >
+          <option value="is">is on</option>
+          <option value="not">is off</option>
+        </select>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <section className="field-group" data-testid="conditions-section">
+      <h3 className="field-group__title">Conditions</h3>
+
+      {sources.length === 0 ? (
+        <p className="panel__hint">
+          Nothing on this screen produces a true/false value yet. A checkbox, or a Compare node,
+          gives a condition something to read.
+        </p>
+      ) : null}
+
+      <Field label="Show when">
+        {picker(component.visibleWhen, (next) => setVisibleWhen(component.id, next), 'visible-when')}
+      </Field>
+
+      {conditionals.map((entry, index) => (
+        <div key={index} className="conditional-style" data-testid={`conditional-style-${index}`}>
+          <div className="field-group__head">
+            <span className="badge">Style when</span>
+            <button
+              title="Remove"
+              data-testid={`remove-conditional-${index}`}
+              onClick={() =>
+                setConditionalStyles(
+                  component.id,
+                  conditionals.filter((_, i) => i !== index),
+                )
+              }
+            >
+              ×
+            </button>
+          </div>
+
+          {picker(
+            entry.when,
+            (next) => {
+              if (!next) return;
+              setConditionalStyles(
+                component.id,
+                conditionals.map((row, i) => (i === index ? { ...row, when: next } : row)),
+              );
+            },
+            `conditional-when-${index}`,
+          )}
+
+          <StyleFields
+            style={entry.style}
+            testPrefix={`conditional-${index}-`}
+            onChange={(patch) =>
+              setConditionalStyles(
+                component.id,
+                conditionals.map((row, i) =>
+                  i === index ? { ...row, style: cleaned({ ...row.style, ...patch }) } : row,
+                ),
+              )
+            }
+          />
+        </div>
+      ))}
+
+      {sources.length > 0 ? (
+        <button
+          data-testid="add-conditional-style"
+          onClick={() => addConditionalStyle(component.id)}
+        >
+          + Style when…
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+/** Drop cleared properties, so an override carries only what it actually changes. */
+function cleaned(style: Style): Style {
+  const next = { ...style } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(next)) {
+    if (value === undefined) delete next[key];
+  }
+  return next as Style;
+}
+
+function StyleSection({ component }: { component: Component }) {
+  const style = component.style ?? {};
+
+  return (
+    <section className="field-group" data-testid="style-section">
+      <h3 className="field-group__title">Style</h3>
+
+      <StyleFields
+        style={style}
+        testPrefix="style-"
+        onChange={(patch) => setStyle(component.id, patch)}
+      />
 
       <Field label="Border w">
         <input

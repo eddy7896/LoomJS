@@ -1,14 +1,13 @@
 import type { ComponentEmitter } from '../types';
-import { indent, styleExpr } from '../emit/text';
-import { styleToCss } from '../emit/style';
+import { indent } from '../emit/text';
+import { styleAttr } from '../emit/style';
 import { valueExpr } from '../emit/props';
 
 /** Text = a leaf span carrying its `content` prop (static text or a route param). */
 export const textEmitter: ComponentEmitter = {
   type: 'Text',
   emit(component, ctx, depth) {
-    const style = styleToCss(component);
-    const attrs = Object.keys(style).length > 0 ? ` style=${styleExpr(style)}` : '';
+    const attrs = styleAttr(component, ctx);
 
     const value = component.props.content;
     if (!value) return `${indent(depth)}<span${attrs}>{""}</span>`;

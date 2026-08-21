@@ -4,6 +4,8 @@ import type {
   ConnectorInstance,
   Flow,
   FlowPayload,
+  Condition,
+  ConditionalStyle,
   Layout,
   Param,
   ScreenSize,
@@ -30,6 +32,8 @@ export type Op =
   | { type: 'removeProp'; componentId: string; key: string }
   | { type: 'setLayout'; componentId: string; layout: Partial<Layout> }
   | { type: 'setStyle'; componentId: string; style: Partial<Style> }
+  | { type: 'setVisibleWhen'; componentId: string; condition: Condition | undefined }
+  | { type: 'setConditionalStyles'; componentId: string; styles: ConditionalStyle[] }
   | { type: 'setThemeToken'; token: string; value: string | undefined }
   | { type: 'setName'; componentId: string; name: string }
   | { type: 'moveComponent'; componentId: string; parentId: string; index?: number }
@@ -109,6 +113,23 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         if (value === undefined) delete style[key];
       }
       component.style = style as Style;
+      return next;
+    }
+
+    /** Clearing the condition makes the component unconditional again, not permanently hidden. */
+    case 'setVisibleWhen': {
+      const component = next.components[op.componentId];
+      if (!component) throw new Error(`setVisibleWhen: unknown component ${op.componentId}`);
+      if (op.condition) component.visibleWhen = op.condition;
+      else delete component.visibleWhen;
+      return next;
+    }
+
+    case 'setConditionalStyles': {
+      const component = next.components[op.componentId];
+      if (!component) throw new Error(`setConditionalStyles: unknown component ${op.componentId}`);
+      if (op.styles.length > 0) component.conditionalStyles = op.styles;
+      else delete component.conditionalStyles;
       return next;
     }
 

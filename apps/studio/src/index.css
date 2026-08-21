@@ -347,15 +347,18 @@ select {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  display: flex;
-  justify-content: center;
+  /* Block, not flex: a centred flex item wider than its container overflows on *both* sides, so
+     half the previewed screen ends up outside the scroll area and unreachable. Block layout with
+     an auto margin centres what fits and overflows only to the right, where scrolling reaches. */
+  display: block;
   background: var(--surface-sunken);
 }
 
 .preview__frame {
+  display: block;
   border: none;
-  flex: 0 0 auto;
-  min-height: 100%;
+  height: 100%;
+  margin: 0 auto;
   background: #fff;
 }
 
@@ -789,4 +792,22 @@ input[type='color'] {
 .save--error {
   color: var(--error);
   font-weight: 600;
+}
+
+/* A conditional style override reads as a block, not as more loose fields. */
+.conditional-style {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.conditional-style .field-group__head {
+  margin-bottom: 6px;
+}
+
+/* Drawn, and marked: this one only appears in the running app when its condition holds. */
+[data-conditional='true'] {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
 }
