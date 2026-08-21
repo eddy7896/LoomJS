@@ -41,6 +41,17 @@ export function initialFieldValue(component: Component): unknown {
     }
     case 'Checkbox':
       return Boolean(staticValue(component, 'value', false));
+    case 'Slider': {
+      const initial = Number(staticValue(component, 'value', 50));
+      return Number.isFinite(initial) ? initial : 50;
+    }
+    case 'RadioGroup': {
+      // Nothing chosen is a real answer for a radio group, so it starts empty rather than on the
+      // first option — unlike a Select, which always shows something.
+      const options = parseOptions(staticText(component, 'options'));
+      const initial = staticText(component, 'value');
+      return options.includes(initial) ? initial : '';
+    }
     case 'Select': {
       const options = parseOptions(staticText(component, 'options'));
       const initial = staticText(component, 'value');

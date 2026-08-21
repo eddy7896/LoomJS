@@ -484,7 +484,9 @@ export function everyComponentSnapshot(): Snapshot {
   for (const def of componentDefs()) {
     if (def.type === 'Frame') continue;
     const component = createComponent(def.type, `cp_${def.type.toLowerCase()}`);
-    if (def.type === 'Select') component.props.options = { kind: 'static', value: 'Low, High' };
+    if (def.type === 'Select' || def.type === 'RadioGroup') {
+      component.props.options = { kind: 'static', value: 'Low, High' };
+    }
     components[component.id] = component;
   }
 

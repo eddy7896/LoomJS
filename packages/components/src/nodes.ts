@@ -558,17 +558,28 @@ export function mirrorPortsFor(componentType: string): Port[] {
     case 'Button':
       return [port('pt_click', 'onClick', 'out', 'trigger', { kind: 'trigger' })];
     case 'TextField':
+    case 'MultilineField':
       return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
     case 'NumberField':
+    case 'Slider':
       return [port('pt_value', 'value', 'out', 'data', { kind: 'number' })];
     case 'Checkbox':
       return [port('pt_value', 'checked', 'out', 'data', { kind: 'boolean' })];
     case 'Select':
+    case 'RadioGroup':
       // `text` rather than an enum of the options: typing it would need the mirror to read the
       // component's config, which is a wider change than this vocabulary needs.
       return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
+    case 'DateField':
+      // The browser hands back `YYYY-MM-DD`, and that string is exactly what a date column
+      // accepts. Typing this `date` would promise a conversion nothing performs.
+      return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
     case 'Text':
       return [port('pt_content', 'content', 'in', 'data', { kind: 'any' })];
+    case 'Image':
+      return [port('pt_src', 'source', 'in', 'data', { kind: 'text' })];
+    case 'Link':
+      return [port('pt_href', 'address', 'in', 'data', { kind: 'text' })];
     case 'List':
       return [port('pt_items', 'items', 'in', 'data', { kind: 'list', of: { kind: 'record' } })];
     default:
@@ -627,7 +638,16 @@ export function acceptsManyWires(node: Node, portId: Id): boolean {
  * Component types whose value lives in local state in the emitted app — the inputs. A binding
  * pointing at one of these mirrors reads what the person typed, with no pipeline in between.
  */
-const FIELD_STATE_TYPES = new Set(['TextField', 'NumberField', 'Checkbox', 'Select']);
+const FIELD_STATE_TYPES = new Set([
+  'TextField',
+  'MultilineField',
+  'NumberField',
+  'Checkbox',
+  'Select',
+  'RadioGroup',
+  'DateField',
+  'Slider',
+]);
 
 export function hasFieldState(componentType: string): boolean {
   return FIELD_STATE_TYPES.has(componentType);

@@ -74,6 +74,13 @@ export interface EmitContext {
   requireMessage: () => string;
   /** The JS expression that navigates along `flowId` (path + payload). */
   navigateExpr: (flowId: Id, componentId: Id) => string;
+  /**
+   * The path `flowId` reaches, as an expression — the same route `navigateExpr` would go to, but
+   * as a value. A real `<a>` needs the destination in its `href`, not a handler that goes there.
+   */
+  pathExpr: (flowId: Id, componentId: Id) => string;
+  /** Declare that this module renders a router `<Link>`; returns the component name to emit. */
+  requireLink: () => string;
   /** The type a property value carries, when it is knowable (bindings). */
   typeOfValue: (value: PropertyValue) => TypeRef | undefined;
   /** Declare that this module needs the text coercion helper; returns its name. */

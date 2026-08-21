@@ -90,3 +90,20 @@ test('problems stay visible in every section', async ({ page }) => {
   await page.getByTestId('rail-data').click();
   await expect(page.getByTestId('problems')).toBeVisible();
 });
+
+test('the new elements are placeable, and reach the running app', async ({ page }) => {
+  const palette = page.getByTestId('elements-panel');
+
+  for (const name of ['+ Slider', '+ Date field', '+ Multiline field', '+ Icon']) {
+    await page.locator('.layer', { hasText: 'Root' }).first().click();
+    await palette.getByRole('button', { name, exact: true }).click();
+  }
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  const preview = page.frameLocator('iframe.preview__frame');
+  await expect(preview.locator('input[type="range"]')).toHaveCount(1);
+  await expect(preview.locator('input[type="date"]')).toHaveCount(1);
+  await expect(preview.locator('textarea')).toHaveCount(1);
+  // The icon is inlined, not fetched: no font, no package, no request.
+  await expect(preview.locator('svg[aria-hidden="true"]')).toHaveCount(1);
+});

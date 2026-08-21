@@ -112,7 +112,7 @@ to place the top hit is *not* built — it wants a focus model the palette does 
 
 ---
 
-## S3 — The palette, filled: tier one
+## S3 — The palette, filled: tier one ✅ _(done)_
 
 Everything below is **new language surface**, and each entry states what it emits. Nothing is here
 because Bubble has it.
@@ -132,6 +132,26 @@ component the studio can place already exists and covers them.
 
 **Done-when:** the "every component" smoke gate passes with the new set, and each new input's
 mirror carries the right type into the graph.
+
+**Decisions made while building them:**
+
+- **A Link that points at a screen emits `<Link to>`, not `<a href>`.** A full page load would
+  throw away the app's state to reach a route it already has. That needed one new thing on the
+  emit context — `pathExpr`, the destination as a *value* rather than as a handler that goes
+  there — and `navigateExpr` is now written in terms of it, so there is one definition of where a
+  flow leads.
+- **A date field's port is `text`, not `date`.** The browser hands back `YYYY-MM-DD`, and that
+  string is exactly what a date column accepts; typing it `date` would promise a conversion
+  nothing performs.
+- **A radio group starts on nothing.** Unlike a Select, which always shows something, "nothing
+  chosen" is a real answer for a radio group. Its `name` is derived from the component id, because
+  two groups sharing a name would let a choice in one clear the other — a bug nobody would guess
+  from the canvas.
+- **`alt` is always written, even when empty.** Empty alt is a decision ("this picture carries no
+  meaning"), and a builder that makes it easy to omit produces inaccessible apps by default.
+- **A freshly placed Link compiles.** Its address defaults to a placeholder rather than empty —
+  the same rule an action follows when it is added already pointing at something real. The
+  existing vocabulary gate caught this immediately.
 
 ## S4 — The palette, filled: tier two
 

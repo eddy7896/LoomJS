@@ -5,6 +5,13 @@ import { listEmitter } from './list';
 import { textEmitter } from './textComponent';
 import { textFieldEmitter } from './textField';
 import { checkboxEmitter, numberFieldEmitter, selectEmitter } from './inputs';
+import {
+  dateFieldEmitter,
+  multilineFieldEmitter,
+  radioGroupEmitter,
+  sliderEmitter,
+} from './inputs2';
+import { iconEmitter, imageEmitter, linkEmitter } from './media';
 
 /**
  * The component template registry: each component type owns exactly one code template
@@ -20,6 +27,13 @@ const EMITTERS: ComponentEmitter[] = [
   checkboxEmitter,
   selectEmitter,
   listEmitter,
+  imageEmitter,
+  linkEmitter,
+  iconEmitter,
+  multilineFieldEmitter,
+  radioGroupEmitter,
+  dateFieldEmitter,
+  sliderEmitter,
 ];
 
 const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));

@@ -1,4 +1,5 @@
 import type { Component, Layout, PropertyValue } from '@loom/ir';
+import { ICON_NAMES } from './icons';
 
 /**
  * The component vocabulary: one definition per component type, shared by the studio
@@ -188,6 +189,123 @@ export const SELECT_DEF: ComponentDef = {
   ],
 };
 
+/**
+ * An image. There was no way to put a picture on a screen at all — a hole rather than a gap.
+ *
+ * `alt` is a first-class field, not an afterthought: an `<img>` with no alt text is the single
+ * most common accessibility failure on the web, and a builder that makes it easy to omit is a
+ * builder that produces inaccessible apps by default.
+ */
+export const IMAGE_DEF: ComponentDef = {
+  type: 'Image',
+  label: 'Image',
+  category: 'visual',
+  keywords: ['picture', 'photo', 'img', 'graphic', 'logo'],
+  isContainer: false,
+  fields: [
+    { key: 'src', label: 'Source', control: 'text', default: '' },
+    { key: 'alt', label: 'Alt text', control: 'text', default: '' },
+  ],
+};
+
+/**
+ * A real link. `navigate` on a Button is a `<div>` that moves the page: not right-clickable, not
+ * middle-clickable, not crawlable, and reachable by keyboard only because the button is. This
+ * emits an anchor — `<Link>` when it points at a screen, `<a>` when it points at an address.
+ */
+export const LINK_DEF: ComponentDef = {
+  type: 'Link',
+  label: 'Link',
+  category: 'visual',
+  keywords: ['anchor', 'href', 'url', 'hyperlink'],
+  isContainer: false,
+  acceptsClickFlow: true,
+  fields: [
+    { key: 'label', label: 'Label', control: 'text', default: 'Link' },
+    // A placeholder rather than empty: a freshly placed element must compile, the same rule an
+    // action follows when it is added already pointing at something real (`specs/actions.md`).
+    { key: 'href', label: 'Address', control: 'text', default: 'https://' },
+    { key: 'newTab', label: 'Open in a new tab', control: 'boolean', default: false },
+  ],
+};
+
+/**
+ * An icon, from a small curated set. Not an icon *font* and not a package: a dependency whose
+ * whole job is to draw twenty shapes is a dependency the emitted app should not carry.
+ */
+export const ICON_DEF: ComponentDef = {
+  type: 'Icon',
+  label: 'Icon',
+  category: 'visual',
+  keywords: ['symbol', 'glyph', 'svg', 'pictogram'],
+  isContainer: false,
+  fields: [
+    { key: 'name', label: 'Icon', control: 'select', options: [...ICON_NAMES], default: 'check' },
+    { key: 'size', label: 'Size', control: 'number', default: 20 },
+  ],
+};
+
+/** A textarea. Not expressible as a Text field: the difference is the shape of the answer. */
+export const MULTILINE_FIELD_DEF: ComponentDef = {
+  type: 'MultilineField',
+  label: 'Multiline field',
+  category: 'input',
+  keywords: ['textarea', 'long text', 'paragraph', 'notes', 'description'],
+  isContainer: false,
+  fields: [
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+    { key: 'placeholder', label: 'Placeholder', control: 'text', default: 'Type here' },
+    { key: 'rows', label: 'Rows', control: 'number', default: 4 },
+  ],
+};
+
+/** Radio buttons. A Select with three options is the wrong control for three options. */
+export const RADIO_GROUP_DEF: ComponentDef = {
+  type: 'RadioGroup',
+  label: 'Radio buttons',
+  category: 'input',
+  keywords: ['choice', 'options', 'one of', 'pick'],
+  isContainer: false,
+  fields: [
+    { key: 'options', label: 'Options', control: 'text', default: 'One, Two' },
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+    { key: 'label', label: 'Question', control: 'text', default: '' },
+  ],
+};
+
+/**
+ * A date picker. Its value is the browser's `YYYY-MM-DD`, and its port stays `text` because that
+ * string is exactly what a date column accepts — typing it as `date` would promise a conversion
+ * nothing performs.
+ */
+export const DATE_FIELD_DEF: ComponentDef = {
+  type: 'DateField',
+  label: 'Date field',
+  category: 'input',
+  keywords: ['calendar', 'day', 'when', 'picker', 'datetime'],
+  isContainer: false,
+  fields: [
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+    { key: 'min', label: 'Earliest', control: 'text', default: '' },
+    { key: 'max', label: 'Latest', control: 'text', default: '' },
+  ],
+};
+
+/** A slider — the right control for a bounded number, and cheap. */
+export const SLIDER_DEF: ComponentDef = {
+  type: 'Slider',
+  label: 'Slider',
+  category: 'input',
+  keywords: ['range', 'number', 'scale', 'amount'],
+  isContainer: false,
+  fields: [
+    { key: 'value', label: 'Value', control: 'number', default: 50 },
+    { key: 'min', label: 'Minimum', control: 'number', default: 0 },
+    { key: 'max', label: 'Maximum', control: 'number', default: 100 },
+    { key: 'step', label: 'Step', control: 'number', default: 1 },
+  ],
+};
+
 const DEFS: readonly ComponentDef[] = [
   FRAME_DEF,
   TEXT_DEF,
@@ -197,6 +315,13 @@ const DEFS: readonly ComponentDef[] = [
   CHECKBOX_DEF,
   SELECT_DEF,
   LIST_DEF,
+  IMAGE_DEF,
+  LINK_DEF,
+  ICON_DEF,
+  MULTILINE_FIELD_DEF,
+  RADIO_GROUP_DEF,
+  DATE_FIELD_DEF,
+  SLIDER_DEF,
 ];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 

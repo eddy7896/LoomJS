@@ -67,7 +67,14 @@ export function emitArtboardModule(
   };
 
   const seen = new Set<Id>();
-  const hooks = { params: false, navigate: false, textHelper: false, truthy: false, message: false };
+  const hooks = {
+    params: false,
+    navigate: false,
+    textHelper: false,
+    truthy: false,
+    message: false,
+    link: false,
+  };
   const itemScope: string[] = [];
   const fields = new Map<Id, unknown>();
   // Buckets first: they are the merge point every other plan needs to know about. A pipeline has
@@ -138,7 +145,11 @@ export function emitArtboardModule(
       hooks.textHelper = true;
       return TEXT_HELPER;
     },
-    navigateExpr: (flowId, componentId) => {
+    requireLink: () => {
+      hooks.link = true;
+      return 'Link';
+    },
+    pathExpr: (flowId, componentId) => {
       const flow = snapshot.flows[flowId];
       if (!flow) throw new CompileError(`Unknown flow "${flowId}".`, componentId);
       if (flow.from !== artboard.id) {
@@ -163,8 +174,12 @@ export function emitArtboardModule(
         values.set(entry.param, JSON.stringify(entry.value));
       }
 
-      return `${ctx.requireNavigate()}(${pathExpression(destination, values)})`;
+      return pathExpression(destination, values);
     },
+    // Going somewhere and *being able to point at it* are the same destination reached two ways:
+    // a handler for a Button, an `href` for a Link.
+    navigateExpr: (flowId, componentId) =>
+      `${ctx.requireNavigate()}(${ctx.pathExpr(flowId, componentId)})`,
   };
 
   function render(id: Id, depth: number): string {
@@ -206,7 +221,11 @@ ${indent(depth)}) : null}`;
   );
   if (reactHooks.length > 0) imports.push(`import { ${reactHooks.join(', ')} } from 'react';\n`);
 
-  const routerHooks = [hooks.navigate ? 'useNavigate' : null, hooks.params ? 'useParams' : null]
+  const routerHooks = [
+    hooks.link ? 'Link' : null,
+    hooks.navigate ? 'useNavigate' : null,
+    hooks.params ? 'useParams' : null,
+  ]
     .filter(Boolean)
     .join(', ');
   if (routerHooks) imports.push(`import { ${routerHooks} } from 'react-router-dom';\n`);
