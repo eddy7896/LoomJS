@@ -16,7 +16,10 @@ export const textFieldEmitter: ComponentEmitter = {
 
     const styled = styleAttr(component, ctx);
 
+    // Explicit, like every other input template: `text` is the browser default, but a developer
+    // reading the output should not have to know that to know what this is.
     return `${indent(depth)}<input${styled}
+${indent(depth + 1)}type="text"
 ${indent(depth + 1)}value={${state}}
 ${indent(depth + 1)}placeholder={${JSON.stringify(placeholder)}}
 ${indent(depth + 1)}onChange={(event) => set_${state}(event.target.value)}

@@ -11,6 +11,7 @@ import {
 } from './pipeline';
 import { valueExpr } from './props';
 import { indent } from './text';
+import { MESSAGE_FN } from './messages';
 import {
   DIVIDE_HELPER_SOURCE,
   emitDerived,
@@ -66,7 +67,7 @@ export function emitArtboardModule(
   };
 
   const seen = new Set<Id>();
-  const hooks = { params: false, navigate: false, textHelper: false, truthy: false };
+  const hooks = { params: false, navigate: false, textHelper: false, truthy: false, message: false };
   const itemScope: string[] = [];
   const fields = new Map<Id, unknown>();
   // Buckets first: they are the merge point every other plan needs to know about. A pipeline has
@@ -108,39 +109,9 @@ export function emitArtboardModule(
       fields.set(componentId, initial);
       return stateNameForComponent(componentId);
     },
-    triggerExpr: (target, componentId) => {
-      // A trigger can fire a pipeline (a request) or a derivation (a recomputation in place).
-      const derivation = derived.find((entry) => entry.node.id === target.nodeId);
-      if (derivation) {
-        if (!derivation.runName) {
-          throw new CompileError(
-            `"${derivation.node.name ?? derivation.node.id}" has no run port wired, so nothing fires it.`,
-            componentId,
-          );
-        }
-        return `${derivation.runName}()`;
-      }
-
-      const plan = plans.find((candidate) => candidate.node.id === target.nodeId);
-      if (!plan) {
-        // A function node this screen never planned is one nothing consumes — it was dropped as
-        // demand-driven dead code. Saying "not a pipeline" sends the reader looking for a routing
-        // mistake; the actual fix is at the other end, where the answer should have gone.
-        const node = snapshot.nodes[target.nodeId];
-        if (node?.category === 'fn') {
-          throw new CompileError(
-            `"${node.name ?? node.kind}" runs when this is pressed, but nothing on this screen ` +
-              `shows or keeps its result, so pressing it would do nothing. Bind its result to a ` +
-              `property, or wire it into a variable something reads.`,
-            componentId,
-          );
-        }
-        throw new CompileError(
-          `Trigger points at node "${target.nodeId}", which is not a pipeline on this screen.`,
-          componentId,
-        );
-      }
-      return `void ${plan.names.run}()`;
+    requireMessage: () => {
+      hooks.message = true;
+      return MESSAGE_FN;
     },
     conditionExpr: (condition, componentId) => {
       hooks.truthy = true;
@@ -242,9 +213,12 @@ ${indent(depth)}) : null}`;
   // An app-wide variable lives above the router, so a screen reaches it through the context hook
   // rather than owning it (`emit/globals.ts`).
   if (usesGlobals(states)) imports.push(`import { useGlobals } from '../state/globals';\n`);
+  if (hooks.message) imports.push(`import { useMessages } from '../state/messages';\n`);
 
   const prelude: string[] = [];
   if (hooks.navigate) prelude.push(`  const ${NAVIGATE_VAR} = useNavigate();`);
+  // The toast is one host above the router, so a message outlives the screen that sent it.
+  if (hooks.message) prelude.push(`  const { ${MESSAGE_FN} } = useMessages();`);
   if (hooks.params) prelude.push(`  const ${PARAMS_VAR} = useParams();`);
   for (const [componentId, initial] of fields) {
     const name = stateNameForComponent(componentId);

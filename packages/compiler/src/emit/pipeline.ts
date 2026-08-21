@@ -359,6 +359,9 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
     const onError = plan.binds.error
       ? `      set_${plan.names.error}(error instanceof Error ? error.message : String(error));`
       : '      console.error(error);';
+    // The run reports whether it worked, so an action sequence can stop where it failed: a
+    // "save, then navigate" that navigated anyway would show someone a success they did not get
+    // (`docs/specs/actions.md`). Callers that do not care simply ignore it.
     const settle = plan.binds.pending
       ? `    } finally {\n      set_${plan.names.pending}(false);\n    }`
       : '    }';
@@ -370,8 +373,10 @@ ${start}${clearError}    try {
       if (!response.ok) throw new Error("Request failed with " + response.status);
       const body = (await response.json()) as { result?: unknown };
 ${store}
+      return true;
     } catch (error) {
 ${onError}
+      return false;
 ${settle}
   }, [${[...new Set(plan.inputs.map((input) => stateNameForComponent(input.componentId)))].join(', ')}]);`);
 

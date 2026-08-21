@@ -1,7 +1,14 @@
 import { apiPortsFromBody, componentDefs, createComponent } from '@loom/components';
 import { inferBackend } from '@loom/inference';
 import { columnPortId, createDbNode } from '@loom/connectors';
-import { applyOps, SCHEMA_VERSION, type Component, type Node, type Snapshot } from '@loom/ir';
+import {
+  applyOps,
+  SCHEMA_VERSION,
+  type Action,
+  type Component,
+  type Node,
+  type Snapshot,
+} from '@loom/ir';
 
 /**
  * A deterministic twin of `createTrivialSnapshot()` — same shape, fixed ids, so golden-file
@@ -1048,4 +1055,71 @@ export function calculatorSnapshot(
     },
     ...secondScreen,
   ]);
+}
+
+/**
+ * P3's done-when: a submit button that saves, clears the form, confirms, and navigates — in that
+ * order (`docs/specs/actions.md`).
+ *
+ * Built on the inferred backend, because the interesting part is the ordering around a real
+ * awaited request: everything after the save has to happen *after* it, and nothing after it may
+ * happen at all when it fails.
+ */
+export function submitSequenceSnapshot(
+  options: { conditional?: boolean; extras?: boolean } = {},
+): Snapshot {
+  const { snapshot, stateId } = inferredSnapshot();
+
+  const actions: Action[] = [
+    { kind: 'trigger', target: { nodeId: routeNodeIdOf(snapshot), portId: 'pt_run' } },
+    { kind: 'clearField', componentId: 'cp_title' },
+    { kind: 'clearField', componentId: 'cp_body' },
+    { kind: 'message', text: 'Saved', tone: 'ok' },
+    {
+      kind: 'navigate',
+      flowId: 'fl_done',
+      ...(options.conditional
+        ? { when: { source: { nodeId: stateId, portId: 'pt_value' } } }
+        : {}),
+    },
+  ];
+
+  if (options.extras) {
+    actions.splice(
+      4,
+      0,
+      { kind: 'setField', componentId: 'cp_title', value: { kind: 'static', value: 'next' } },
+      { kind: 'openUrl', url: 'https://example.com/receipt' },
+      { kind: 'copy', value: { kind: 'bound', source: { nodeId: stateId, portId: 'pt_value' } } },
+    );
+  }
+
+  return applyOps(snapshot, [
+    {
+      type: 'addArtboard',
+      artboard: { id: 'ab_done000001', name: 'Done', root: 'cp_done_root' },
+      root: {
+        id: 'cp_done_root',
+        type: 'Frame',
+        name: 'Root',
+        props: {},
+        layout: { direction: 'column', gap: 8, padding: 24, align: 'start', justify: 'start' },
+        children: [],
+      },
+    },
+    { type: 'addFlow', flow: { id: 'fl_done', from: 'ab_home000001', to: 'ab_done000001' } },
+    {
+      type: 'setProp',
+      componentId: 'cp_save',
+      key: 'onClick',
+      value: { kind: 'event', handler: { kind: 'actions', actions } },
+    },
+  ]);
+}
+
+/** The API route the inference proposed, found the way the compiler finds it. */
+function routeNodeIdOf(snapshot: Snapshot): string {
+  const route = Object.values(snapshot.nodes).find((node) => node.category === 'api');
+  if (!route) throw new Error('no API route in the inferred snapshot');
+  return route.id;
 }

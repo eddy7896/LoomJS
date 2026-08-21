@@ -1,4 +1,5 @@
 import {
+  actionsOf,
   applyOp,
   createEmptyProject,
   newArtboardId,
@@ -351,10 +352,12 @@ export function removeArtboard(artboardId: Id): void {
   });
 }
 
+/** The first screen a component's click goes to, if any. Used to draw the arrow on the canvas. */
 export function flowFor(snapshot: Snapshot, componentId: Id): Id | undefined {
   const onClick = snapshot.components[componentId]?.props.onClick;
-  if (onClick?.kind !== 'event' || onClick.handler.kind !== 'navigate') return undefined;
-  return onClick.handler.flowId;
+  if (onClick?.kind !== 'event') return undefined;
+  const navigate = actionsOf(onClick.handler).find((action) => action.kind === 'navigate');
+  return navigate?.kind === 'navigate' ? navigate.flowId : undefined;
 }
 
 /**
@@ -402,10 +405,24 @@ export function setFlowPayload(flowId: Id, payload: FlowPayload[]): void {
 }
 
 export function removeFlow(flowId: Id): void {
-  // Detach any handler pointing at the flow, or the project would reference a dead arrow.
+  // Detach any step pointing at the flow, or the project would reference a dead arrow. Only that
+  // step: the rest of the sequence is a separate set of decisions (spec 7).
   for (const component of Object.values(state.snapshot.components)) {
-    if (flowFor(state.snapshot, component.id) === flowId) {
+    const onClick = component.props.onClick;
+    if (onClick?.kind !== 'event') continue;
+    const kept = actionsOf(onClick.handler).filter(
+      (action) => !(action.kind === 'navigate' && action.flowId === flowId),
+    );
+    if (kept.length === actionsOf(onClick.handler).length) continue;
+    if (kept.length === 0) {
       dispatch({ type: 'removeProp', componentId: component.id, key: 'onClick' });
+    } else {
+      dispatch({
+        type: 'setProp',
+        componentId: component.id,
+        key: 'onClick',
+        value: { kind: 'event', handler: { kind: 'actions', actions: kept } },
+      });
     }
   }
   dispatch({ type: 'removeFlow', flowId });

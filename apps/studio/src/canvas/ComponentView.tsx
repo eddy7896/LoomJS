@@ -1,5 +1,5 @@
 import type { CSSProperties, PointerEvent } from 'react';
-import type { Component, Id, Snapshot } from '@loom/ir';
+import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
 import { componentStyle, styleToCss } from '@loom/compiler';
 
 /**
@@ -55,6 +55,9 @@ export function ComponentView({
     // The canvas has no runtime values, so a conditional component is drawn and *marked* rather
     // than hidden — the Preview is where conditions actually run (`docs/specs/conditions.md`).
     'data-conditional': component.visibleWhen ? 'true' : undefined,
+    // A click that does more than one thing says so here, so a sequence is never invisible from
+    // the outside (`docs/specs/actions.md`).
+    'data-steps': stepCount(component) > 1 ? String(stepCount(component)) : undefined,
   };
 
   const style = componentStyle(component) as CSSProperties;
@@ -157,4 +160,10 @@ export function ComponentView({
       ))}
     </div>
   );
+}
+
+/** How many actions a component's click runs. One or none is not worth marking. */
+function stepCount(component: Component): number {
+  const onClick = component.props.onClick;
+  return onClick?.kind === 'event' ? actionsOf(onClick.handler).length : 0;
 }

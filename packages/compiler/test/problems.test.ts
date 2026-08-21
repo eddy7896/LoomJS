@@ -60,7 +60,8 @@ describe('things that no longer exist', () => {
     ]);
     const [problem] = find(gone, 'dangling-trigger');
     expect(problem?.entityId).toBe('cp_btn_add');
-    expect(problem?.message).toMatch(/pressing it would do nothing/);
+    // The step is named, not just the component: a sequence can break at position three.
+    expect(problem?.message).toMatch(/Step 1 of .* fires something that no longer exists/);
   });
 
   it('names the component whose condition lost its source', () => {

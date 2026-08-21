@@ -276,6 +276,31 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P2] The editor never leaves a reference to something it just deleted.** `removeNode` already
   scrubbed bindings and triggers but not conditions — a condition reading a deleted node can never
   hold, so the component would silently never appear again.
+- **[P3] Eight actions, and the number is the product.** Bubble has roughly sixty. Deciding which
+  eight *is* the design work; a ninth needs an argument, not a ticket. The bar: an action earns its
+  place only if it cannot be said with what already exists, and the 80% needs it. See
+  `specs/actions.md`.
+- **[P3] `show` / `hide` was proposed and rejected.** A component's visibility is already
+  `visibleWhen` reading a boolean, so "show the confirmation" is `setVariable` plus a condition —
+  one mechanism, already built, and it composes. A second imperative way would mean two sources of
+  truth for one question, and the canvas could not show which one won.
+- **[P3] A failed pipeline stops the sequence.** "Save, then navigate" must not navigate when the
+  save failed; continuing would show someone a success they did not get. Bubble continues on
+  failure — this is a deliberate divergence, and `run_…` reports success so a sequence can act on
+  it.
+- **[P3] An old handler is a one-action sequence.** `navigate` and `trigger` keep the shapes they
+  had as standalone handlers, so every document written before spec 7 reads unchanged — no
+  migration, and no second representation to keep alive.
+- **[P3] The wire and the `trigger` action are one fact in two views.** Drawing the wire appends a
+  step rather than owning the property; removing either removes only that step. The wire is what
+  makes "this button runs that pipeline" readable from across the graph, and the Inspector adds the
+  order and the rest.
+- **[P3] The toast lives above the router, not in the screen.** Found by building the done-when:
+  "save, confirm, navigate" unmounts the screen — and a per-screen toast with it — a frame after
+  the confirmation appears. A message outlives the screen that sent it.
+- **[P3] The sequence is edited inline, never in a modal.** loom's protection against workflow
+  spaghetti is that behaviour is visible and wired, and that protection dies the moment an action
+  list hides behind a dialog.
 
 - **[P1.2] A variable is one node with two scopes, not two nodes.** `screen` is one artboard's
   `useState`; `global` is the same merge point held in a React Context above the router. Same fan-in

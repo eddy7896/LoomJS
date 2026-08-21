@@ -1,6 +1,6 @@
-import type { Artboard, Component, Id, Node, Snapshot, TypeRef } from '@loom/ir';
+import { actionsOf, type Artboard, type Component, type Id, type Node, type Snapshot, type TypeRef, type ValueSource } from '@loom/ir';
 import { stateKeyOf, stateScopeOf, type StateScope } from '@loom/components';
-import { tsTypeOf } from '@loom/typesys';
+import { inferType, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 
 /**
@@ -30,7 +30,12 @@ import { CompileError } from '../types';
 /** Something that sets a variable: an API route's result, or a function node's result. */
 export interface StateWriter {
   node: Node;
-  kind: 'route' | 'derived';
+  kind: 'route' | 'derived' | 'action';
+  /**
+   * For an action writer, the component whose event sets the variable. An action has no wire, so
+   * this is the only thing that says which screen the write happens on.
+   */
+  firedBy?: Id;
   /** The type that writer produces, used to widen the variable. */
   type: TypeRef;
 }
@@ -184,7 +189,33 @@ function writersOf(snapshot: Snapshot, node: Node, inside: Set<Id>): StateWriter
     );
   }
 
+  // An action writes without a wire (spec 7). It is a writer all the same — otherwise a variable
+  // set only by "show the confirmation" would read as one nothing ever fills.
+  for (const component of Object.values(snapshot.components)) {
+    for (const value of Object.values(component.props)) {
+      if (value.kind !== 'event') continue;
+      for (const action of actionsOf(value.handler)) {
+        if (action.kind !== 'setVariable' || action.nodeId !== node.id) continue;
+        writers.push({
+          node,
+          kind: 'action',
+          type: valueSourceType(snapshot, action.value),
+          firedBy: component.id,
+        });
+      }
+    }
+  }
+
   return writers;
+}
+
+/** The type an action's value carries: a literal's own, or the port's it reads. */
+function valueSourceType(snapshot: Snapshot, value: ValueSource): TypeRef {
+  if (value.kind === 'bound') {
+    const source = snapshot.nodes[value.source.nodeId];
+    return source?.ports.find((port) => port.id === value.source.portId)?.type ?? { kind: 'any' };
+  }
+  return inferType(value.value);
 }
 
 /** Does anything anywhere in the project read this variable — a property, a condition, a wire? */
@@ -276,6 +307,14 @@ function artboardOfMirror(snapshot: Snapshot, node: Node | undefined): Id | unde
  * that do not exist there.
  */
 function writerRunsOn(snapshot: Snapshot, writer: StateWriter, artboardId: Id): boolean {
+  // An action has no wire to reason about: it runs on the screen holding the component that
+  // fires it, and nowhere else.
+  if (writer.kind === 'action') {
+    const artboard = snapshot.artboards[artboardId];
+    if (!artboard || !writer.firedBy) return false;
+    return componentsOf(snapshot, artboard).some((component) => component.id === writer.firedBy);
+  }
+
   const triggerWires = Object.values(snapshot.wires).filter(
     (wire) => wire.to.nodeId === writer.node.id && wire.to.portId === 'pt_run',
   );

@@ -1,4 +1,4 @@
-import type { Component, Id, Node, PortRef, Snapshot } from '@loom/ir';
+import { actionsOf, type Component, type Id, type Node, type PortRef, type Snapshot } from '@loom/ir';
 import { nodeTitle } from '@loom/components';
 import { compile } from './compile';
 import { CompileError } from './types';
@@ -141,28 +141,65 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
       }
 
       if (value.kind !== 'event') continue;
-      const handler = value.handler;
 
-      if (handler.kind === 'trigger' && !resolves(snapshot, handler.target)) {
-        add(
-          'dangling-trigger',
-          'error',
-          `"${name}" fires something that no longer exists, so pressing it would do nothing.`,
-          component.id,
-          'component',
-          `:${key}`,
-        );
-      }
+      // Every step, not just the first: a sequence can break at position three (spec 7).
+      for (const [index, action] of actionsOf(value.handler).entries()) {
+        if (action.kind === 'trigger' && !resolves(snapshot, action.target)) {
+          add(
+            'dangling-trigger',
+            'error',
+            `Step ${index + 1} of "${name}" fires something that no longer exists.`,
+            component.id,
+            'component',
+            `:${key}:${index}`,
+          );
+        }
 
-      if (handler.kind === 'navigate' && !snapshot.flows[handler.flowId]) {
-        add(
-          'dangling-flow',
-          'error',
-          `"${name}" navigates along an arrow that has been removed.`,
-          component.id,
-          'component',
-          `:${key}`,
-        );
+        if (action.kind === 'navigate' && !snapshot.flows[action.flowId]) {
+          add(
+            'dangling-flow',
+            'error',
+            `Step ${index + 1} of "${name}" navigates along an arrow that has been removed.`,
+            component.id,
+            'component',
+            `:${key}:${index}`,
+          );
+        }
+
+        if (action.kind === 'setField' || action.kind === 'clearField') {
+          if (!snapshot.components[action.componentId]) {
+            add(
+              'dangling-action-target',
+              'error',
+              `Step ${index + 1} of "${name}" sets a field that no longer exists.`,
+              component.id,
+              'component',
+              `:${key}:${index}`,
+            );
+          }
+        }
+
+        if (action.kind === 'setVariable' && !snapshot.nodes[action.nodeId]) {
+          add(
+            'dangling-action-target',
+            'error',
+            `Step ${index + 1} of "${name}" sets a variable that no longer exists.`,
+            component.id,
+            'component',
+            `:${key}:${index}`,
+          );
+        }
+
+        if (action.when && !resolves(snapshot, action.when.source)) {
+          add(
+            'dangling-condition',
+            'error',
+            `Step ${index + 1} of "${name}" is conditional on something that no longer exists.`,
+            component.id,
+            'component',
+            `:${key}:${index}`,
+          );
+        }
       }
     }
 
@@ -204,8 +241,11 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
         boundSomewhere.add(`${value.source.nodeId}:${value.source.portId}`);
         referenced.add(value.source.nodeId);
       }
-      if (value.kind === 'event' && value.handler.kind === 'trigger') {
-        referenced.add(value.handler.target.nodeId);
+      if (value.kind === 'event') {
+        for (const action of actionsOf(value.handler)) {
+          if (action.kind === 'trigger') referenced.add(action.target.nodeId);
+          if (action.kind === 'setVariable') referenced.add(action.nodeId);
+        }
       }
     }
     if (component.visibleWhen) referenced.add(component.visibleWhen.source.nodeId);

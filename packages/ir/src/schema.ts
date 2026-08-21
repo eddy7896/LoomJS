@@ -68,11 +68,83 @@ export type Binding = PortRef;
 // Property values (static / bound / event) — the seam between the two modes
 // ---------------------------------------------------------------------------
 
-export const EventHandlerSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('navigate'), flowId: IdSchema }),
-  z.object({ kind: z.literal('trigger'), target: PortRefSchema }),
+// ---------------------------------------------------------------------------
+// Conditions (spec 6) — a reference to a boolean, optionally inverted
+// ---------------------------------------------------------------------------
+
+/**
+ * A condition is **a reference to a boolean somewhere on this screen**, and nothing more. There is
+ * no `and`, no comparison, no chained operator: composition happens in Compare, Logic and Compute
+ * nodes on the canvas, which produce a boolean this then reads (`docs/specs/conditions.md`).
+ * A second expression language in the inspector is how a domain-specific tool becomes a
+ * general-purpose one, and it would be invisible on the canvas besides.
+ */
+export const ConditionSchema = z.object({
+  source: PortRefSchema,
+  /** `is` shows when the value is on; `not` inverts it. Words, because a flag reads as noise. */
+  test: z.enum(['is', 'not']).optional(),
+});
+export type Condition = z.infer<typeof ConditionSchema>;
+
+// ---------------------------------------------------------------------------
+// Actions (spec 7) — the eight things a click can do
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an action's value comes from. Deliberately the two simplest sources and no expression
+ * language: a literal someone typed, or a port on the graph. Anything more interesting is what a
+ * Compute node is for (`docs/specs/actions.md`).
+ */
+export const ValueSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('static'), value: z.unknown() }),
+  z.object({ kind: z.literal('bound'), source: PortRefSchema }),
+]);
+export type ValueSource = z.infer<typeof ValueSourceSchema>;
+
+/** Every action may carry a condition, so "navigate only if it saved" needs no branch construct. */
+const withCondition = { when: ConditionSchema.optional() };
+
+/**
+ * **The eight.** Bubble has roughly sixty; the number here is the product decision, and a ninth
+ * needs an argument rather than a ticket (`docs/specs/actions.md`).
+ *
+ * `navigate` and `trigger` keep the shapes they had as standalone handlers, so every document
+ * written before sequences existed reads as a one-action sequence — no migration, and no second
+ * representation to keep alive.
+ */
+export const ActionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('navigate'), flowId: IdSchema, ...withCondition }),
+  z.object({ kind: z.literal('trigger'), target: PortRefSchema, ...withCondition }),
+  z.object({ kind: z.literal('setVariable'), nodeId: IdSchema, value: ValueSourceSchema, ...withCondition }),
+  z.object({ kind: z.literal('setField'), componentId: IdSchema, value: ValueSourceSchema, ...withCondition }),
+  /** Back to what it *started* as — a number field to its initial number, not to "". */
+  z.object({ kind: z.literal('clearField'), componentId: IdSchema, ...withCondition }),
+  z.object({
+    kind: z.literal('message'),
+    text: z.string(),
+    tone: z.enum(['ok', 'error']).optional(),
+    ...withCondition,
+  }),
+  z.object({ kind: z.literal('openUrl'), url: z.string(), ...withCondition }),
+  z.object({ kind: z.literal('copy'), value: ValueSourceSchema, ...withCondition }),
+]);
+export type Action = z.infer<typeof ActionSchema>;
+export type ActionKind = Action['kind'];
+
+/**
+ * An event holds an ordered list of actions — or, for anything written before spec 7, a single
+ * action standing on its own. Read both through `actionsOf`.
+ */
+export const EventHandlerSchema = z.union([
+  z.object({ kind: z.literal('actions'), actions: z.array(ActionSchema) }),
+  ActionSchema,
 ]);
 export type EventHandler = z.infer<typeof EventHandlerSchema>;
+
+/** The sequence an event runs, however it happens to be written down. */
+export function actionsOf(handler: EventHandler): Action[] {
+  return handler.kind === 'actions' ? handler.actions : [handler];
+}
 
 export const PropertyValueSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('static'), value: z.unknown() }),
@@ -164,24 +236,6 @@ export const StyleSchema = z.object({
   align: z.enum(['start', 'center', 'end']).optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
-
-// ---------------------------------------------------------------------------
-// Conditions (spec 6) — a reference to a boolean, optionally inverted
-// ---------------------------------------------------------------------------
-
-/**
- * A condition is **a reference to a boolean somewhere on this screen**, and nothing more. There is
- * no `and`, no comparison, no chained operator: composition happens in Compare, Logic and Compute
- * nodes on the canvas, which produce a boolean this then reads (`docs/specs/conditions.md`).
- * A second expression language in the inspector is how a domain-specific tool becomes a
- * general-purpose one, and it would be invisible on the canvas besides.
- */
-export const ConditionSchema = z.object({
-  source: PortRefSchema,
-  /** `is` shows when the value is on; `not` inverts it. Words, because a flag reads as noise. */
-  test: z.enum(['is', 'not']).optional(),
-});
-export type Condition = z.infer<typeof ConditionSchema>;
 
 /** One conditional override: this style, merged over the base, while the condition holds. */
 export const ConditionalStyleSchema = z.object({

@@ -1,13 +1,13 @@
 import type { ComponentEmitter } from '../types';
-import { CompileError } from '../types';
 import { indent } from '../emit/text';
 import { styleAttr } from '../emit/style';
 import { valueExpr } from '../emit/props';
+import { eventAttr } from '../emit/actions';
 
 /**
- * Button = the leaf that starts a flow. Its `onClick` property holds an event handler; a
- * `navigate` handler compiles to react-router navigation along the flow arrow (M2); a `trigger`
- * handler fires a backend pipeline (M3).
+ * Button = the leaf that starts a sequence. Its `onClick` property holds an ordered list of
+ * actions (spec 7); everything about what those are and how they compile lives in `emit/actions`,
+ * so a second component with an event gets the same behaviour by calling the same function.
  */
 export const buttonEmitter: ComponentEmitter = {
   type: 'Button',
@@ -15,23 +15,8 @@ export const buttonEmitter: ComponentEmitter = {
     const label = component.props.label;
     const labelExpr = label ? valueExpr(label, ctx, component.id, 'label') : '""';
 
-    const onClick = component.props.onClick;
-    let handler = '';
-
-    if (onClick) {
-      if (onClick.kind !== 'event') {
-        throw new CompileError(
-          `Button "onClick" must hold an event handler, got "${onClick.kind}".`,
-          component.id,
-        );
-      }
-      handler =
-        onClick.handler.kind === 'trigger'
-          ? ` onClick={() => ${ctx.triggerExpr(onClick.handler.target, component.id)}}`
-          : ` onClick={() => ${ctx.navigateExpr(onClick.handler.flowId, component.id)}}`;
-    }
-
     const attrs = styleAttr(component, ctx);
+    const handler = eventAttr(component, ctx, 'onClick', depth);
 
     return `${indent(depth)}<button type="button"${attrs}${handler}>{${labelExpr}}</button>`;
   },

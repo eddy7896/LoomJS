@@ -891,3 +891,42 @@ input[type='color'] {
   background: var(--surface-sunken);
   color: var(--ink-soft);
 }
+
+/* ---- action sequences: an ordered list, never a modal ---- */
+.action-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 8px;
+  /* Numbered top to bottom, and the left edge carries the order the eye follows. */
+  border-left-width: 3px;
+}
+
+.action-row .field-group__head {
+  margin-bottom: 6px;
+}
+
+.action-row .field-group__head .badge {
+  flex: 1 1 auto;
+}
+
+.action-row button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* A component whose click does more than one thing says so on the canvas, so a sequence is never
+   invisible from the outside (docs/specs/actions.md). */
+.node[data-steps]::after,
+.artboard [data-steps]::after {
+  content: attr(data-steps) ' steps';
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  pointer-events: none;
+}

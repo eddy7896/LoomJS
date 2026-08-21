@@ -67,8 +67,11 @@ export interface EmitContext {
    * form can fill a typed column without a cast.
    */
   requireFieldState: (componentId: Id, initial: unknown) => string;
-  /** The JS expression that fires the pipeline reached through `target`. */
-  triggerExpr: (target: PortRef, componentId: Id) => string;
+  /**
+   * Declare that this screen shows messages; returns the state variable behind the toast. Like
+   * every other local, it is only emitted when something actually sets it.
+   */
+  requireMessage: () => string;
   /** The JS expression that navigates along `flowId` (path + payload). */
   navigateExpr: (flowId: Id, componentId: Id) => string;
   /** The type a property value carries, when it is knowable (bindings). */

@@ -14,6 +14,7 @@ import {
 } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
+import { ActionsSection } from './ActionsSection';
 import {
   artboardOf,
   flowFor,
@@ -108,7 +109,7 @@ export function Inspector() {
         </section>
       ) : null}
 
-      {def?.acceptsClickFlow ? <ClickFlowSection component={component} /> : null}
+      {def?.acceptsClickFlow ? <ActionsSection component={component} /> : null}
 
       <StyleSection component={component} />
 
@@ -730,56 +731,6 @@ function ThemeSection() {
 /** `<input type="color">` only accepts `#rrggbb`; anything else would silently show black. */
 function normalizeColor(value: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
-}
-
-function ClickFlowSection({ component }: { component: Component }) {
-  const snapshot = useEditor((s) => s.snapshot);
-  const flowId = flowFor(snapshot, component.id);
-  const flow = flowId ? snapshot.flows[flowId] : undefined;
-  const ownArtboard = artboardOf(snapshot, component.id);
-  const destination = flow ? snapshot.artboards[flow.to] : undefined;
-
-  return (
-    <section className="field-group">
-      <h3 className="field-group__title">On click</h3>
-      <Field label="Go to">
-        <select
-          value={flow?.to ?? ''}
-          onChange={(e) => setClickFlow(component.id, e.target.value || undefined)}
-        >
-          <option value="">— nothing —</option>
-          {Object.values(snapshot.artboards)
-            .filter((artboard) => artboard.id !== ownArtboard)
-            .map((artboard) => (
-              <option key={artboard.id} value={artboard.id}>
-                {artboard.name}
-              </option>
-            ))}
-        </select>
-      </Field>
-
-      {flow && destination
-        ? (destination.params ?? []).map((param) => {
-            const entry = (flow.payload ?? []).find((p) => p.param === param.name);
-            const value = entry?.kind === 'static' ? String(entry.value ?? '') : '';
-            return (
-              <Field key={param.name} label={param.name}>
-                <input
-                  value={value}
-                  placeholder="value to carry"
-                  onChange={(e) =>
-                    setFlowPayload(flow.id, [
-                      ...(flow.payload ?? []).filter((p) => p.param !== param.name),
-                      { kind: 'static', param: param.name, value: e.target.value },
-                    ])
-                  }
-                />
-              </Field>
-            );
-          })
-        : null}
-    </section>
-  );
 }
 
 function ArtboardInspector({ artboardId }: { artboardId: string }) {

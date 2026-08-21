@@ -15,6 +15,7 @@ import {
   triggeredMathSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
+  submitSequenceSnapshot,
   supabaseSnapshot,
   trivialSnapshot,
 } from './fixtures';
@@ -167,6 +168,20 @@ describe('emitted app builds for real', () => {
     const report = await readFile(join(dir, 'src', 'artboards', 'Report.tsx'), 'utf8');
     expect(report).toContain('global_answer ?? ""');
     expect(report).not.toContain('field_cp_b');
+  });
+
+  it('type-checks a submit sequence: save, clear, confirm, navigate', async () => {
+    const dir = await emitProject(submitSequenceSnapshot({ extras: true }));
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    // An awaited run inside an async handler, a self-dismissing toast, and a `window.open` are
+    // three different ways to write TSX that a string match would accept and `tsc` would not.
+    expect(home).toContain('onClick={async () => {');
+    expect(home).toMatch(/if \(!\(await run_[a-zA-Z0-9_]+\(\)\)\) return;/);
+    expect(home).toContain('showMessage({');
+    expect(home).toContain('noopener,noreferrer');
+    expect(home).toContain('navigator.clipboard?.writeText');
   });
 
   it('type-checks a screen whose parts appear and restyle with a condition', async () => {

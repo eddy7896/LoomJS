@@ -3,6 +3,7 @@ import {
   newPortId,
   newWireId,
   type Id,
+  type Action,
   type Node,
   type NodeCategory,
   type Op,
@@ -12,6 +13,7 @@ import {
 import { acceptsManyWires, createNode, defForNode, mirrorPortsFor } from '@loom/components';
 import { canConnect } from '@loom/typesys';
 import { artboardOf, dispatch, dispatchAll, getState, select } from './store';
+import { actionsFor } from './actions';
 
 /**
  * Nodes-mode document operations. Wiring is validated here with the same rules the compiler
@@ -142,12 +144,12 @@ export function removeNode(nodeId: Id): void {
   // A trigger handler pointing into this node would dangle; drop it with the node.
   for (const component of Object.values(snapshot.components)) {
     for (const [key, value] of Object.entries(component.props)) {
-      if (
-        value.kind === 'event' &&
-        value.handler.kind === 'trigger' &&
-        value.handler.target.nodeId === nodeId
-      ) {
-        dispatch({ type: 'removeProp', componentId: component.id, key });
+      if (value.kind === 'event') {
+        // Only the steps that fired this node; the rest of the sequence is untouched.
+        dropActions(
+          component.id,
+          (action) => action.kind === 'trigger' && action.target.nodeId === nodeId,
+        );
       }
       if (value.kind === 'bound' && value.source.nodeId === nodeId) {
         dispatch({ type: 'removeProp', componentId: component.id, key });
@@ -177,14 +179,37 @@ export function removeNode(nodeId: Id): void {
 export function removeWire(wireId: Id): void {
   const snapshot = getState().snapshot;
   const wire = snapshot.wires[wireId];
-  // Unwiring a trigger also unwires the component's handler — one gesture, one meaning.
+  // Unwiring a trigger removes that *step* — one gesture, one meaning. The rest of the sequence
+  // is a separate set of decisions and survives.
   if (wire && wire.to.portId === 'pt_run') {
     const source = snapshot.nodes[wire.from.nodeId];
     if (source?.mirrorOf) {
-      dispatch({ type: 'removeProp', componentId: source.mirrorOf, key: 'onClick' });
+      dropActions(
+        source.mirrorOf,
+        (action) => action.kind === 'trigger' && action.target.nodeId === wire.to.nodeId,
+      );
     }
   }
   dispatch({ type: 'removeWire', wireId });
+}
+
+/** Drop every step matching `doomed`, leaving the rest of the sequence in order. */
+export function dropActions(componentId: Id, doomed: (action: Action) => boolean): void {
+  const snapshot = getState().snapshot;
+  const existing = actionsFor(snapshot, componentId);
+  const kept = existing.filter((action) => !doomed(action));
+  if (kept.length === existing.length) return;
+
+  if (kept.length === 0) {
+    dispatch({ type: 'removeProp', componentId, key: 'onClick' });
+    return;
+  }
+  dispatch({
+    type: 'setProp',
+    componentId,
+    key: 'onClick',
+    value: { kind: 'event', handler: { kind: 'actions', actions: kept } },
+  });
 }
 
 export interface ConnectResult {
@@ -233,14 +258,24 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
 
   ops.push({ type: 'addWire', wire: { id: newWireId(), from, to } });
 
-  // A trigger wire is the same fact as the component's onClick handler; keep them in step.
+  // A trigger wire and its `trigger` action are one fact in two views (spec 7), so drawing the
+  // wire *appends* a step rather than replacing whatever sequence is already there.
   if (toPort.portKind === 'trigger' && fromNode.mirrorOf) {
-    ops.push({
-      type: 'setProp',
-      componentId: fromNode.mirrorOf,
-      key: 'onClick',
-      value: { kind: 'event', handler: { kind: 'trigger', target: to } },
-    });
+    const existing = actionsFor(snapshot, fromNode.mirrorOf);
+    const already = existing.some(
+      (action) => action.kind === 'trigger' && action.target.nodeId === to.nodeId,
+    );
+    if (!already) {
+      ops.push({
+        type: 'setProp',
+        componentId: fromNode.mirrorOf,
+        key: 'onClick',
+        value: {
+          kind: 'event',
+          handler: { kind: 'actions', actions: [...existing, { kind: 'trigger', target: to }] },
+        },
+      });
+    }
   }
 
   // A data wire into a Text mirror is a binding on the real component.

@@ -48,7 +48,7 @@ export function fieldStateExpr(
 }
 
 /** Whether a component belongs to the artboard being emitted. */
-function ownsComponent(ctx: EmitContext, componentId: Id): boolean {
+export function ownsComponent(ctx: EmitContext, componentId: Id): boolean {
   const seen = new Set<Id>();
   const walk = (id: Id): boolean => {
     if (id === componentId) return true;

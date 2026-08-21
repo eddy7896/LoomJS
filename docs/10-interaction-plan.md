@@ -71,7 +71,7 @@ Written before their consumers, per `09`'s rule.
 | #   | Spec | Blocks | Land by |
 | --- | --- | --- | --- |
 | 6 | **Conditions model** — where a condition lives, what it may read, how it compiles | P1 | before P1 |
-| 7 | **Action vocabulary** — the twelve, their arguments, and the bar for a thirteenth | P3 | before P3 |
+| 7 | **Action vocabulary** — the eight, their arguments, and the bar for a ninth | P3 | ✅ landed |
 | 8 | **Lineage / source map** — node ↔ emitted line, the trust bridge | P6 | before P6 |
 | 9 | **Problems** — what earns a row, and why the compiler is not the only source | P2 | ✅ landed |
 
@@ -112,7 +112,7 @@ Written before their consumers, per `09`'s rule.
 - **Reference:** Bubble's issue checker, which refuses to deploy with issues outstanding. Whether
   loom blocks Deploy on problems is an open decision below.
 
-### P3 — Action sequences
+### P3 — Action sequences ✅ _(done)_
 
 - **Goal:** one click can do more than one thing.
 - **Build:** an event holds an **ordered list of actions**, each optionally conditional. The
@@ -201,8 +201,8 @@ any empty state.
 
 ## Open decisions (recommended defaults)
 
-1. **How many actions?** _Recommend:_ the eight in P3 plus three auth actions in P5. A thirteenth
-   needs an argument in spec 7.
+1. **How many actions?** _Settled:_ eight in P3, plus three auth actions in P5. `show`/`hide` was
+   dropped for `setVariable` + `visibleWhen`; a ninth needs an argument in spec 7.
 2. **Do reusable UI components jump the v1.5 queue?** _Recommend:_ yes, but after M6 — they are the
    missing half of "UI systems," and the `07` deferral was written about sub-graphs.
 3. **Does Deploy block on open Problems?** _Recommend:_ yes for Build-tier problems (the emitted app

@@ -75,11 +75,15 @@ describe('nodes-mode graph', () => {
     expect((snapshot().nodes[apiId]!.config as { body: string[] }).body).toEqual([stepId]);
   });
 
-  it('wiring a trigger also wires the component handler', () => {
+  it('wiring a trigger appends a step to the component sequence', () => {
+    // The wire and the `trigger` action are one fact in two views (`docs/specs/actions.md`).
     const { apiId, buttonId } = buildPipeline();
     expect(snapshot().components[buttonId]!.props.onClick).toEqual({
       kind: 'event',
-      handler: { kind: 'trigger', target: { nodeId: apiId, portId: 'pt_run' } },
+      handler: {
+        kind: 'actions',
+        actions: [{ kind: 'trigger', target: { nodeId: apiId, portId: 'pt_run' } }],
+      },
     });
   });
 

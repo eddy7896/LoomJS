@@ -69,8 +69,10 @@ test('a flow arrow becomes a route you can click through (M2)', async ({ page })
   await page.locator('.layer--artboard', { hasText: 'Home' }).click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Label').locator('input').fill('Open item');
-  await field(page, 'Go to').locator('select').selectOption({ label: 'Item Detail' });
-  await field(page, 'id').locator('input').fill('42');
+  // Navigation is one step of a sequence now (spec 7); adding it creates the arrow.
+  await page.getByTestId('add-action').selectOption('navigate');
+  await page.getByTestId('action-0-screen').selectOption({ label: 'Item Detail' });
+  await page.getByTestId('payload-id').fill('42');
 
   // A straight arrow has a zero-height box, so assert presence rather than visibility.
   await expect(page.locator('.flow__line')).toHaveCount(1);
@@ -91,7 +93,7 @@ test('an uncompilable edit surfaces as a Build error and keeps the last good bui
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Go to').locator('select').selectOption({ index: 1 });
+  await page.getByTestId('add-action').selectOption('navigate');
 
   // The flow reaches a dynamic route with an empty param value: a Build-tier failure.
   await expect(page.locator('.preview__error')).toBeVisible();
