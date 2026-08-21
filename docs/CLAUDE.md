@@ -35,6 +35,10 @@ Core promise: *a designer should never feel they left the canvas.*
 - `docs/05-guardrails.md` — hard constraints (security, design system, scope). Non-negotiable.
 - `docs/06-glossary.md` — canonical terminology. Use these exact terms; one term per concept.
 - `docs/07-v1-scope.md` — the V1 in/out line. Anything "out" is a v2 branch, not a gap.
+- `docs/09-implementation-plan.md` — execution plan for M0–M6 (repo shape, gates, risks).
+- `docs/10-interaction-plan.md` — execution plan for P0–P7: persistence, conditions, actions,
+  CRUD + search, app auth, the runtime tier, reusable components. Several are prerequisites for
+  M6's acceptance test, not follow-ons.
 
 ## Current phase
 
