@@ -5,12 +5,13 @@ import {
   type Id,
   type Node,
   type NodeCategory,
+  type Op,
   type PortRef,
   type Snapshot,
 } from '@loom/ir';
 import { acceptsManyWires, createNode, defForNode, mirrorPortsFor } from '@loom/components';
 import { canConnect } from '@loom/typesys';
-import { artboardOf, dispatch, getState, select } from './store';
+import { artboardOf, dispatch, dispatchAll, getState, select } from './store';
 
 /**
  * Nodes-mode document operations. Wiring is validated here with the same rules the compiler
@@ -152,6 +153,21 @@ export function removeNode(nodeId: Id): void {
         dispatch({ type: 'removeProp', componentId: component.id, key });
       }
     }
+
+    // Conditions point at nodes too, and a condition reading a node that is gone can never hold —
+    // the component would silently never appear again. Same rule as a binding: the editor does not
+    // leave the document referencing something it just deleted.
+    if (component.visibleWhen?.source.nodeId === nodeId) {
+      dispatch({ type: 'setVisibleWhen', componentId: component.id, condition: undefined });
+    }
+    const conditionals = component.conditionalStyles ?? [];
+    if (conditionals.some((entry) => entry.when.source.nodeId === nodeId)) {
+      dispatch({
+        type: 'setConditionalStyles',
+        componentId: component.id,
+        styles: conditionals.filter((entry) => entry.when.source.nodeId !== nodeId),
+      });
+    }
   }
   dispatch({ type: 'removeNode', nodeId });
   const selection = getState().selection;
@@ -199,22 +215,27 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
   );
   if (duplicate) return { ok: false, reason: 'These ports are already wired.' };
 
+  // One gesture, one undo. Drawing a wire can also replace an old one and set a property on the
+  // mirrored component; those are the same act, and stepping back through them one dispatch at a
+  // time would leave the document in states the designer never drew.
+  const ops: Op[] = [];
+
   // An input port takes one value; rewiring replaces rather than stacks. A screen bucket's `set`
   // port is the one exception — it exists precisely so several results can answer into one place,
   // and replacing on each wire would silently unwire the operation drawn before this one.
   if (!acceptsManyWires(toNode, to.portId)) {
     for (const wire of Object.values(snapshot.wires)) {
       if (wire.to.nodeId === to.nodeId && wire.to.portId === to.portId) {
-        dispatch({ type: 'removeWire', wireId: wire.id });
+        ops.push({ type: 'removeWire', wireId: wire.id });
       }
     }
   }
 
-  dispatch({ type: 'addWire', wire: { id: newWireId(), from, to } });
+  ops.push({ type: 'addWire', wire: { id: newWireId(), from, to } });
 
   // A trigger wire is the same fact as the component's onClick handler; keep them in step.
   if (toPort.portKind === 'trigger' && fromNode.mirrorOf) {
-    dispatch({
+    ops.push({
       type: 'setProp',
       componentId: fromNode.mirrorOf,
       key: 'onClick',
@@ -224,7 +245,7 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
 
   // A data wire into a Text mirror is a binding on the real component.
   if (toNode.mirrorOf && toPort.portKind === 'data' && toPort.direction === 'in') {
-    dispatch({
+    ops.push({
       type: 'setProp',
       componentId: toNode.mirrorOf,
       key: toPort.name === 'content' ? 'content' : toPort.name,
@@ -232,6 +253,7 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
     });
   }
 
+  dispatchAll(ops);
   return { ok: true };
 }
 

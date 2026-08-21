@@ -73,6 +73,7 @@ Written before their consumers, per `09`'s rule.
 | 6 | **Conditions model** — where a condition lives, what it may read, how it compiles | P1 | before P1 |
 | 7 | **Action vocabulary** — the twelve, their arguments, and the bar for a thirteenth | P3 | before P3 |
 | 8 | **Lineage / source map** — node ↔ emitted line, the trust bridge | P6 | before P6 |
+| 9 | **Problems** — what earns a row, and why the compiler is not the only source | P2 | ✅ landed |
 
 ---
 
@@ -99,7 +100,7 @@ Written before their consumers, per `09`'s rule.
   pipeline failed — both verified in the Preview.
 - **Notes:** compiles to `{cond ? <x/> : null}` and a merged style object. No new runtime.
 
-### P2 — Problems panel _(cheap, independent, overdue)_
+### P2 — Problems panel ✅ _(done)_
 
 - **Goal:** the first of the three error tiers gets a home.
 - **Build:** a live list of everything currently wrong — illegal wires refused at the gesture,

@@ -3,6 +3,7 @@ import { Canvas } from './canvas/Canvas';
 import { NodesCanvas } from './nodes/NodesCanvas';
 import { Inspector } from './inspector/Inspector';
 import { LayersPanel } from './panels/LayersPanel';
+import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewPanel } from './preview/PreviewPanel';
 import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
@@ -55,7 +56,12 @@ export default function App({
         restoreProblem={restoreProblem}
       />
       <main className={`workspace ${previewOpen ? 'workspace--preview' : ''}`}>
-        <LayersPanel />
+        {/* The left rail carries what is *true of the project*: its screens, and what is wrong
+            with them. Both stay visible in either mode. */}
+        <div className="rail">
+          <LayersPanel />
+          <ProblemsPanel />
+        </div>
         {mode === 'design' ? <Canvas /> : <NodesCanvas />}
         {previewOpen ? <PreviewPanel /> : null}
         <Inspector />

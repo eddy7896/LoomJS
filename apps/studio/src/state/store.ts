@@ -17,6 +17,7 @@ import {
   type Style,
 } from '@loom/ir';
 import { createComponent, defFor } from '@loom/components';
+import { __resetBuildResult } from './build';
 
 /**
  * The editor's document state. Every mutation is an **atomic op** applied to an immutable
@@ -430,10 +431,14 @@ export function loadSnapshot(snapshot: Snapshot): void {
 
 /** Throw the document away and start over. Destructive, so the caller confirms first. */
 export function resetProject(): void {
+  // The compiler's last verdict belongs to the document that produced it; carried across a New it
+  // would name entities that no longer exist.
+  __resetBuildResult();
   set(freshState());
 }
 
 /** Test seam: reset the module-level store. */
 export function __resetStore(): void {
+  __resetBuildResult();
   set(freshState());
 }

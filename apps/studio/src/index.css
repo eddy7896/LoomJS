@@ -811,3 +811,83 @@ input[type='color'] {
   outline: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 2px;
 }
+
+/* ---- the left rail: screens above, problems below ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.rail > .panel {
+  border-right: none;
+}
+
+.rail > .layers {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Capped rather than free-growing: a long list of warnings must never push the screen tree off
+   the rail, because the tree is how you get to the thing the warning is about. */
+.problems {
+  flex: 0 0 auto;
+  max-height: 45%;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.problems--closed {
+  max-height: none;
+}
+
+.problems__list {
+  overflow: auto;
+  min-height: 0;
+}
+
+.problem-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.problem-row:hover {
+  background: var(--surface-sunken);
+}
+
+.problem-row:disabled {
+  cursor: default;
+}
+
+.problem-row--error {
+  border-left-color: var(--error);
+}
+
+/* Muted, because this is what half-finished work looks like and shouting at it is worse than
+   saying nothing (docs/02: "muted for work-in-progress, sharp red for true breaks"). */
+.problem-row--warning {
+  color: var(--ink-soft);
+  border-left-color: var(--line);
+}
+
+.chip--error {
+  background: color-mix(in srgb, var(--error) 12%, var(--surface));
+  color: var(--error);
+}
+
+.chip--warn {
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Snapshot } from '@loom/ir';
 import { CompileError, compile } from '@loom/compiler';
+import { setBuildResult } from '../state/build';
 
 export interface PreviewStatus {
   url: string | undefined;
@@ -51,14 +52,15 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
       let files;
       try {
         files = compile(snapshot).files;
+        // This is the project's only compile: the Problems panel reads the verdict rather than
+        // running emission a second time on its own render path.
+        setBuildResult(null);
       } catch (error) {
         // The Build tier: keep the last good build running and point at the offending entity.
-        setStatus((s) => ({
-          ...s,
-          syncing: false,
-          error: error instanceof Error ? error.message : String(error),
-          entityId: error instanceof CompileError ? error.entityId : undefined,
-        }));
+        const message = error instanceof Error ? error.message : String(error);
+        const entityId = error instanceof CompileError ? error.entityId : undefined;
+        setBuildResult({ message, entityId });
+        setStatus((s) => ({ ...s, syncing: false, error: message, entityId }));
         return;
       }
 

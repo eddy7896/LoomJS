@@ -255,6 +255,27 @@ Recorded here because they constrain everything downstream. Each was taken at th
   emission had been dropping the derivation and leaving the button's handler pointing at nothing;
   the message now names the real fix — bind the result, or wire it into a bucket — instead of
   reporting a routing problem the reader does not have.
+- **[P2] The Problems panel holds state, not history.** A wire refused at the gesture left nothing
+  wrong behind, so it stays a toast and never becomes a row. Only what the document *currently*
+  says earns a row — which is what lets the list never need clearing, and a list you have to clear
+  is a list nobody trusts. See `specs/problems.md`.
+- **[P2] The compiler cannot be the only source of problems.** It stops at the first failure
+  because its job is to refuse a build rather than survey one, and emission is demand-driven, so a
+  half-wired node nothing reads is never compiled at all. A structural walk finds every instance;
+  the compiler contributes one row. Structural messages reuse the compiler's own sentences so the
+  two can never disagree.
+- **[P2] One compile per keystroke, shared.** The panel takes the Build verdict as an argument
+  rather than compiling for itself. Found while building: `diagnose` ran a full codegen inside a
+  `useMemo`, duplicating the Preview's.
+- **[P2] Nothing is auto-fixed on click.** A row selects its entity and stops there. A panel that
+  edited the document on click would be guessing at intent, and the fix for "nothing is wired into
+  input 2" is a decision, not a default.
+- **[P2] One gesture is one undo.** Drawing a wire can also replace an old wire and set a property
+  on the mirrored component; those are one act. `connect` now batches them, because stepping back
+  through them one dispatch at a time left the document in states nobody drew.
+- **[P2] The editor never leaves a reference to something it just deleted.** `removeNode` already
+  scrubbed bindings and triggers but not conditions — a condition reading a deleted node can never
+  hold, so the component would silently never appear again.
 
 - **[P1.2] A variable is one node with two scopes, not two nodes.** `screen` is one artboard's
   `useState`; `global` is the same merge point held in a React Context above the router. Same fan-in
