@@ -8,7 +8,7 @@ import {
   type PortRef,
   type Snapshot,
 } from '@loom/ir';
-import { createNode, defForNode, mirrorPortsFor } from '@loom/components';
+import { acceptsManyWires, createNode, defForNode, mirrorPortsFor } from '@loom/components';
 import { canConnect } from '@loom/typesys';
 import { artboardOf, dispatch, getState, select } from './store';
 
@@ -80,6 +80,19 @@ export function addGraphNode(
   dispatch({ type: 'addNode', node });
   select({ kind: 'node', id: node.id });
   return node.id;
+}
+
+/**
+ * A variable scoped to the whole app rather than one screen.
+ *
+ * It is the same node as the screen variable — one kind, one set of rules — configured wider, so
+ * the value survives navigation and any screen naming it reads the same value
+ * (`packages/compiler/src/emit/state.ts`).
+ */
+export function addGlobalNode(): Id {
+  const id = addGraphNode('state', 'write');
+  setNodeConfig(id, { scope: 'global' });
+  return id;
 }
 
 /**
@@ -186,10 +199,14 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
   );
   if (duplicate) return { ok: false, reason: 'These ports are already wired.' };
 
-  // An input port takes one value; rewiring replaces rather than stacks.
-  for (const wire of Object.values(snapshot.wires)) {
-    if (wire.to.nodeId === to.nodeId && wire.to.portId === to.portId) {
-      dispatch({ type: 'removeWire', wireId: wire.id });
+  // An input port takes one value; rewiring replaces rather than stacks. A screen bucket's `set`
+  // port is the one exception — it exists precisely so several results can answer into one place,
+  // and replacing on each wire would silently unwire the operation drawn before this one.
+  if (!acceptsManyWires(toNode, to.portId)) {
+    for (const wire of Object.values(snapshot.wires)) {
+      if (wire.to.nodeId === to.nodeId && wire.to.portId === to.portId) {
+        dispatch({ type: 'removeWire', wireId: wire.id });
+      }
     }
   }
 

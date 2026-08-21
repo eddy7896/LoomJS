@@ -3,6 +3,7 @@ import { COMPUTE_OPS, mathInputCount, mathInputPortId, MATH_OPERATORS } from '@l
 import { tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 import { stateNameForComponent, type PipelinePlan } from './pipeline';
+import { stateFallback, statesWrittenBy, type ScreenStatePlan } from './state';
 
 /**
  * Derived values — the browser half of the FN family.
@@ -28,6 +29,14 @@ export interface DerivedPlan {
   type: TypeRef;
   /** Set when a trigger is wired into `run`; the name of the function that recomputes. */
   runName: string | undefined;
+  /**
+   * Whether anything reads this derivation *by name* — a bound property, or another derivation.
+   * A derivation that only feeds a screen bucket needs no local of its own, and emitting one would
+   * be a dead binding in an app that builds with `noUnusedLocals`.
+   */
+  bound: boolean;
+  /** The setters of the variables this derivation's run writes (`emit/state.ts`). */
+  writes: string[];
 }
 
 const jsIdent = (id: string): string => id.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -156,6 +165,7 @@ export function planDerived(
   snapshot: Snapshot,
   artboard: Artboard,
   plans: PipelinePlan[],
+  states: ScreenStatePlan[] = [],
 ): DerivedPlan[] {
   const inside = nodesInsideRoutes(snapshot);
   const owned = componentsOf(snapshot, artboard);
@@ -165,14 +175,25 @@ export function planDerived(
   const isDerivable = (node: Node | undefined): boolean =>
     Boolean(node && node.category === 'fn' && !inside.has(node.id));
 
-  // 1. What does this screen actually read?
+  // 1. What does this screen actually read? Two kinds of demand: a property bound straight to a
+  //    derivation, and a screen bucket this derivation writes into (the four-buttons-one-answer
+  //    shape — `emit/state.ts`). The second is why a derivation nothing binds still gets emitted.
   const wanted: Id[] = [];
+  const boundDirectly = new Set<Id>();
   for (const component of Object.values(snapshot.components)) {
     if (!owned.has(component.id)) continue;
     for (const value of Object.values(component.props)) {
       if (value.kind !== 'bound') continue;
       const target = snapshot.nodes[value.source.nodeId];
-      if (target && isDerivable(target)) wanted.push(target.id);
+      if (target && isDerivable(target)) {
+        wanted.push(target.id);
+        boundDirectly.add(target.id);
+      }
+    }
+  }
+  for (const state of states) {
+    for (const writer of state.writers) {
+      if (writer.kind === 'derived' && isDerivable(writer.node)) wanted.push(writer.node.id);
     }
   }
   if (wanted.length === 0) return [];
@@ -246,20 +267,49 @@ export function planDerived(
       return `(${plan.names.state} ?? "")`;
     }
 
+    if (source.category === 'state') {
+      // Reading a variable back is what makes a running total sayable: `total = total + amount`,
+      // one Math node reading the same variable it writes. It stays predictable because a write is
+      // always triggered — the read happens inside the handler the button already calls, so there
+      // is one answer at one moment, never a render loop.
+      const bucket = states.find((entry) => entry.node.id === source.id);
+      if (!bucket) {
+        throw new CompileError(
+          `"${node.name ?? node.id}" reads the variable "${source.name ?? source.id}", which ` +
+            `this screen does not hold. Read a variable on the screen that displays it.`,
+          node.id,
+        );
+      }
+      if (from.portId !== 'pt_value') {
+        throw new CompileError(
+          `"${node.name ?? node.id}" reads port "${from.portId}", which is not an output of a variable.`,
+          node.id,
+        );
+      }
+      return `(${bucket.name} ?? ${stateFallback(bucket.type)})`;
+    }
+
     throw new CompileError(
       `"${node.name ?? node.id}" reads "${source.name ?? source.id}", which produces no value in the browser.`,
       node.id,
     );
   };
 
-  // 3. Turn each into an expression, and decide whether it is held or recomputed.
-  return ordered.map((node) => {
+  // 3. Turn each into an expression. A derivation feeding another derivation is read by name, so
+  //    that counts as demand for a local of its own just as a bound property does.
+  const readByName = new Set<Id>(boundDirectly);
+  const expressions = ordered.map((node) => {
     const ports = inputPortsOf(node);
-    const operands = ports.map((portId, index) => operandExpr(node, portId, index, ports.length));
+    const operands = ports.map((portId, index) => {
+      const from = wireInto(node.id, portId);
+      if (from && isDerivable(snapshot.nodes[from.nodeId])) readByName.add(from.nodeId);
+      return operandExpr(node, portId, index, ports.length);
+    });
+    return node.kind === 'math' ? mathExpr(node, operands).expr : computeExpr(node, operands[0]!);
+  });
 
-    const expr =
-      node.kind === 'math' ? mathExpr(node, operands).expr : computeExpr(node, operands[0]!);
-
+  // 4. Decide whether each is held or recomputed, and which buckets its run sets.
+  return ordered.map((node, index) => {
     const name = derivedName(node.id);
     // A trigger wired into `run` turns the derivation from a recomputation into a held value.
     const triggered = Boolean(wireInto(node.id, 'pt_run'));
@@ -267,9 +317,11 @@ export function planDerived(
     return {
       node,
       name,
-      expr,
+      expr: expressions[index]!,
       type: node.ports.find((port) => port.id === 'pt_result')?.type ?? { kind: 'any' },
       runName: triggered ? `run_${name}` : undefined,
+      bound: readByName.has(node.id),
+      writes: statesWrittenBy(states, node.id).map((state) => state.setter),
     };
   });
 }
@@ -309,10 +361,25 @@ export function emitDerived(derived: DerivedPlan[]): string[] {
       continue;
     }
 
-    lines.push(
-      `  const [${entry.name}, set_${entry.name}] = useState<${tsTypeOf(entry.type)}>(${initialValue(entry.type)});`,
-    );
-    lines.push(`  const ${entry.runName} = () => set_${entry.name}(${entry.expr});`);
+    if (entry.bound) {
+      lines.push(
+        `  const [${entry.name}, set_${entry.name}] = useState<${tsTypeOf(entry.type)}>(${initialValue(entry.type)});`,
+      );
+    }
+
+    // The plain case stays a one-liner; only a run with more than one destination needs a block,
+    // and then the expression is computed once into `next` rather than repeated per setter.
+    const setters = [...(entry.bound ? [`set_${entry.name}`] : []), ...entry.writes];
+
+    if (setters.length === 1) {
+      lines.push(`  const ${entry.runName} = () => ${setters[0]}(${entry.expr});`);
+      continue;
+    }
+
+    lines.push(`  const ${entry.runName} = () => {`);
+    lines.push(`    const next = ${entry.expr};`);
+    for (const setter of setters) lines.push(`    ${setter}(next);`);
+    lines.push('  };');
   }
 
   return lines;

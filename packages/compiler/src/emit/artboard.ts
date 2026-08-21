@@ -17,6 +17,13 @@ import {
   planDerived,
   usesDivideHelper,
 } from './derived';
+import {
+  emitScreenStates,
+  planScreenStates,
+  usesGlobals,
+  type GlobalPlan,
+  type ScreenStatePlan,
+} from './state';
 
 const PARAMS_VAR = 'params';
 const NAVIGATE_VAR = 'navigate';
@@ -50,6 +57,7 @@ export function emitArtboardModule(
   artboard: Artboard,
   routes: RouteMap,
   componentName: string,
+  globals: GlobalPlan[] = [],
 ): string {
   const component = (id: Id): Component => {
     const found = snapshot.components[id];
@@ -61,10 +69,14 @@ export function emitArtboardModule(
   const hooks = { params: false, navigate: false, textHelper: false, truthy: false };
   const itemScope: string[] = [];
   const fields = new Map<Id, unknown>();
-  const plans = planPipelines(snapshot, artboard);
+  // Buckets first: they are the merge point every other plan needs to know about. A pipeline has
+  // to know which buckets its success path sets, and a derivation is *demanded* by a bucket it
+  // writes even when no property binds it (`emit/state.ts`).
+  const states = planScreenStates(snapshot, artboard, globals);
+  const plans = planPipelines(snapshot, artboard, states);
   // Function nodes outside any API route run here, in the browser: the container boundary is the
   // network boundary (`docs/specs/binding-trigger-runtime.md`).
-  const derived = planDerived(snapshot, artboard, plans);
+  const derived = planDerived(snapshot, artboard, plans, states);
 
   const ctx: EmitContext = {
     snapshot,
@@ -72,6 +84,7 @@ export function emitArtboardModule(
     routes,
     plans,
     derived,
+    states,
     component,
     renderChild: (id, depth) => render(id, depth),
     itemVar: () => itemScope[itemScope.length - 1],
@@ -110,6 +123,18 @@ export function emitArtboardModule(
 
       const plan = plans.find((candidate) => candidate.node.id === target.nodeId);
       if (!plan) {
+        // A function node this screen never planned is one nothing consumes — it was dropped as
+        // demand-driven dead code. Saying "not a pipeline" sends the reader looking for a routing
+        // mistake; the actual fix is at the other end, where the answer should have gone.
+        const node = snapshot.nodes[target.nodeId];
+        if (node?.category === 'fn') {
+          throw new CompileError(
+            `"${node.name ?? node.kind}" runs when this is pressed, but nothing on this screen ` +
+              `shows or keeps its result, so pressing it would do nothing. Bind its result to a ` +
+              `property, or wire it into a variable something reads.`,
+            componentId,
+          );
+        }
         throw new CompileError(
           `Trigger points at node "${target.nodeId}", which is not a pipeline on this screen.`,
           componentId,
@@ -136,7 +161,7 @@ export function emitArtboardModule(
       if (source?.category === 'ui' && source.mirrorOf) {
         return source.ports.find((port) => port.id === value.source.portId)?.type;
       }
-      return boundTypeOf(plans, derived, value.source);
+      return boundTypeOf(plans, derived, states, value.source);
     },
     requireTextHelper: () => {
       hooks.textHelper = true;
@@ -203,13 +228,20 @@ ${indent(depth)}) : null}`;
   const tree = render(artboard.root, 2);
 
   const imports: string[] = [];
-  const reactHooks = reactHooksUsed(plans, fields.size > 0 || derived.some((d) => d.runName));
+  const reactHooks = reactHooksUsed(
+    plans,
+    states,
+    fields.size > 0 || derived.some((d) => d.runName),
+  );
   if (reactHooks.length > 0) imports.push(`import { ${reactHooks.join(', ')} } from 'react';\n`);
 
   const routerHooks = [hooks.navigate ? 'useNavigate' : null, hooks.params ? 'useParams' : null]
     .filter(Boolean)
     .join(', ');
   if (routerHooks) imports.push(`import { ${routerHooks} } from 'react-router-dom';\n`);
+  // An app-wide variable lives above the router, so a screen reaches it through the context hook
+  // rather than owning it (`emit/globals.ts`).
+  if (usesGlobals(states)) imports.push(`import { useGlobals } from '../state/globals';\n`);
 
   const prelude: string[] = [];
   if (hooks.navigate) prelude.push(`  const ${NAVIGATE_VAR} = useNavigate();`);
@@ -218,6 +250,9 @@ ${indent(depth)}) : null}`;
     const name = stateNameForComponent(componentId);
     prelude.push(`  const [${name}, set_${name}] = useState(${JSON.stringify(initial)});`);
   }
+  // Buckets are declared before the pipelines and derivations that set them: a `run` closes over
+  // its setter, so the bucket has to exist first.
+  prelude.push(...emitScreenStates(states));
   prelude.push(...emitPipelinePrelude(plans));
   // Derived values come last: they may read a field's state or a route's result, both declared
   // above, and nothing reads them but the tree below.
@@ -235,11 +270,18 @@ ${tree}
 }
 
 /** Only the hooks the module actually uses — the emitted app compiles with noUnusedLocals. */
-function reactHooksUsed(plans: PipelinePlan[], hasFields: boolean): string[] {
+function reactHooksUsed(
+  plans: PipelinePlan[],
+  states: ScreenStatePlan[],
+  hasFields: boolean,
+): string[] {
   const used: string[] = [];
   if (plans.length > 0) used.push('useCallback');
   if (plans.some((plan) => !plan.trigger)) used.push('useEffect');
-  if (hasFields || plans.length > 0) used.push('useState');
+  // A global is state the provider owns, not this module — only a screen variable needs the hook.
+  if (hasFields || plans.length > 0 || states.some((state) => state.scope === 'screen')) {
+    used.push('useState');
+  }
   return used;
 }
 

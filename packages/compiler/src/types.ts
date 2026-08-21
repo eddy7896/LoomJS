@@ -11,6 +11,7 @@ import type {
 import type { RouteMap } from './emit/routes';
 import type { PipelinePlan } from './emit/pipeline';
 import type { DerivedPlan } from './emit/derived';
+import type { ScreenStatePlan } from './emit/state';
 
 /** One file the compiler emits. `path` is POSIX-relative to the output root. */
 export interface EmittedFile {
@@ -46,6 +47,8 @@ export interface EmitContext {
   plans: PipelinePlan[];
   /** Values derived in the browser by function nodes outside any API route. */
   derived: DerivedPlan[];
+  /** Screen buckets this artboard reads: many writers, one reader (`emit/state.ts`). */
+  states: ScreenStatePlan[];
   /** Resolve a component id or fail loudly (dangling ids are a compile error, not undefined). */
   component: (id: Id) => Component;
   /** Render a child subtree at the given indent depth. */

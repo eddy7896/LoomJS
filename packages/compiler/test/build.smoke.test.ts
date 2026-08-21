@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
 import {
+  calculatorSnapshot,
   conditionalSnapshot,
   everyComponentSnapshot,
   operatorPipelineSnapshot,
@@ -126,6 +127,46 @@ describe('emitted app builds for real', () => {
     expect(home).toContain('safeDivide');
     // Nothing here talks to a server: the whole derivation runs in the browser.
     expect(home).not.toContain('fetch(');
+  });
+
+  it('type-checks a calculator: four operations, one answer', async () => {
+    const dir = await emitProject(calculatorSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    // One bucket, four writers, one reader — the shape four Texts used to be needed for.
+    expect(home.match(/useState<number \| null>\(null\)/g)).toHaveLength(1);
+    expect(home.match(/set_state_nd_bucket\(/g)).toHaveLength(4);
+    expect(home.match(/state_nd_bucket \?\? ""/g)).toHaveLength(1);
+    // No derivation local for a value nothing reads by name: the app builds with noUnusedLocals,
+    // so a dead `const` here would fail this very build rather than any assertion below.
+    expect(home).not.toContain('derived_nd_math_add,');
+    expect(home).not.toContain('fetch(');
+  });
+
+  it('type-checks a global variable two screens share, and a running total', async () => {
+    // Two gates in one build: the context module and its provider have to type-check, and the
+    // screen that only *reads* the total must not drag the other screen's Math node in with it.
+    const dir = await emitProject(
+      calculatorSnapshot({
+        operators: ['add'],
+        scope: 'global',
+        secondScreen: true,
+        runningTotal: true,
+      }),
+    );
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const globals = await readFile(join(dir, 'src', 'state', 'globals.tsx'), 'utf8');
+    expect(globals).toContain('const [answer, set_answer] = useState<number | null>(null);');
+
+    const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
+    // `total = total + b`: the variable is read inside the very handler that writes it.
+    expect(home).toContain('set_global_answer((Number((global_answer ?? "")) + Number(field_cp_b)))');
+
+    const report = await readFile(join(dir, 'src', 'artboards', 'Report.tsx'), 'utf8');
+    expect(report).toContain('global_answer ?? ""');
+    expect(report).not.toContain('field_cp_b');
   });
 
   it('type-checks a screen whose parts appear and restyle with a condition', async () => {

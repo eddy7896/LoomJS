@@ -79,7 +79,7 @@ export function valueExpr(
     }
     case 'bound': {
       const field = fieldStateExpr(ctx, value.source, componentId);
-      return field ?? bindingExpr(ctx.plans, ctx.derived, value.source, componentId);
+      return field ?? bindingExpr(ctx.plans, ctx.derived, ctx.states, value.source, componentId);
     }
     case 'item': {
       const item = ctx.itemVar();

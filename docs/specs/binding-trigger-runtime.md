@@ -96,6 +96,92 @@ node (`state:write`, scope `screen`) is that something: wire an API route's `res
   template asks the compiler for the bound type and routes anything non-text through a small
   `asText` helper, because an object dropped into JSX as a child crashes React at runtime.
 
+## The variable as the merge point
+
+The M5 shape above assumed one writer: a route, whose result the bucket kept. That is the smaller
+half of what a bucket is for. **A bucket is the one place in the language where many producers
+meet one consumer** — many writers, one reader, last write wins.
+
+The shape that forces it is a calculator: two number fields, four operation buttons, one answer.
+Every property binds exactly one port, so without a merge point the only way to show four results
+is four Texts, one per operation, three of them always stale. With a bucket, all four Math nodes
+wire into `set`, one Text binds `value`, and the display shows whatever was computed last.
+
+```tsx
+const [state_nd_answer, set_state_nd_answer] = useState<number | null>(null);
+const run_derived_nd_add = () => set_state_nd_answer((Number(field_cp_a) + Number(field_cp_b)));
+const run_derived_nd_sub = () => set_state_nd_answer((Number(field_cp_a) - Number(field_cp_b)));
+…
+<span>{asText(state_nd_answer ?? "")}</span>
+```
+
+Three rules keep "last write wins" something a person can actually reason about:
+
+1. **Writes are always triggered.** A reactive writer runs on every render, so two of them would
+   race on each keystroke and the bucket would hold whichever React evaluated last — unpredictable
+   from looking at the canvas. A reactive node wired into `set` is a Build error that says to wire
+   a button into its `run` port.
+2. **`set` is the only fan-in port.** Every other input port holds one value, and rewiring replaces
+   what was there; that is what makes a graph readable. The editor enforces the same exception it
+   compiles, so drawing the second operation does not silently unwire the first.
+3. **A bucket writes into the browser only.** A node inside an API route body runs on a server that
+   has no access to the screen's state; the route's own `result` is how a server value comes back.
+
+A function node that *only* feeds a bucket emits no local of its own — the value is never read by
+name, and a dead `const` would fail the generated app's `noUnusedLocals`. When something binds it
+directly **and** it writes a bucket, the run computes once into `next` and sets both.
+
+### Reading a variable back — the running total
+
+A variable's `value` port feeds a function node as readily as it feeds a property, which is what
+makes `total = total + amount` sayable: one Math node reads the variable it is about to write.
+
+```tsx
+const run_derived_nd_add = () => set_state_nd_total((Number((state_nd_total ?? "")) + Number(field_cp_amount)));
+```
+
+It stays predictable for exactly one reason: **a write is always triggered**, so the read happens
+inside the handler the button already calls. There is one answer at one moment — no render loop,
+no question of which writer saw which value, because nothing recomputes on its own. The variable is
+declared before every run that closes over it, so a chain reads top to bottom.
+
+Two refusals keep the rest honest: a function node may only read a variable **this screen holds**
+(one on another screen is another screen's state), and only through the `value` port.
+
+## Global variables — one value, every screen
+
+A screen variable is a `useState` in one artboard's module, which is precisely why it cannot answer
+"what did the other screen work out?". The **global** scope is the same merge point lifted one level
+up: same fan-in `set`, same last-write-wins, held in **one React Context above the router** — what
+`06-glossary.md` has always called the app bucket.
+
+- **A global's name is its identity.** Two Global nodes carrying the same name are one variable,
+  because a node id is not something a designer can type on another screen. Scope and name are the
+  node's only configuration.
+- **The provider owns the state; a screen destructures only the halves it uses** — the value when
+  it displays it, the setter when it writes it. The emitted app builds with `noUnusedLocals`, so an
+  unused half would fail its own build.
+- **A writer belongs to the screen holding the button that fires it.** Without that rule, a screen
+  that only displays the total would try to emit the other screen's Math node, reading fields that
+  do not exist there.
+- **Demand-driven, app-wide.** A global nothing reads on any screen is not emitted at all; a screen
+  that only *writes* one still emits the write, because that work happens there.
+
+```tsx
+// src/state/globals.tsx — the whole runtime, generated
+const [answer, set_answer] = useState<number | null>(null);
+
+// the screen that computes            // the screen that shows
+const { set_answer: set_global_answer } = useGlobals();   const { answer: global_answer } = useGlobals();
+```
+
+A screen variable written from another screen is a **Build error** that names the fix ("set its
+scope to global"), rather than a `useState` that silently never updates.
+
+**Still deferred:** a cycle through two variables (A writes B on one screen, B writes A on another).
+Nothing refuses it today because a triggered write cannot loop on its own, but nothing tests it
+either — the shape has no demand behind it yet.
+
 ## The expression vocabulary (typed inputs, booleans, Gate)
 
 - **Inputs carry their own type.** A number field's state is a `number`, a checkbox's is a

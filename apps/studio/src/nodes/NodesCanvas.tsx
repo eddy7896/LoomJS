@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { Node, Port } from '@loom/ir';
-import { mirrorPortsFor } from '@loom/components';
+import { mirrorPortsFor, nodeTitle } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { select } from '../state/store';
@@ -69,7 +69,7 @@ function LoomNode({ data, selected }: NodeProps) {
       data-auto={node.auto?.state}
     >
       <header className="nnode__head">
-        <span className="nnode__title">{node.name ?? node.kind}</span>
+        <span className="nnode__title">{nodeTitle(node)}</span>
         {/* AUTO is drawn, not hidden: a node loom wrote should say so on the canvas. */}
         {node.auto ? <span className="badge badge--auto">AUTO</span> : null}
         <span className="nnode__kind mono">{subtitle}</span>

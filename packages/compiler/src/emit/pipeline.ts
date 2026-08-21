@@ -2,6 +2,7 @@ import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, TypeRef, W
 import { canConnect, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 import type { DerivedPlan } from './derived';
+import { stateFallback, statesWrittenBy, type ScreenStatePlan } from './state';
 
 /**
  * The binding & trigger runtime (`docs/specs/binding-trigger-runtime.md`), compiled.
@@ -14,18 +15,6 @@ import type { DerivedPlan } from './derived';
  * Nothing here ships a runtime library: a bound property compiles to a plain state read, and a
  * pipeline compiles to an async function a developer would recognise as hand-written.
  */
-
-/**
- * A screen-bucket write fed by a pipeline's result (M5). The node runs in the browser: it is
- * React local state, which is what "screen bucket" means (`docs/06-glossary.md`).
- */
-export interface StatePlan {
-  node: Node;
-  /** Local variable holding the value. */
-  name: string;
-  /** Type of what the feeding pipeline returns. */
-  valueType: TypeRef;
-}
 
 export interface PipelinePlan {
   /** The API route node. */
@@ -43,8 +32,9 @@ export interface PipelinePlan {
   resultType: TypeRef;
   /** Which output ports something on this artboard binds. Unbound outputs emit no state. */
   binds: { result: boolean; pending: boolean; error: boolean };
-  /** State nodes this pipeline's result is written into, and that this artboard reads. */
-  states: StatePlan[];
+  /** Screen buckets this pipeline's result is kept in. The buckets themselves are declared by
+   * `emit/state.ts`; a pipeline only knows which ones its success path has to set. */
+  states: ScreenStatePlan[];
   /** Local identifiers used in the emitted module. */
   names: { state: string; pending: string; error: string; run: string };
 }
@@ -120,25 +110,17 @@ function mirrorComponent(
  * Plan the pipelines that touch one artboard. A pipeline is *triggered* when a trigger port is
  * wired into its run port and *reactive* otherwise — derived, never configured.
  */
-export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelinePlan[] {
+export function planPipelines(
+  snapshot: Snapshot,
+  artboard: Artboard,
+  screenStates: ScreenStatePlan[] = [],
+): PipelinePlan[] {
   const owned = componentsOf(snapshot, artboard);
   const plans: PipelinePlan[] = [];
 
   const apiNodes = Object.values(snapshot.nodes)
     .filter((node) => node.category === 'api')
     .sort((a, b) => a.id.localeCompare(b.id));
-
-  // State this screen actually reads. A write nobody reads emits nothing, for the same reason
-  // an unbound `pending` does: the emitted app compiles with `noUnusedLocals`.
-  const readStates = new Set<Id>();
-  for (const component of Object.values(snapshot.components)) {
-    if (!owned.has(component.id)) continue;
-    for (const value of Object.values(component.props)) {
-      if (value.kind !== 'bound') continue;
-      const target = snapshot.nodes[value.source.nodeId];
-      if (target?.category === 'state') readStates.add(target.id);
-    }
-  }
 
   for (const node of apiNodes) {
     const config = (node.config ?? {}) as { method?: string; path?: string; body?: Id[] };
@@ -192,19 +174,9 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
       }
     }
 
-    // Writes: this route's result wired into a state node the screen reads.
-    const states: StatePlan[] = [];
+    // Writes: the screen buckets this route's result is kept in.
+    const states = statesWrittenBy(screenStates, node.id);
     const resultType = portOf(node, 'pt_result')?.type ?? { kind: 'any' };
-    for (const wire of Object.values(snapshot.wires)) {
-      if (wire.from.nodeId !== node.id || wire.from.portId !== 'pt_result') continue;
-      const target = snapshot.nodes[wire.to.nodeId];
-      if (!target || target.category !== 'state' || !readStates.has(target.id)) continue;
-      states.push({
-        node: target,
-        name: `state_${jsIdent(target.id)}`,
-        valueType: resultType,
-      });
-    }
 
     const bound = binds.result || binds.pending || binds.error;
 
@@ -238,6 +210,7 @@ export function planPipelines(snapshot: Snapshot, artboard: Artboard): PipelineP
 export function bindingExpr(
   plans: PipelinePlan[],
   derived: DerivedPlan[],
+  states: ScreenStatePlan[],
   source: PortRef,
   componentId: Id,
 ): string {
@@ -253,19 +226,17 @@ export function bindingExpr(
     return derivation.name;
   }
 
-  // A state node is read directly: the value outlives the call that produced it, which is the
-  // whole point of writing it to the screen bucket.
-  for (const plan of plans) {
-    for (const state of plan.states) {
-      if (state.node.id !== source.nodeId) continue;
-      if (source.portId !== 'pt_value') {
-        throw new CompileError(
-          `Bound property reads port "${source.portId}", which is not an output of the state node.`,
-          componentId,
-        );
-      }
-      return `${state.name} ?? ${state.valueType.kind === 'list' ? '[]' : '""'}`;
+  // A bucket is read directly: the value outlives whatever produced it, which is the whole point
+  // of keeping it. Many writers, one reader — see `emit/state.ts`.
+  for (const state of states) {
+    if (state.node.id !== source.nodeId) continue;
+    if (source.portId !== 'pt_value') {
+      throw new CompileError(
+        `Bound property reads port "${source.portId}", which is not an output of the state node.`,
+        componentId,
+      );
     }
+    return `${state.name} ?? ${stateFallback(state.type)}`;
   }
 
   const plan = plans.find((candidate) => candidate.node.id === source.nodeId);
@@ -302,6 +273,7 @@ export function bindingExpr(
 export function boundTypeOf(
   plans: PipelinePlan[],
   derived: DerivedPlan[],
+  states: ScreenStatePlan[],
   source: PortRef,
 ): TypeRef | undefined {
   const derivation = derived.find((entry) => entry.node.id === source.nodeId);
@@ -309,10 +281,11 @@ export function boundTypeOf(
     return derivation.node.ports.find((port) => port.id === source.portId)?.type;
   }
 
+  for (const state of states) {
+    if (state.node.id === source.nodeId) return state.type;
+  }
+
   for (const plan of plans) {
-    for (const state of plan.states) {
-      if (state.node.id === source.nodeId) return state.valueType;
-    }
     if (plan.node.id !== source.nodeId) continue;
     if (source.portId === 'pt_result') return plan.resultType;
     if (source.portId === 'pt_pending') return { kind: 'boolean' };
@@ -344,11 +317,6 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
     if (plan.binds.error) {
       lines.push(
         `  const [${plan.names.error}, set_${plan.names.error}] = useState<string | null>(null);`,
-      );
-    }
-    for (const state of plan.states) {
-      lines.push(
-        `  const [${state.name}, set_${state.name}] = useState<${tsTypeOf(state.valueType)} | null>(null);`,
       );
     }
   }
@@ -385,7 +353,7 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
         : []),
       // The state write happens here, in the same success path: a screen-bucket write is a
       // `setState` after the call returns, not a second round trip.
-      ...plan.states.map((state) => `      set_${state.name}((body.result ?? null) ${cast});`),
+      ...plan.states.map((state) => `      ${state.setter}((body.result ?? null) ${cast});`),
     ];
     const store = writes.length > 0 ? writes.join('\n') : '      void body;';
     const onError = plan.binds.error

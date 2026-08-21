@@ -3,7 +3,7 @@ import { componentDefs, nodeDefs } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { addArtboard, addComponent, redo, resetProject, setMode, undo } from '../state/store';
 import { clearProject, type AutosaveHandle, type SaveState } from '../state/persistence';
-import { addBodyStep, addGraphNode } from '../state/graph';
+import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
 import { addDbStep, connectedTables } from '../state/connectors';
 
 export function Toolbar({
@@ -77,6 +77,12 @@ export function Toolbar({
               + {def.label}
             </button>
           ))}
+
+          {/* A global is the same node with a wider scope, but a designer looking for "one value
+              every screen shares" is looking for a button, not a dropdown. */}
+          <button title="A variable every screen shares" onClick={() => addGlobalNode()}>
+            + Global
+          </button>
 
           {containerId && tables.length > 0 ? (
             <>

@@ -1,4 +1,4 @@
-import type { Node, NodeCategory, Port, TypeRef } from '@loom/ir';
+import type { Id, Node, NodeCategory, Port, TypeRef } from '@loom/ir';
 import type { FieldDef } from './defs';
 
 /**
@@ -144,23 +144,55 @@ export const VALIDATE_DEF: NodeDef = {
   },
 };
 
+/**
+ * Where a variable lives (`docs/06-glossary.md` §State scope).
+ *
+ * - `screen` — one artboard's own value, React local state in that screen's module.
+ * - `global` — one value the whole app shares, held in a context above the router. Two global
+ *   nodes carrying the same **name** are the same variable, which is what lets one screen write
+ *   what another screen reads.
+ *
+ * The third bucket, `env`, is deliberately not a node: secrets are server-only, referenced by
+ * name, and never cross into the browser (`docs/specs/connector-credentials.md`).
+ */
+export type StateScope = 'screen' | 'global';
+
+export const STATE_SCOPES = ['screen', 'global'] as const satisfies readonly StateScope[];
+
 export interface StateWriteConfig {
-  /** V1 has one scope; the global bucket is a later addition (`docs/06-glossary.md`). */
-  scope: 'screen';
+  scope: StateScope;
   key: string;
 }
 
+/** A node's scope, defaulting to `screen` — the narrower of the two is the safer default. */
+export function stateScopeOf(node: Node): StateScope {
+  return ((node.config ?? {}) as { scope?: unknown }).scope === 'global' ? 'global' : 'screen';
+}
+
 /**
- * A screen-bucket write: it holds whatever is wired into it for the rest of the screen's life,
- * so a pipeline's result outlives the call that produced it. It runs in the browser — it is
- * React local state, and it is never inside an API route's body.
+ * A variable's name, which is its identity when the scope is global. Blank falls back to
+ * `value` so a freshly dropped node is never nameless.
+ */
+export function stateKeyOf(node: Node): string {
+  const key = String(((node.config ?? {}) as { key?: unknown }).key ?? '').trim();
+  return key.length > 0 ? key : 'value';
+}
+
+/**
+ * A variable: it holds whatever is wired into it for the rest of its scope's life, so a result
+ * outlives the call or the click that produced it. It runs in the browser — React state, never
+ * inside an API route's body — and its `set` port is the one port in the language that takes
+ * many wires: **many writers, one reader, last write wins**.
  */
 export const STATE_WRITE_DEF: NodeDef = {
   category: 'state',
   kind: 'write',
-  label: 'State',
+  label: 'Variable',
   defaultConfig: { scope: 'screen', key: 'value' },
-  fields: [{ key: 'key', label: 'Name', control: 'text', default: 'value' }],
+  fields: [
+    { key: 'key', label: 'Name', control: 'text', default: 'value' },
+    { key: 'scope', label: 'Scope', control: 'select', options: STATE_SCOPES, default: 'screen' },
+  ],
   ports: () => [
     port('pt_set', 'set', 'in', 'data', { kind: 'any' }),
     port('pt_value', 'value', 'out', 'data', { kind: 'any' }),
@@ -506,6 +538,53 @@ export function mirrorPortsFor(componentType: string): Port[] {
     default:
       return [];
   }
+}
+
+/**
+ * What a node calls itself on the canvas.
+ *
+ * A node's `name` belongs to the person, and it starts life as the def's label — which means four
+ * Math nodes all read "Math", and a calculator's graph tells you nothing about which button does
+ * what. While the name is still that untouched default, the canvas shows what the node is
+ * *configured to do* instead. Rename one and the name wins again, immediately.
+ */
+export function nodeTitle(node: Node): string {
+  const def = defForNode(node);
+  if (!def) return node.name ?? node.kind;
+  if (node.name && node.name !== def.label) return node.name;
+
+  const config = (node.config ?? {}) as Record<string, unknown>;
+
+  if (node.kind === 'math') {
+    const operator = MATH_OPERATORS[config.operator as MathOperator];
+    return operator ? `${def.label} — ${operator}` : def.label;
+  }
+  if (node.kind === 'compute') {
+    const op = COMPUTE_OPS[config.op as ComputeOp];
+    return op ? `${def.label} — ${op.label.toLowerCase()}` : def.label;
+  }
+  if (node.category === 'state') {
+    // A variable's name is the whole point of it: several results answer into "total", and the
+    // reader needs to know which "total" a wire is landing in — and whether that "total" is this
+    // screen's or the whole app's, because a global one is shared with every other screen.
+    const scope = stateScopeOf(node);
+    const label = scope === 'global' ? 'Global' : def.label;
+    return `${label} — ${stateKeyOf(node)}`;
+  }
+
+  return def.label;
+}
+
+/**
+ * The one port in the language that takes many wires.
+ *
+ * Every other input port holds a single value, and rewiring one replaces what was there — that is
+ * what makes a graph readable: follow the wire back and there is exactly one answer. A screen
+ * bucket is the deliberate exception, because "four operations, one display" cannot be said any
+ * other way. Many writers, one reader, last write wins (`packages/compiler/src/emit/state.ts`).
+ */
+export function acceptsManyWires(node: Node, portId: Id): boolean {
+  return node.category === 'state' && portId === 'pt_set';
 }
 
 /**

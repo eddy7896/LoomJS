@@ -745,3 +745,307 @@ export function conditionalSnapshot(): Snapshot {
     },
   ]);
 }
+
+/** The four operations a calculator offers, and the shape the bug report used. */
+export const CALCULATOR_OPERATORS = ['add', 'subtract', 'multiply', 'divide'] as const;
+
+/**
+ * The calculator from the bug report: `operators.length` Math nodes fed by the same two fields,
+ * each fired by its own button, all answering into one bucket that one Text displays.
+ */
+export function calculatorSnapshot(
+  options: {
+    operators?: readonly string[];
+    triggered?: boolean;
+    bindMathDirectly?: boolean;
+    /** `global` shares the variable with every screen; `screen` keeps it to this one. */
+    scope?: 'screen' | 'global';
+    /** The running total: each operation reads the variable it writes. */
+    runningTotal?: boolean;
+    /** A second screen that displays the same global, without writing it. */
+    secondScreen?: boolean;
+  } = {},
+): Snapshot {
+  const operators = options.operators ?? CALCULATOR_OPERATORS;
+  const triggered = options.triggered ?? true;
+  const scope = options.scope ?? 'screen';
+
+  const fields: Op[] = ['a', 'b'].flatMap((key) => [
+    {
+      type: 'addComponent',
+      parentId: 'cp_form',
+      component: {
+        id: `cp_${key}`,
+        type: 'NumberField',
+        name: key.toUpperCase(),
+        props: { value: { kind: 'static', value: 0 } },
+      },
+    },
+    {
+      type: 'addNode',
+      node: {
+        id: `nd_m_${key}`,
+        category: 'ui',
+        kind: 'mirror',
+        mirrorOf: `cp_${key}`,
+        position: { x: 0, y: 0 },
+        ports: [
+          {
+            id: 'pt_value',
+            name: 'value',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'number' },
+          },
+        ],
+      },
+    },
+  ]);
+
+  const perOperator: Op[] = operators.flatMap((operator, index) => {
+    const math = `nd_math_${operator}`;
+    const button = `cp_btn_${operator}`;
+    const mirror = `nd_btn_${operator}`;
+
+    const ops: Op[] = [
+      {
+        type: 'addComponent',
+        parentId: 'cp_form',
+        component: {
+          id: button,
+          type: 'Button',
+          name: operator,
+          props: { label: { kind: 'static', value: operator } },
+        },
+      },
+      {
+        type: 'addNode',
+        node: {
+          id: math,
+          category: 'fn',
+          kind: 'math',
+          name: `Math ${operator}`,
+          position: { x: 0, y: index * 100 },
+          config: { operator, inputs: 2 },
+          ports: [
+            {
+              id: 'pt_run',
+              name: 'run',
+              direction: 'in',
+              portKind: 'trigger',
+              type: { kind: 'trigger' },
+            },
+            {
+              id: 'pt_in_0',
+              name: 'input 1',
+              direction: 'in',
+              portKind: 'data',
+              type: { kind: 'number' },
+            },
+            {
+              id: 'pt_in_1',
+              name: 'input 2',
+              direction: 'in',
+              portKind: 'data',
+              type: { kind: 'number' },
+            },
+            {
+              id: 'pt_result',
+              name: 'result',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'number' },
+            },
+          ],
+        },
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: `wr_a_${operator}`,
+          // A running total reads the variable it is about to write: `total = total + b`.
+          from: options.runningTotal
+            ? { nodeId: 'nd_bucket', portId: 'pt_value' }
+            : { nodeId: 'nd_m_a', portId: 'pt_value' },
+          to: { nodeId: math, portId: 'pt_in_0' },
+        },
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: `wr_b_${operator}`,
+          from: { nodeId: 'nd_m_b', portId: 'pt_value' },
+          to: { nodeId: math, portId: 'pt_in_1' },
+        },
+      },
+      // Every answer lands in the same bucket. This is the wire that did not exist before.
+      {
+        type: 'addWire',
+        wire: {
+          id: `wr_set_${operator}`,
+          from: { nodeId: math, portId: 'pt_result' },
+          to: { nodeId: 'nd_bucket', portId: 'pt_set' },
+        },
+      },
+    ];
+
+    if (!triggered) return ops;
+
+    return [
+      ...ops,
+      {
+        type: 'addNode',
+        node: {
+          id: mirror,
+          category: 'ui',
+          kind: 'mirror',
+          mirrorOf: button,
+          position: { x: 0, y: 0 },
+          ports: [
+            {
+              id: 'pt_click',
+              name: 'onClick',
+              direction: 'out',
+              portKind: 'trigger',
+              type: { kind: 'trigger' },
+            },
+          ],
+        },
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: `wr_run_${operator}`,
+          from: { nodeId: mirror, portId: 'pt_click' },
+          to: { nodeId: math, portId: 'pt_run' },
+        },
+      },
+      {
+        type: 'setProp',
+        componentId: button,
+        key: 'onClick',
+        value: {
+          kind: 'event',
+          handler: { kind: 'trigger', target: { nodeId: math, portId: 'pt_run' } },
+        },
+      },
+    ];
+  });
+
+  // A second Text reading one operation directly, so that derivation is both kept and read.
+  const bindDirectly: Op[] = options.bindMathDirectly
+    ? [
+        {
+          type: 'addComponent',
+          parentId: 'cp_form',
+          component: {
+            id: 'cp_echo',
+            type: 'Text',
+            name: 'Echo',
+            props: {
+              content: {
+                kind: 'bound',
+                source: { nodeId: `nd_math_${operators[0]}`, portId: 'pt_result' },
+              },
+            },
+          },
+        },
+      ]
+    : [];
+
+  /**
+   * A second screen that only *reads* the total, through its own Global node carrying the same
+   * name. Two nodes, one variable — which is the whole point of a global: the screen that
+   * computes the answer is not the screen that shows it.
+   */
+  const secondScreen: Op[] = options.secondScreen
+    ? [
+        {
+          type: 'addArtboard',
+          artboard: { id: 'ab_report00001', name: 'Report', root: 'cp_report_root' },
+          root: {
+            id: 'cp_report_root',
+            type: 'Frame',
+            name: 'Root',
+            props: {},
+            layout: { direction: 'column', gap: 8, padding: 24, align: 'start', justify: 'start' },
+            children: [],
+          },
+        },
+        {
+          type: 'addComponent',
+          parentId: 'cp_report_root',
+          component: {
+            id: 'cp_report_total',
+            type: 'Text',
+            name: 'Total',
+            props: {
+              content: { kind: 'bound', source: { nodeId: 'nd_bucket_2', portId: 'pt_value' } },
+            },
+          },
+        },
+        {
+          type: 'addNode',
+          node: {
+            id: 'nd_bucket_2',
+            category: 'state',
+            kind: 'write',
+            name: 'Answer',
+            position: { x: 600, y: 0 },
+            config: { scope: 'global', key: 'answer' },
+            ports: [
+              {
+                id: 'pt_set',
+                name: 'set',
+                direction: 'in',
+                portKind: 'data',
+                type: { kind: 'any' },
+              },
+              {
+                id: 'pt_value',
+                name: 'value',
+                direction: 'out',
+                portKind: 'data',
+                type: { kind: 'any' },
+              },
+            ],
+          },
+        },
+      ]
+    : [];
+
+  return applyOps(formSnapshot(), [
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_bucket',
+        category: 'state',
+        kind: 'write',
+        name: 'Answer',
+        position: { x: 0, y: 0 },
+        config: { scope, key: 'answer' },
+        ports: [
+          { id: 'pt_set', name: 'set', direction: 'in', portKind: 'data', type: { kind: 'any' } },
+          {
+            id: 'pt_value',
+            name: 'value',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'any' },
+          },
+        ],
+      },
+    },
+    ...fields,
+    ...perOperator,
+    ...bindDirectly,
+    // One Text, reading the variable.
+    {
+      type: 'setProp',
+      componentId: 'cp_status',
+      key: 'content',
+      value: { kind: 'bound', source: { nodeId: 'nd_bucket', portId: 'pt_value' } },
+    },
+    ...secondScreen,
+  ]);
+}

@@ -238,6 +238,45 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P1] The canvas marks conditional components rather than hiding them.** Design mode has no
   runtime values, so it draws everything and outlines what is conditional; the Preview is where
   conditions actually run. Simulating a condition on the canvas is a later idea, deliberately.
+- **[P1.1] A screen bucket is the merge point: many writers, one reader, last write wins.** Found
+  by building a calculator in the studio — two number fields, four operation buttons, and one Text
+  per operation because every property binds exactly one port. The bucket already existed for
+  pipeline results; opening it to browser-side function nodes is what makes "four operations, one
+  answer" sayable. See `specs/binding-trigger-runtime.md`.
+- **[P1.1] A bucket write is always triggered.** A reactive writer runs on every render, so two of
+  them race on each keystroke and the bucket holds whichever React evaluated last — a value nobody
+  can predict from the canvas. Refusing it at compile time is what keeps "last write wins" a rule
+  a person can reason about, rather than a race.
+- **[P1.1] `set` is the one fan-in port in the language.** Every other input port takes a single
+  value and rewiring replaces it, which is what makes a graph readable: follow the wire back and
+  there is exactly one answer. The editor enforces the same exception it compiles, because
+  replacing on each wire would silently unwire the operation drawn before.
+- **[P1.1] A trigger whose result nothing consumes is a Build error, not dead code.** Demand-driven
+  emission had been dropping the derivation and leaving the button's handler pointing at nothing;
+  the message now names the real fix — bind the result, or wire it into a bucket — instead of
+  reporting a routing problem the reader does not have.
+
+- **[P1.2] A variable is one node with two scopes, not two nodes.** `screen` is one artboard's
+  `useState`; `global` is the same merge point held in a React Context above the router. Same fan-in
+  `set` port, same last-write-wins, same refusals — only how far the value reaches changes, so a
+  designer who has learned one has learned both. See `specs/binding-trigger-runtime.md`.
+- **[P1.2] A global variable's identity is its name, not its node id.** Two Global nodes carrying
+  the same name are one value. A node id is not something a designer can type on another screen, so
+  the name is the only thing that can make "the screen that computes it" and "the screen that shows
+  it" meet — and it is what the canvas draws on the node.
+- **[P1.2] A writer belongs to the screen holding the button that fires it.** Writes are always
+  triggered, so this is well defined, and without it a screen that only displays a global would try
+  to emit the other screen's function node — reading fields that do not exist there. A screen
+  variable written from another screen is a Build error naming the fix ("make it global"), never a
+  `useState` that silently never updates.
+- **[P1.2] Reading a variable back is supported, and the trigger rule is why.** `total = total +
+  amount` reads inside the handler the button already calls, so there is one answer at one moment
+  rather than a render loop. The M5.1 deferral is lifted; what stays deferred is a cycle *through
+  two* variables, which has no demand behind it yet.
+- **[P1.2] Demand is transitive and app-wide.** A variable read by a demanded function node is
+  demanded too, and a global is emitted when any screen reads it — but a screen that only writes one
+  still emits the write. The emitted app builds with `noUnusedLocals`, so each screen destructures
+  only the halves it uses: the value where it displays, the setter where it writes.
 
 ## The next specs to write (highest-leverage, in dependency order)
 
