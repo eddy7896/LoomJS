@@ -39,6 +39,8 @@ Core promise: *a designer should never feel they left the canvas.*
 - `docs/10-interaction-plan.md` — execution plan for P0–P7: persistence, conditions, actions,
   CRUD + search, app auth, the runtime tier, reusable components. Several are prerequisites for
   M6's acceptance test, not follow-ons.
+- `docs/11-editor-shell.md` — execution plan for S0–S5: the studio's own sidebar, the element
+  palette and the elements tree, plus the bar an element must clear to enter the vocabulary.
 
 ## Current phase
 
