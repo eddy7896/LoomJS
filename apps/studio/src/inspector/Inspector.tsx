@@ -4,8 +4,12 @@ import {
   LAYOUT_FIELDS,
   MATH_BODY_FIELDS,
   MATH_CANVAS_FIELDS,
+  DEFAULT_SCREEN,
+  SCREEN_PRESETS,
   defFor,
   defForNode,
+  presetForSize,
+  screenPreset,
   type FieldDef,
 } from '@loom/components';
 import { formatType } from '@loom/typesys';
@@ -18,6 +22,7 @@ import {
   rename,
   renameArtboard,
   setArtboardParams,
+  setArtboardSize,
   setClickFlow,
   setEntryArtboard,
   setFlowPayload,
@@ -331,6 +336,75 @@ function AutoBackendSection({ component }: { component: Component }) {
   );
 }
 
+
+/**
+ * The frame a screen is drawn at. A preset is a **canvas size, not a breakpoint** — V1 emits one
+ * flex layout that adapts (`docs/07-v1-scope.md`), so choosing Phone changes what the designer
+ * sees and what the Preview runs at, and changes no emitted CSS.
+ */
+function ScreenSizeSection({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  if (!artboard) return null;
+
+  const size = artboard.size ?? { width: DEFAULT_SCREEN.width, height: DEFAULT_SCREEN.height };
+  const matched = presetForSize(size.width, size.height);
+
+  const apply = (width: number, height: number): void =>
+    setArtboardSize(artboardId, {
+      width: Math.max(240, Math.round(width) || 240),
+      height: Math.max(240, Math.round(height) || 240),
+      preset: presetForSize(width, height)?.id,
+    });
+
+  return (
+    <section className="field-group" data-testid="screen-size">
+      <h3 className="field-group__title">Screen</h3>
+
+      <Field label="Size">
+        <select
+          data-testid="screen-preset"
+          value={matched?.id ?? ''}
+          onChange={(event) => {
+            const preset = screenPreset(event.target.value);
+            if (preset) apply(preset.width, preset.height);
+          }}
+        >
+          {matched ? null : <option value="">Custom</option>}
+          {SCREEN_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label} — {preset.width}x{preset.height}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Width">
+        <input
+          type="number"
+          data-testid="screen-width"
+          value={size.width}
+          onChange={(event) => apply(Number(event.target.value), size.height)}
+        />
+      </Field>
+
+      <Field label="Height">
+        <input
+          type="number"
+          data-testid="screen-height"
+          value={size.height}
+          onChange={(event) => apply(size.width, Number(event.target.value))}
+        />
+      </Field>
+
+      <p className="panel__hint">
+        The frame you design in, and the width the Preview runs at. The app itself stays one
+        adaptive layout — this is not a breakpoint.
+      </p>
+    </section>
+  );
+}
+
 /** Accept / Detach for a generated pipeline (`docs/06-glossary.md`). */
 function AutoSection({ group, state }: { group: string; state: 'proposed' | 'accepted' }) {
   return (
@@ -574,6 +648,8 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
           </button>
         </Field>
       </section>
+
+      <ScreenSizeSection artboardId={artboard.id} />
 
       <section className="field-group">
         <h3 className="field-group__title">Params</h3>

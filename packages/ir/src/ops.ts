@@ -6,6 +6,7 @@ import type {
   FlowPayload,
   Layout,
   Param,
+  ScreenSize,
   Style,
   Node,
   PropertyValue,
@@ -44,6 +45,7 @@ export type Op =
   | { type: 'removeFlow'; flowId: string }
   | { type: 'renameArtboard'; artboardId: string; name: string }
   | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
+  | { type: 'setArtboardSize'; artboardId: string; size: ScreenSize }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
   | { type: 'addConnector'; connector: ConnectorInstance }
@@ -254,6 +256,13 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       const artboard = next.artboards[op.artboardId];
       if (!artboard) throw new Error(`setArtboardParams: unknown artboard ${op.artboardId}`);
       artboard.params = op.params;
+      return next;
+    }
+
+    case 'setArtboardSize': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardSize: unknown artboard ${op.artboardId}`);
+      artboard.size = op.size;
       return next;
     }
 

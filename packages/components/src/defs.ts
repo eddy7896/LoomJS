@@ -190,3 +190,41 @@ export function createComponent(type: string, id: string): Component {
     ...(def.isContainer ? { layout: { ...(def.defaultLayout ?? DEFAULT_LAYOUT) }, children: [] } : {}),
   };
 }
+
+/**
+ * The frames a screen can be drawn at.
+ *
+ * These are **canvas sizes, not breakpoints**. V1 emits one flex layout that adapts, and distinct
+ * per-device layouts are out of scope (`docs/07-v1-scope.md`); what a preset changes is the frame
+ * the designer works in and the width the Preview runs at, so a screen can be judged at the size
+ * people will actually hold it. Sizes are the CSS pixel sizes of common devices, not marketing
+ * resolutions.
+ */
+export interface ScreenPreset {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  group: 'phone' | 'tablet' | 'desktop';
+}
+
+export const SCREEN_PRESETS: readonly ScreenPreset[] = [
+  { id: 'phone-sm', label: 'Phone', width: 390, height: 844, group: 'phone' },
+  { id: 'phone-lg', label: 'Phone large', width: 430, height: 932, group: 'phone' },
+  { id: 'tablet', label: 'Tablet', width: 834, height: 1112, group: 'tablet' },
+  { id: 'tablet-lg', label: 'Tablet landscape', width: 1112, height: 834, group: 'tablet' },
+  { id: 'laptop', label: 'Laptop', width: 1280, height: 800, group: 'desktop' },
+  { id: 'desktop', label: 'Desktop', width: 1440, height: 900, group: 'desktop' },
+];
+
+/** The frame a screen with no size of its own is drawn at. Tablet, per the V1 target. */
+export const DEFAULT_SCREEN: ScreenPreset = SCREEN_PRESETS.find((p) => p.id === 'tablet')!;
+
+export function screenPreset(id: string | undefined): ScreenPreset | undefined {
+  return SCREEN_PRESETS.find((preset) => preset.id === id);
+}
+
+/** The preset matching an exact size, so a hand-typed 390x844 still reads as "Phone". */
+export function presetForSize(width: number, height: number): ScreenPreset | undefined {
+  return SCREEN_PRESETS.find((preset) => preset.width === width && preset.height === height);
+}

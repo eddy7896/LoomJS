@@ -11,6 +11,7 @@ import {
   type Op,
   type Param,
   type PropertyValue,
+  type ScreenSize,
   type SizeMode,
   type Snapshot,
   type Style,
@@ -322,6 +323,14 @@ export function renameArtboard(artboardId: Id, name: string): void {
 
 export function setArtboardParams(artboardId: Id, params: Param[]): void {
   dispatch({ type: 'setArtboardParams', artboardId, params });
+}
+
+/**
+ * Resize a screen. This is the frame the designer works in and the width the Preview runs at —
+ * not a breakpoint. V1 emits one adaptive layout (`docs/07-v1-scope.md`).
+ */
+export function setArtboardSize(artboardId: Id, size: ScreenSize): void {
+  dispatch({ type: 'setArtboardSize', artboardId, size });
 }
 
 export function setEntryArtboard(artboardId: Id): void {

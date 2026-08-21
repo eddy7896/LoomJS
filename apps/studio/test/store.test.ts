@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
   __resetStore,
+  setArtboardSize,
   addArtboard,
   addComponent,
   flowFor,
@@ -202,5 +203,33 @@ describe('editor -> compiler (M2 routing)', () => {
     expect(home).toContain('useNavigate()');
     expect(home).toContain('encodeURIComponent(String("42"))');
     expect(detail).toContain('{params.id ?? ""}');
+  });
+});
+
+describe('screen sizes', () => {
+  it('starts with no size of its own, so the canvas uses the default frame', () => {
+    __resetStore();
+    const id = getState().activeArtboardId;
+    expect(snapshot().artboards[id]!.size).toBeUndefined();
+  });
+
+  it('records a size and the preset it came from', () => {
+    __resetStore();
+    const id = getState().activeArtboardId;
+    setArtboardSize(id, { width: 390, height: 844, preset: 'phone-sm' });
+    expect(snapshot().artboards[id]!.size).toEqual({ width: 390, height: 844, preset: 'phone-sm' });
+  });
+
+  it('is one undo, and changes nothing the compiler emits', () => {
+    __resetStore();
+    const id = getState().activeArtboardId;
+    const before = JSON.stringify(compile(snapshot()).files);
+
+    setArtboardSize(id, { width: 390, height: 844, preset: 'phone-sm' });
+    // A screen size is editor intent: the app stays one adaptive layout (docs/07-v1-scope.md).
+    expect(JSON.stringify(compile(snapshot()).files)).toBe(before);
+
+    undo();
+    expect(snapshot().artboards[id]!.size).toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { DEFAULT_SCREEN } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { selectComponent } from '../state/store';
 import { usePreviewSync } from './usePreviewSync';
@@ -8,7 +9,12 @@ import { usePreviewSync } from './usePreviewSync';
  */
 export function PreviewPanel() {
   const snapshot = useEditor((s) => s.snapshot);
+  const activeArtboardId = useEditor((s) => s.activeArtboardId);
   const status = usePreviewSync(snapshot, true);
+
+  // The Preview runs at the width of the screen being designed, so "does this fit on a phone" is
+  // answered by looking rather than guessing. The frame scrolls if the panel is narrower.
+  const size = snapshot.artboards[activeArtboardId]?.size ?? DEFAULT_SCREEN;
 
   return (
     <section className="preview">
@@ -17,6 +23,9 @@ export function PreviewPanel() {
         <span className={`dot ${status.error ? 'dot--error' : status.syncing ? 'dot--busy' : 'dot--ok'}`} />
         <span className="preview__state mono">
           {status.error ? 'build error' : status.syncing ? 'compiling…' : 'live'}
+        </span>
+        <span className="preview__size mono" data-testid="preview-size">
+          {size.width}
         </span>
       </header>
 
@@ -31,7 +40,14 @@ export function PreviewPanel() {
       ) : null}
 
       {status.url ? (
-        <iframe className="preview__frame" src={status.url} title="Preview" />
+        <div className="preview__stage">
+          <iframe
+            className="preview__frame"
+            style={{ width: size.width }}
+            src={status.url}
+            title="Preview"
+          />
+        </div>
       ) : (
         <div className="preview__error">Preview server not reachable.</div>
       )}

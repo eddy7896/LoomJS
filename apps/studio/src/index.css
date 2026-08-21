@@ -343,11 +343,26 @@ select {
   background: var(--error);
 }
 
-.preview__frame {
+.preview__stage {
   flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  background: var(--surface-sunken);
+}
+
+.preview__frame {
   border: none;
-  width: 100%;
+  flex: 0 0 auto;
+  min-height: 100%;
   background: #fff;
+}
+
+.preview__size {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-left: auto;
 }
 
 .preview__error {
@@ -737,4 +752,29 @@ input[type='color'] {
   padding: 0;
   height: 24px;
   cursor: pointer;
+}
+
+/* The screen's resize grip: bottom-right corner, the way every design tool puts it. */
+.artboard__resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  cursor: nwse-resize;
+  opacity: 0;
+}
+
+.artboard-slot:hover .artboard__resize,
+.artboard-slot.is-active .artboard__resize {
+  opacity: 1;
+}
+
+.artboard-slot {
+  /* The grip is positioned against the slot, so the slot has to be the containing block. */
+  position: absolute;
 }

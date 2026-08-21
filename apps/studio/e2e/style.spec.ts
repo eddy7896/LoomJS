@@ -60,3 +60,57 @@ test('a styled input still looks like the control it is', async ({ page }) => {
   await expect(input).toHaveAttribute('placeholder', 'Your name');
   await expect(input).toHaveCSS('border-radius', '999px');
 });
+
+test('a screen can be set to a device size, or dragged to any size', async ({ page }) => {
+  await page.locator('.layer--artboard').first().click();
+
+  // The default frame is tablet, per the V1 target.
+  const label = page.locator('.artboard__label .chip--mono').first();
+  await expect(label).toContainText('834 x 1112');
+
+  await page.getByTestId('screen-preset').selectOption('phone-sm');
+  await expect(label).toContainText('390 x 844 Phone');
+
+  // The canvas frame follows...
+  const artboard = page.locator('.artboard').first();
+  await expect(artboard).toHaveCSS('min-height', '844px');
+
+  // ...and so does the width the Preview runs at, which is the point of choosing a device.
+  await expect(page.getByTestId('preview-size')).toHaveText('390');
+  await expect(page.locator('iframe.preview__frame')).toHaveCSS('width', '390px');
+
+  // A hand-typed size is allowed, and stops claiming to be a preset.
+  await page.getByTestId('screen-width').fill('600');
+  await expect(label).toContainText('600 x 844');
+  await expect(label).not.toContainText('Phone');
+  await expect(page.getByTestId('screen-preset')).toHaveValue('');
+});
+
+test('dragging the corner resizes the screen in one undo', async ({ page }) => {
+  await page.locator('.layer--artboard').first().click();
+
+  // A small frame first: a phone at 844px tall puts its bottom-right corner below the browser
+  // window, and this test is about the drag, not about panning to reach it.
+  await page.getByTestId('screen-width').fill('400');
+  await page.getByTestId('screen-height').fill('300');
+
+  const label = page.locator('.artboard__label .chip--mono').first();
+  await expect(label).toContainText('400 x 300');
+
+  const grip = page.locator('[data-testid^="resize-"]').first();
+  const box = (await grip.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 160, box.y + 120, { steps: 10 });
+  await page.mouse.up();
+
+  // The exact arithmetic depends on the canvas zoom, which is not the contract here — that the
+  // drag resizes the screen, and that one undo puts it back, is.
+  const grown = (await label.innerText()).match(/(\d+) x (\d+)/)!;
+  expect(Number(grown[1])).toBeGreaterThan(400);
+  expect(Number(grown[2])).toBeGreaterThan(300);
+
+  // The whole drag is one op: one press of undo puts the screen back.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(label).toContainText('400 x 300');
+});

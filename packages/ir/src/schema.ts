@@ -185,11 +185,26 @@ export type Component = z.infer<typeof ComponentSchema>;
 export const ParamSchema = z.object({ name: z.string(), type: TypeRefSchema });
 export type Param = z.infer<typeof ParamSchema>;
 
+/**
+ * The frame a screen is drawn at. **Editor intent, not a breakpoint** — V1 emits one flex layout
+ * that adapts, and distinct mobile/tablet layouts are explicitly out of scope
+ * (`docs/07-v1-scope.md`). Choosing "Phone" changes the canvas and the Preview width, so a
+ * designer can see their screen at the size people will hold it; it changes no emitted CSS.
+ */
+export const ScreenSizeSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  /** The preset this came from, kept so the picker can show it as chosen rather than "Custom". */
+  preset: z.string().optional(),
+});
+export type ScreenSize = z.infer<typeof ScreenSizeSchema>;
+
 export const ArtboardSchema = z.object({
   id: IdSchema,
   name: z.string(),
   root: IdSchema,
   params: z.array(ParamSchema).optional(),
+  size: ScreenSizeSchema.optional(),
 });
 export type Artboard = z.infer<typeof ArtboardSchema>;
 

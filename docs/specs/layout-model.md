@@ -85,3 +85,22 @@ space, radius, type size, weight, shadow — and each token is a *named decision
   border, alignment. Anything past that belongs to a component kit, not to loom's core.
 - A token id that is not in the system is a **Build error naming the property**. An undefined
   custom property renders as nothing at all, and a silent blank is worse than a stopped build.
+
+## Screen sizes are a frame, not a breakpoint
+
+An artboard carries an optional `size` (width, height, and the preset it came from). Presets cover
+phone, tablet and desktop at real CSS pixel sizes; any size can also be dragged from the screen's
+bottom-right corner or typed in the Inspector.
+
+**It changes nothing the compiler emits.** V1 ships one flex layout that adapts, and distinct
+per-device layouts are explicitly out of scope (`docs/07-v1-scope.md`). What a size changes is the
+frame the designer works in and **the width the Preview runs at**, so "does this fit on a phone"
+is answered by looking rather than guessing. Calling it a breakpoint would promise responsive
+behaviour the compiler does not implement.
+
+Two details worth keeping:
+
+- The height is a **minimum**. Content taller than the frame grows the artboard rather than being
+  clipped — a designer has to be able to see what they built.
+- A drag is **one op, applied on release**. The size travels in local state while the pointer
+  moves, so undo steps back over the whole resize rather than one pixel of it.

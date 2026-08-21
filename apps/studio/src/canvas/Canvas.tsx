@@ -1,5 +1,13 @@
-import { useCallback, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
-import type { Id } from '@loom/ir';
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent,
+} from 'react';
+import type { Id, ScreenSize } from '@loom/ir';
+import { DEFAULT_SCREEN, presetForSize } from '@loom/components';
 import { themeStyle } from '@loom/ui';
 import { useEditor } from '../state/useEditor';
 import {
@@ -7,6 +15,7 @@ import {
   select,
   selectComponent,
   setActiveArtboard,
+  setArtboardSize,
   type Selection,
 } from '../state/store';
 import { ComponentView } from './ComponentView';
@@ -16,9 +25,9 @@ import { useDragReorder } from './useDragReorder';
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2.5;
-const ARTBOARD_WIDTH = 720;
-const ARTBOARD_MIN_HEIGHT = 480;
 const ARTBOARD_GAP = 120;
+/** Small enough to still be a screen, large enough to still be grabbable at low zoom. */
+const MIN_SCREEN = { width: 240, height: 240 };
 
 /**
  * The Design canvas: artboards are DOM behind a pan/zoom transform (docs/09 risk register —
@@ -43,6 +52,28 @@ export function Canvas() {
     [snapshot.artboards],
   );
 
+  /** The size being dragged, held locally so a resize is one undo step rather than sixty. */
+  const [resizing, setResizing] = useState<{ id: Id; width: number; height: number } | null>(null);
+
+  const sizeOf = useCallback(
+    (artboard: { id: Id; size?: ScreenSize }): { width: number; height: number } => {
+      if (resizing?.id === artboard.id) return { width: resizing.width, height: resizing.height };
+      return artboard.size ?? { width: DEFAULT_SCREEN.width, height: DEFAULT_SCREEN.height };
+    },
+    [resizing],
+  );
+
+  /** Where each artboard starts, accumulated so screens of different widths still sit in a row. */
+  const offsets = useMemo(() => {
+    const map = new Map<Id, number>();
+    let x = 0;
+    for (const artboard of artboards) {
+      map.set(artboard.id, x);
+      x += sizeOf(artboard).width + ARTBOARD_GAP;
+    }
+    return map;
+  }, [artboards, sizeOf]);
+
   const rootIds = useMemo(() => new Set(artboards.map((a) => a.root)), [artboards]);
   const dragReorder = useDragReorder(snapshot, rootIds);
 
@@ -54,18 +85,21 @@ export function Canvas() {
   // Artboards are laid out in a row by the canvas itself; the boxes feed the arrow layer.
   const boxes = useMemo(() => {
     const map = new Map<Id, ArtboardBox>();
-    artboards.forEach((artboard, index) => {
+    artboards.forEach((artboard) => {
       const node = artboardRefs.current.get(artboard.id);
+      const size = sizeOf(artboard);
       map.set(artboard.id, {
         id: artboard.id,
-        x: index * (ARTBOARD_WIDTH + ARTBOARD_GAP),
+        x: offsets.get(artboard.id) ?? 0,
         y: 0,
-        width: ARTBOARD_WIDTH,
-        height: node?.offsetHeight ?? ARTBOARD_MIN_HEIGHT,
+        width: size.width,
+        // The frame is a minimum: content taller than the screen grows the artboard rather than
+        // being clipped, because a designer needs to see what they built.
+        height: Math.max(node?.offsetHeight ?? 0, size.height),
       });
     });
     return map;
-  }, [artboards, snapshot]);
+  }, [artboards, snapshot, offsets, sizeOf]);
 
   const onWheel = (event: WheelEvent<HTMLDivElement>): void => {
     if (event.ctrlKey || event.metaKey) {
@@ -75,20 +109,20 @@ export function Canvas() {
     setPan((p) => ({ x: p.x - event.deltaX, y: p.y - event.deltaY }));
   };
 
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (event.button !== 1 && !(event.button === 0 && event.target === event.currentTarget)) return;
     panning.current = { x: pan.x, y: pan.y, startX: event.clientX, startY: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     dragReorder.onPointerMove(event);
     const drag = panning.current;
     if (!drag) return;
     setPan({ x: drag.x + (event.clientX - drag.startX), y: drag.y + (event.clientY - drag.startY) });
   };
 
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const reordered = dragReorder.onPointerUp();
     const drag = panning.current;
     panning.current = null;
@@ -129,15 +163,21 @@ export function Canvas() {
           onSelect={(flowId) => select({ kind: 'flow', id: flowId } as Selection)}
         />
 
-        {artboards.map((artboard, index) => (
+        {artboards.map((artboard) => (
           <div
             key={artboard.id}
             className={`artboard-slot ${activeArtboardId === artboard.id ? 'is-active' : ''}`}
-            style={{ left: index * (ARTBOARD_WIDTH + ARTBOARD_GAP), width: ARTBOARD_WIDTH }}
+            style={{ left: offsets.get(artboard.id) ?? 0, width: sizeOf(artboard).width }}
           >
             <div className="artboard__label" onClick={() => setActiveArtboard(artboard.id)}>
               {artboard.name}
               {artboard.id === entryId ? <span className="chip">entry</span> : null}
+              <span className="chip chip--mono" data-testid={`screen-size-${artboard.id}`}>
+                {sizeOf(artboard).width} x {sizeOf(artboard).height}
+                {presetForSize(sizeOf(artboard).width, sizeOf(artboard).height)
+                  ? ` ${presetForSize(sizeOf(artboard).width, sizeOf(artboard).height)!.label}`
+                  : ''}
+              </span>
               {(artboard.params ?? []).length > 0 ? (
                 <span className="chip chip--mono">
                   {(artboard.params ?? []).map((p) => `:${p.name}`).join(' ')}
@@ -150,7 +190,7 @@ export function Canvas() {
                 if (node) artboardRefs.current.set(artboard.id, node);
                 else artboardRefs.current.delete(artboard.id);
               }}
-              style={{ minHeight: ARTBOARD_MIN_HEIGHT }}
+              style={{ minHeight: sizeOf(artboard).height }}
               onClick={() => setActiveArtboard(artboard.id)}
             >
               <ComponentView
@@ -162,6 +202,52 @@ export function Canvas() {
                 draggingId={dragReorder.dragging}
               />
             </div>
+
+            {/* Drag the corner to resize the screen. The listeners go on the window for the
+                duration of the drag: the pointer leaves this 14px button immediately, and one op
+                lands on release so a resize is one undo rather than one per pixel. */}
+            <button
+              className="artboard__resize"
+              title="Resize screen"
+              aria-label={`Resize ${artboard.name}`}
+              data-testid={`resize-${artboard.id}`}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                const start = sizeOf(artboard);
+                const from = { x: event.clientX, y: event.clientY };
+                let latest = { width: start.width, height: start.height };
+
+                const onMove = (move: PointerEvent): void => {
+                  // Divide by the zoom, or the screen grows faster than the pointer.
+                  latest = {
+                    width: Math.max(
+                      MIN_SCREEN.width,
+                      Math.round(start.width + (move.clientX - from.x) / scale),
+                    ),
+                    height: Math.max(
+                      MIN_SCREEN.height,
+                      Math.round(start.height + (move.clientY - from.y) / scale),
+                    ),
+                  };
+                  setResizing({ id: artboard.id, ...latest });
+                };
+
+                const onUp = (): void => {
+                  window.removeEventListener('pointermove', onMove);
+                  window.removeEventListener('pointerup', onUp);
+                  setResizing(null);
+                  if (latest.width === start.width && latest.height === start.height) return;
+                  setArtboardSize(artboard.id, {
+                    ...latest,
+                    preset: presetForSize(latest.width, latest.height)?.id,
+                  });
+                };
+
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+              }}
+            />
           </div>
         ))}
 
