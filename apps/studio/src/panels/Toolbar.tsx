@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { componentDefs, nodeDefs } from '@loom/components';
 import { useEditor } from '../state/useEditor';
-import { addArtboard, addComponent, redo, setMode, undo } from '../state/store';
+import { addArtboard, addComponent, redo, resetProject, setMode, undo } from '../state/store';
+import { clearProject, type AutosaveHandle, type SaveState } from '../state/persistence';
 import { addBodyStep, addGraphNode } from '../state/graph';
 import { addDbStep, connectedTables } from '../state/connectors';
 
 export function Toolbar({
   previewOpen,
   onTogglePreview,
+  autosave,
+  restoreProblem,
 }: {
   previewOpen: boolean;
   onTogglePreview: () => void;
+  autosave?: AutosaveHandle;
+  restoreProblem?: string;
 }) {
   const [table, setTable] = useState('');
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -108,9 +113,69 @@ export function Toolbar({
 
       <div className="toolbar__spacer" />
 
+      <SaveStatus autosave={autosave} restoreProblem={restoreProblem} />
+
+      <button
+        data-testid="reset-project"
+        title="Throw this project away and start over"
+        onClick={() => {
+          if (!window.confirm('Discard this project and start a new one?')) return;
+          clearProject();
+          resetProject();
+          autosave?.flush();
+        }}
+      >
+        New
+      </button>
+
       <button className={previewOpen ? 'is-active' : ''} onClick={onTogglePreview}>
         {previewOpen ? 'Hide preview' : 'Preview'}
       </button>
     </header>
+  );
+}
+
+/**
+ * Whether the work is safe. Honest about failure: a browser refusing storage, or a document that
+ * this build could not read, says so rather than showing a reassuring tick.
+ */
+function SaveStatus({
+  autosave,
+  restoreProblem,
+}: {
+  autosave?: AutosaveHandle;
+  restoreProblem?: string;
+}) {
+  const [state, setState] = useState<SaveState>('idle');
+  const [detail, setDetail] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!autosave) return;
+    return autosave.subscribe((next, why) => {
+      setState(next);
+      setDetail(why);
+    });
+  }, [autosave]);
+
+  if (restoreProblem) {
+    return (
+      <span className="save save--error" title={restoreProblem} data-testid="save-status">
+        could not open saved project
+      </span>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <span className="save save--error" title={detail} data-testid="save-status">
+        not saved
+      </span>
+    );
+  }
+
+  return (
+    <span className="save" data-testid="save-status">
+      {state === 'saving' ? 'saving…' : state === 'saved' ? 'saved' : 'ready'}
+    </span>
   );
 }

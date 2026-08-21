@@ -778,3 +778,15 @@ input[type='color'] {
   /* The grip is positioned against the slot, so the slot has to be the containing block. */
   position: absolute;
 }
+
+/* Whether the work is safe. Quiet when it is, loud when it is not. */
+.save {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.save--error {
+  color: var(--error);
+  font-weight: 600;
+}

@@ -12,6 +12,15 @@ const field = (page: Page, label: string) =>
   page.locator('.field', { has: page.locator('.field__label', { hasText: label }) });
 
 test.beforeEach(async ({ page }) => {
+  // Clear once per test, not per navigation: an init script runs again on reload, and two of
+  // these tests reload on purpose. sessionStorage survives the reload; the flag makes the clear
+  // happen exactly once.
+  await page.addInitScript(() => {
+    if (!window.sessionStorage.getItem('loom.e2e.cleared')) {
+      window.localStorage.clear();
+      window.sessionStorage.setItem('loom.e2e.cleared', '1');
+    }
+  });
   await page.goto('/');
   await expect(page.locator('.artboard').first()).toBeVisible();
 });

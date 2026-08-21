@@ -215,6 +215,16 @@ Recorded here because they constrain everything downstream. Each was taken at th
   chrome is deliberately ink, not brand: red is reserved for the primary action and the FN
   category.
 
+- **[P0] The document persists, behind a storage interface.** Autosave is `serializeSnapshot` on
+  a debounce, so the save format's validation runs on the way out and a document that could not be
+  reloaded can never be written. Local storage today; the platform's R2-blob-then-Postgres-pointer
+  order (`02`) swaps in without touching the editor.
+- **[P0] A document this build cannot read is refused, never half-loaded.** The schema version is
+  checked before parsing so the refusal names both numbers, and the saved document is left alone.
+  A designer editing the remains of a partial load is worse than one starting fresh.
+- **[P0] Opening a document starts history empty.** Undo must not walk back into a session the
+  designer was not part of.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

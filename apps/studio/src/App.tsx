@@ -8,8 +8,15 @@ import { PreviewPanel } from './preview/PreviewPanel';
 import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
 import { removeNode, removeWire } from './state/graph';
 import { useEditor } from './state/useEditor';
+import type { AutosaveHandle } from './state/persistence';
 
-export default function App() {
+export default function App({
+  autosave,
+  restoreProblem,
+}: {
+  autosave?: AutosaveHandle;
+  restoreProblem?: string;
+}) {
   const [previewOpen, setPreviewOpen] = useState(true);
   const mode = useEditor((s) => s.mode);
 
@@ -41,7 +48,12 @@ export default function App() {
 
   return (
     <div className="studio">
-      <Toolbar previewOpen={previewOpen} onTogglePreview={() => setPreviewOpen((v) => !v)} />
+      <Toolbar
+        previewOpen={previewOpen}
+        onTogglePreview={() => setPreviewOpen((v) => !v)}
+        autosave={autosave}
+        restoreProblem={restoreProblem}
+      />
       <main className={`workspace ${previewOpen ? 'workspace--preview' : ''}`}>
         <LayersPanel />
         {mode === 'design' ? <Canvas /> : <NodesCanvas />}

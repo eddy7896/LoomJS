@@ -411,6 +411,28 @@ export function removeFlow(flowId: Id): void {
   if (state.selection?.kind === 'flow' && state.selection.id === flowId) select(undefined);
 }
 
+/**
+ * Open a document — a restored save, or a project the platform handed over later. History starts
+ * empty: undo should not walk back into a session the designer was not part of.
+ */
+export function loadSnapshot(snapshot: Snapshot): void {
+  const artboardId = snapshot.entryArtboard ?? Object.keys(snapshot.artboards)[0];
+  if (!artboardId) return;
+  set({
+    snapshot,
+    mode: 'design',
+    selection: undefined,
+    activeArtboardId: artboardId,
+    past: [],
+    future: [],
+  });
+}
+
+/** Throw the document away and start over. Destructive, so the caller confirms first. */
+export function resetProject(): void {
+  set(freshState());
+}
+
 /** Test seam: reset the module-level store. */
 export function __resetStore(): void {
   set(freshState());
