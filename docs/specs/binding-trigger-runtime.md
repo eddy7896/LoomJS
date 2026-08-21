@@ -181,3 +181,18 @@ vocabulary; the Inspector shows only the fields that apply where the node actual
 Division on the canvas goes through an emitted `safeDivide` helper that returns `NaN` for a zero
 divisor. `Infinity` is a plausible wrong number, and a plausible wrong number is worse than a
 visibly wrong one — the same judgement the server-side step makes by throwing.
+
+## Reading an input directly
+
+A binding whose source is an **input's mirror** reads that field's own state — no pipeline, no
+derivation, no request. It compiles to the state variable the input already owns:
+
+```tsx
+<span>{field_cp_title}</span>
+```
+
+This is the simplest wire on the canvas and the first one most people draw, so it gets the
+simplest emission. Two refusals keep it honest: a component that holds no value of its own (a
+Button, a Text) cannot be read from, and an input on another screen cannot be read either, because
+its state only exists where it is rendered. A non-text field goes through the same `asText` helper
+a bound record does.

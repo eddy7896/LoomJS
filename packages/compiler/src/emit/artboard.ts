@@ -105,8 +105,16 @@ export function emitArtboardModule(
       }
       return `void ${plan.names.run}()`;
     },
-    typeOfValue: (value) =>
-      value.kind === 'bound' ? boundTypeOf(plans, derived, value.source) : undefined,
+    typeOfValue: (value) => {
+      if (value.kind !== 'bound') return undefined;
+      // A binding straight to an input's mirror carries that port's type: a number field read
+      // into a Text still has to go through the coercion helper.
+      const source = snapshot.nodes[value.source.nodeId];
+      if (source?.category === 'ui' && source.mirrorOf) {
+        return source.ports.find((port) => port.id === value.source.portId)?.type;
+      }
+      return boundTypeOf(plans, derived, value.source);
+    },
     requireTextHelper: () => {
       hooks.textHelper = true;
       return TEXT_HELPER;

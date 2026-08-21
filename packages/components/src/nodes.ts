@@ -508,6 +508,16 @@ export function mirrorPortsFor(componentType: string): Port[] {
   }
 }
 
+/**
+ * Component types whose value lives in local state in the emitted app — the inputs. A binding
+ * pointing at one of these mirrors reads what the person typed, with no pipeline in between.
+ */
+const FIELD_STATE_TYPES = new Set(['TextField', 'NumberField', 'Checkbox', 'Select']);
+
+export function hasFieldState(componentType: string): boolean {
+  return FIELD_STATE_TYPES.has(componentType);
+}
+
 export function canMirror(componentType: string): boolean {
   return mirrorPortsFor(componentType).length > 0;
 }

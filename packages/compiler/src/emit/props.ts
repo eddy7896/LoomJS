@@ -1,6 +1,7 @@
-import type { Component, PropertyValue } from '@loom/ir';
+import type { Component, Id, PortRef, PropertyValue } from '@loom/ir';
+import { hasFieldState } from '@loom/components';
 import { CompileError, type EmitContext } from '../types';
-import { bindingExpr } from './pipeline';
+import { bindingExpr, stateNameForComponent } from './pipeline';
 
 /**
  * A property value becomes a JS expression.
@@ -10,6 +11,53 @@ import { bindingExpr } from './pipeline';
  * (M4). `event` is handled by the emitters that own the event, not here. Failing loudly beats
  * silently dropping a binding.
  */
+
+/**
+ * A binding straight to an input's mirror: show what the person typed, with nothing in between.
+ *
+ * This is the simplest wire on the canvas and it deserves the simplest emission — the field's own
+ * state variable, read directly. No pipeline, no derivation, no request.
+ */
+export function fieldStateExpr(
+  ctx: EmitContext,
+  source: PortRef,
+  componentId: Id,
+): string | undefined {
+  const node = ctx.snapshot.nodes[source.nodeId];
+  if (!node || node.category !== 'ui' || !node.mirrorOf) return undefined;
+
+  const mirrored = ctx.snapshot.components[node.mirrorOf];
+  if (!mirrored) return undefined;
+
+  if (!hasFieldState(mirrored.type)) {
+    throw new CompileError(
+      `"${mirrored.name ?? mirrored.type}" holds no value of its own, so nothing can read from it.`,
+      componentId,
+    );
+  }
+
+  // The state only exists on the screen that renders the input.
+  if (!ownsComponent(ctx, node.mirrorOf)) {
+    throw new CompileError(
+      `"${mirrored.name ?? mirrored.type}" is on another screen, so this one cannot read it.`,
+      componentId,
+    );
+  }
+
+  return stateNameForComponent(node.mirrorOf);
+}
+
+/** Whether a component belongs to the artboard being emitted. */
+function ownsComponent(ctx: EmitContext, componentId: Id): boolean {
+  const seen = new Set<Id>();
+  const walk = (id: Id): boolean => {
+    if (id === componentId) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return (ctx.snapshot.components[id]?.children ?? []).some(walk);
+  };
+  return walk(ctx.artboard.root);
+}
 export function valueExpr(
   value: PropertyValue,
   ctx: EmitContext,
@@ -29,8 +77,10 @@ export function valueExpr(
       }
       return `${ctx.requireParams()}.${value.name} ?? ""`;
     }
-    case 'bound':
-      return bindingExpr(ctx.plans, ctx.derived, value.source, componentId);
+    case 'bound': {
+      const field = fieldStateExpr(ctx, value.source, componentId);
+      return field ?? bindingExpr(ctx.plans, ctx.derived, value.source, componentId);
+    }
     case 'item': {
       const item = ctx.itemVar();
       if (!item) {

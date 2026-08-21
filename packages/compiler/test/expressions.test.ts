@@ -636,3 +636,67 @@ describe('a trigger turns a derivation from recomputed into held', () => {
     expect(home(mathSnapshot())).toContain('asText(derived_nd_math)');
   });
 });
+
+describe('a Text wired straight to a field shows what the person typed', () => {
+  /** The simplest wire on the canvas: an input's mirror into a Text's mirror. */
+  const wired = (inputId = 'cp_title', type = 'text'): Snapshot =>
+    applyOps(formSnapshot(), [
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_m_in',
+          category: 'ui',
+          kind: 'mirror',
+          mirrorOf: inputId,
+          ports: [
+            { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: type } as never },
+          ],
+          position: { x: 0, y: 0 },
+        },
+      },
+      {
+        type: 'setProp',
+        componentId: 'cp_status',
+        key: 'content',
+        value: { kind: 'bound', source: { nodeId: 'nd_m_in', portId: 'pt_value' } },
+      },
+    ]);
+
+  it('reads the field’s own state, with nothing in between', () => {
+    const code = home(wired());
+    expect(code).toContain('<span>{field_cp_title}</span>');
+    // No pipeline, no derivation, no request: it is the state the input already owns.
+    expect(code).not.toContain('fetch(');
+    expect(code).not.toContain('derived_');
+  });
+
+  it('coerces a non-text field so a number never lands in JSX raw', () => {
+    const numeric = applyOps(wired('cp_title', 'number'), []);
+    expect(home(numeric)).toContain('asText(field_cp_title)');
+  });
+
+  it('refuses to read a component that holds no value of its own', () => {
+    const button = applyOps(formSnapshot(), [
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_m_btn',
+          category: 'ui',
+          kind: 'mirror',
+          mirrorOf: 'cp_save',
+          ports: [
+            { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+          ],
+          position: { x: 0, y: 0 },
+        },
+      },
+      {
+        type: 'setProp',
+        componentId: 'cp_status',
+        key: 'content',
+        value: { kind: 'bound', source: { nodeId: 'nd_m_btn', portId: 'pt_value' } },
+      },
+    ]);
+    expect(() => compile(button)).toThrow(/holds no value of its own/);
+  });
+});

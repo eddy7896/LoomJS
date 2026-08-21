@@ -152,3 +152,24 @@ test('a trigger holds a derivation until the button is pressed', async ({ page }
   await preview(page).getByRole('button', { name: 'Go' }).click();
   await expect(preview(page).locator('span', { hasText: '11' })).toBeVisible();
 });
+
+test('a field wired straight to a Text shows what the person types', async ({ page }) => {
+  // The simplest wire on the canvas, and the first one anyone draws.
+  await page.getByRole('button', { name: '+ Text field' }).click();
+  await field(page, 'Name').locator('input').fill('Input');
+
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Echo');
+
+  await page.getByRole('button', { name: 'Nodes' }).click();
+  await drag(
+    page,
+    handle(graphNode(page, 'Input'), 'pt_value'),
+    handle(graphNode(page, 'Echo'), 'pt_content'),
+  );
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await preview(page).locator('input').fill('typed live');
+  await expect(preview(page).locator('span', { hasText: 'typed live' })).toBeVisible();
+});
