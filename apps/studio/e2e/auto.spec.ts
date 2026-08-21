@@ -16,12 +16,16 @@ const field = (page: Page, label: string) =>
 
 
 async function connect(page: Page): Promise<void> {
+  // Connections live behind the Data section of the icon rail (S0).
+  await page.getByTestId('rail-data').click();
   await page.getByTestId('connect-supabase').click();
   await field(page, 'Project URL').locator('input').fill(STUB);
   await field(page, 'Anon key').locator('input').fill('stub-anon-key');
   await field(page, 'Service role key').locator('input').fill('stub-service-key');
   await page.getByRole('button', { name: 'Connect and read schema' }).click();
   await expect(page.locator('.table-row')).toContainText('notes');
+  // Back to the elements column; connecting is a detour, not a destination.
+  await page.getByTestId('rail-design').click();
 }
 
 const rows = async (request: { get: (url: string) => Promise<{ json: () => Promise<unknown> }> }) =>

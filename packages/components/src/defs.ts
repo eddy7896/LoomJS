@@ -19,9 +19,29 @@ export interface FieldDef {
   default: string | number | boolean;
 }
 
+/**
+ * Where a component sits in the palette. Editor metadata: it groups the sidebar and never reaches
+ * the emitted app (`docs/11-editor-shell.md`).
+ */
+export type ComponentCategory = 'visual' | 'container' | 'input';
+
+/** The order the palette draws them, and what each section is called. */
+export const COMPONENT_CATEGORIES: readonly { id: ComponentCategory; label: string }[] = [
+  { id: 'visual', label: 'Visual elements' },
+  { id: 'container', label: 'Containers' },
+  { id: 'input', label: 'Input forms' },
+];
+
 export interface ComponentDef {
   type: string;
   label: string;
+  category: ComponentCategory;
+  /**
+   * Words someone might search for that are not in the label — the names this control has in
+   * other tools. "Dropdown" has to find Select, or the palette only helps people who already know
+   * loom's vocabulary.
+   */
+  keywords?: readonly string[];
   /** Containers own a layout and accept children. */
   isContainer: boolean;
   /** Property schema — the inspector renders straight off this. */
@@ -44,6 +64,8 @@ export const DEFAULT_LAYOUT: Layout = {
 export const FRAME_DEF: ComponentDef = {
   type: 'Frame',
   label: 'Frame',
+  category: 'container',
+  keywords: ['group', 'div', 'box', 'stack', 'container'],
   isContainer: true,
   fields: [],
   defaultLayout: DEFAULT_LAYOUT,
@@ -56,6 +78,8 @@ export const FRAME_DEF: ComponentDef = {
 export const BUTTON_DEF: ComponentDef = {
   type: 'Button',
   label: 'Button',
+  category: 'visual',
+  keywords: ['click', 'submit', 'action'],
   isContainer: false,
   fields: [{ key: 'label', label: 'Label', control: 'text', default: 'Button' }],
   acceptsClickFlow: true,
@@ -64,6 +88,8 @@ export const BUTTON_DEF: ComponentDef = {
 export const TEXT_DEF: ComponentDef = {
   type: 'Text',
   label: 'Text',
+  category: 'visual',
+  keywords: ['label', 'paragraph', 'heading', 'copy'],
   isContainer: false,
   fields: [{ key: 'content', label: 'Content', control: 'text', default: 'Text' }],
 };
@@ -93,6 +119,8 @@ export const LAYOUT_FIELDS: readonly FieldDef[] = [
 export const TEXT_FIELD_DEF: ComponentDef = {
   type: 'TextField',
   label: 'Text field',
+  category: 'input',
+  keywords: ['input', 'textbox', 'string'],
   isContainer: false,
   fields: [
     { key: 'value', label: 'Value', control: 'text', default: '' },
@@ -108,6 +136,8 @@ export const TEXT_FIELD_DEF: ComponentDef = {
 export const LIST_DEF: ComponentDef = {
   type: 'List',
   label: 'List',
+  category: 'container',
+  keywords: ['repeating group', 'rows', 'each', 'loop'],
   isContainer: true,
   fields: [{ key: 'empty', label: 'Empty text', control: 'text', default: 'Nothing yet' }],
   defaultLayout: { direction: 'column', gap: 8, padding: 0, align: 'stretch', justify: 'start' },
@@ -119,6 +149,8 @@ export const LIST_DEF: ComponentDef = {
 export const NUMBER_FIELD_DEF: ComponentDef = {
   type: 'NumberField',
   label: 'Number field',
+  category: 'input',
+  keywords: ['number', 'numeric', 'quantity', 'amount'],
   isContainer: false,
   fields: [
     { key: 'value', label: 'Value', control: 'number', default: 0 },
@@ -130,6 +162,8 @@ export const NUMBER_FIELD_DEF: ComponentDef = {
 export const CHECKBOX_DEF: ComponentDef = {
   type: 'Checkbox',
   label: 'Checkbox',
+  category: 'input',
+  keywords: ['boolean', 'toggle', 'switch', 'tick'],
   isContainer: false,
   fields: [
     { key: 'label', label: 'Label', control: 'text', default: 'Yes' },
@@ -145,6 +179,8 @@ export const CHECKBOX_DEF: ComponentDef = {
 export const SELECT_DEF: ComponentDef = {
   type: 'Select',
   label: 'Select',
+  category: 'input',
+  keywords: ['dropdown', 'options', 'picker', 'choice'],
   isContainer: false,
   fields: [
     { key: 'options', label: 'Options', control: 'text', default: 'One, Two' },

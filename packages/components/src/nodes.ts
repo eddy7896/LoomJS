@@ -8,10 +8,28 @@ import type { FieldDef } from './defs';
  * annotation (`docs/specs/type-registry.md`).
  */
 
+/**
+ * Where a node sits in the palette. Not the same as its `category`, which is what it *is* in the
+ * language: a Compute and a Math are both `fn`, but a designer looks for one under "values" and
+ * the other under "maths" (`docs/11-editor-shell.md`).
+ */
+export type NodeGroup = 'backend' | 'values' | 'logic' | 'data';
+
+export const NODE_GROUPS: readonly { id: NodeGroup; label: string }[] = [
+  { id: 'backend', label: 'Backend' },
+  { id: 'values', label: 'Values' },
+  { id: 'logic', label: 'Logic' },
+  { id: 'data', label: 'Data' },
+];
+
 export interface NodeDef {
   category: NodeCategory;
   kind: string;
   label: string;
+  /** Palette section. Editor metadata; it never reaches the emitted app. */
+  group: NodeGroup;
+  /** Words someone might search for that are not in the label. */
+  keywords?: readonly string[];
   /** An API route node contains the function nodes that run server-side (spec 4). */
   isContainer?: boolean;
   fields: readonly FieldDef[];
@@ -45,6 +63,8 @@ export const API_ROUTE_DEF: NodeDef = {
   category: 'api',
   kind: 'route',
   label: 'API route',
+  group: 'backend',
+  keywords: ['server', 'endpoint', 'request', 'pipeline'],
   isContainer: true,
   defaultConfig: { method: 'POST', path: 'run' },
   fields: [
@@ -65,6 +85,8 @@ export const COMPUTE_DEF: NodeDef = {
   category: 'fn',
   kind: 'compute',
   label: 'Compute',
+  group: 'values',
+  keywords: ['transform', 'uppercase', 'trim', 'length'],
   defaultConfig: { op: 'uppercase' },
   fields: [
     {
@@ -94,6 +116,8 @@ export const CODE_DEF: NodeDef = {
   category: 'fn',
   kind: 'code',
   label: 'Code',
+  group: 'backend',
+  keywords: ['javascript', 'typescript', 'custom', 'escape hatch'],
   // The escape hatch for the arbitrary 20% (guardrail 7). Its output is `any` and marked as such.
   defaultConfig: { source: 'return String(input).split("").reverse().join("");' },
   fields: [{ key: 'source', label: 'Body', control: 'text', default: 'return input;' }],
@@ -127,6 +151,8 @@ export const VALIDATE_DEF: NodeDef = {
   category: 'fn',
   kind: 'validate',
   label: 'Validate',
+  group: 'logic',
+  keywords: ['required', 'check', 'rules'],
   defaultConfig: { fields: [] },
   fields: [],
   ports: (config) => {
@@ -188,6 +214,8 @@ export const STATE_WRITE_DEF: NodeDef = {
   category: 'state',
   kind: 'write',
   label: 'Variable',
+  group: 'values',
+  keywords: ['state', 'store', 'remember', 'bucket'],
   defaultConfig: { scope: 'screen', key: 'value' },
   fields: [
     { key: 'key', label: 'Name', control: 'text', default: 'value' },
@@ -241,6 +269,8 @@ export const GATE_DEF: NodeDef = {
   category: 'fn',
   kind: 'gate',
   label: 'Gate',
+  group: 'logic',
+  keywords: ['stop', 'guard', 'only when', 'refuse'],
   defaultConfig: { field: '', condition: 'isFilled', value: '', message: '' },
   fields: [
     { key: 'field', label: 'Field', control: 'text', default: '' },
@@ -339,6 +369,8 @@ export const MATH_DEF: NodeDef = {
   category: 'fn',
   kind: 'math',
   label: 'Math',
+  group: 'values',
+  keywords: ['add', 'subtract', 'multiply', 'divide', 'sum'],
   defaultConfig: {
     inputs: MATH_MIN_INPUTS,
     left: '',
@@ -388,6 +420,8 @@ export const COMPARE_DEF: NodeDef = {
   category: 'fn',
   kind: 'compare',
   label: 'Compare',
+  group: 'logic',
+  keywords: ['equals', 'greater', 'less', 'condition'],
   defaultConfig: { left: '', operator: 'equals', rightKind: 'value', right: '', into: '' },
   fields: [
     { key: 'left', label: 'Left', control: 'text', default: '' },
@@ -415,6 +449,8 @@ export const LOGIC_DEF: NodeDef = {
   category: 'fn',
   kind: 'logic',
   label: 'Logic',
+  group: 'logic',
+  keywords: ['and', 'or', 'not', 'boolean'],
   defaultConfig: { left: '', operator: 'and', rightKind: 'field', right: '', into: '' },
   fields: [
     { key: 'left', label: 'Left', control: 'text', default: '' },

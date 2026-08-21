@@ -89,8 +89,19 @@ interface EmittedFile {
 /** Only write what actually changed; rewriting every file on each keystroke thrashes HMR. */
 const lastWritten = new Map<string, string>();
 
-async function writeEmitted(files: EmittedFile[]): Promise<number> {
+/**
+ * `added` counts files this session had never written before.
+ *
+ * HMR can absorb a module's *contents* changing. It cannot absorb one appearing: the first time a
+ * project uses a message action the compiler emits `src/state/messages.tsx` and rewrites `App.tsx`
+ * to wrap the router in its provider, and the running page happily applies the screen's update
+ * against an App that has not re-rendered — so the screen calls a hook whose provider is not there
+ * yet and the preview goes blank until someone reloads. A new module means a new module graph, and
+ * that needs a full reload.
+ */
+async function writeEmitted(files: EmittedFile[]): Promise<{ written: number; added: number }> {
   let written = 0;
+  let added = 0;
 
   for (const file of files) {
     if (typeof file?.path !== 'string' || typeof file.content !== 'string') continue;
@@ -100,6 +111,7 @@ async function writeEmitted(files: EmittedFile[]): Promise<number> {
       throw new Error(`Emitted path escapes the preview directory: ${file.path}`);
     }
     if (lastWritten.get(file.path) === file.content) continue;
+    if (!lastWritten.has(file.path)) added += 1;
 
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, file.content, 'utf8');
@@ -107,7 +119,7 @@ async function writeEmitted(files: EmittedFile[]): Promise<number> {
     written += 1;
   }
 
-  return written;
+  return { written, added };
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -252,7 +264,10 @@ export function loomPreview(): Plugin {
         void (async () => {
           try {
             const body = JSON.parse(await readBody(req)) as { files?: EmittedFile[] };
-            const written = await writeEmitted(body.files ?? []);
+            const { written, added } = await writeEmitted(body.files ?? []);
+            // See `writeEmitted`: a module that did not exist a moment ago cannot be hot-swapped
+            // into a page that never imported it.
+            if (added > 0) previewServer?.ws.send({ type: 'full-reload', path: '*' });
             json(res, 200, { ok: true, written });
           } catch (error) {
             json(res, 200, { ok: false, error: (error as Error).message });

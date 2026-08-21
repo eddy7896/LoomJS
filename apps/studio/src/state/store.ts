@@ -37,9 +37,17 @@ export type Selection =
 /** Which canvas is on screen. A view concern, so it lives beside the document, not inside it. */
 export type Mode = 'design' | 'nodes';
 
+/**
+ * Which section of the icon rail is open, and therefore what the left column shows
+ * (`docs/11-editor-shell.md`). Design and Nodes also swap the canvas; Data does not — connecting a
+ * database should not throw away the canvas you were looking at.
+ */
+export type Rail = 'design' | 'nodes' | 'data';
+
 export interface EditorState {
   snapshot: Snapshot;
   mode: Mode;
+  rail: Rail;
   selection: Selection;
   /** The artboard the canvas is working in — where new components land. */
   activeArtboardId: Id;
@@ -82,6 +90,7 @@ function freshState(): EditorState {
   return {
     snapshot,
     mode: 'design',
+    rail: 'design',
     selection: undefined,
     activeArtboardId: artboardId,
     past: [],
@@ -164,7 +173,13 @@ function stillExists(snapshot: Snapshot, selection: Selection): Selection {
 }
 
 export function setMode(mode: Mode): void {
-  set({ ...state, mode });
+  // The rail follows: revealing a node in Nodes mode while the column still showed the Data panel
+  // would leave the two halves of the editor disagreeing about what you are looking at.
+  set({ ...state, mode, rail: mode });
+}
+
+export function setRail(rail: Rail): void {
+  set({ ...state, rail, mode: rail === 'data' ? state.mode : rail });
 }
 
 export function undo(): void {
@@ -439,6 +454,7 @@ export function loadSnapshot(snapshot: Snapshot): void {
   set({
     snapshot,
     mode: 'design',
+    rail: 'design',
     selection: undefined,
     activeArtboardId: artboardId,
     past: [],

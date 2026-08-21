@@ -16,6 +16,8 @@ const field = (page: Page, label: string) =>
 
 
 async function connect(page: Page): Promise<void> {
+  // Connections live behind the Data section of the icon rail (S0).
+  await page.getByTestId('rail-data').click();
   await page.getByTestId('connect-supabase').click();
   await field(page, 'Project URL').locator('input').fill(STUB);
   await field(page, 'Anon key').locator('input').fill('stub-anon-key');
@@ -45,6 +47,7 @@ test('connecting introspects the schema and shows its tables', async ({ page }) 
 });
 
 test('a bad key is refused at the moment of entry', async ({ page }) => {
+  await page.getByTestId('rail-data').click();
   await page.getByTestId('connect-supabase').click();
   await field(page, 'Project URL').locator('input').fill('http://localhost:5999');
   await field(page, 'Anon key').locator('input').fill('nope');
@@ -57,6 +60,8 @@ test('rows from the database render in the Preview, and a form writes one back',
   request,
 }) => {
   await connect(page);
+  // Back to the elements column; connecting is a detour, not a destination.
+  await page.getByTestId('rail-design').click();
 
   // A List to render the rows, with a Text inside it reading a column.
   await page.getByRole('button', { name: '+ List' }).click();

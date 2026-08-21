@@ -18,6 +18,11 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
+    // A builder with a rail, a sidebar, a canvas, a Preview and an inspector does not fit in
+    // Playwright's 1280x720 default — at that size the Nodes canvas fits so far out that adjacent
+    // ports land within a few pixels of each other and wiring becomes a coin toss. This is the
+    // window the studio is actually designed for (`docs/05-guardrails.md`: tablet width and up).
+    viewport: { width: 1600, height: 900 },
   },
   webServer: [
     {

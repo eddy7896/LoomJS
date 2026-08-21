@@ -115,11 +115,12 @@ select {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px 1fr 260px;
+  /* The icon rail, then the one column the reference builds around, then the canvas. */
+  grid-template-columns: 44px 232px 1fr 260px;
 }
 
 .workspace--preview {
-  grid-template-columns: 220px 1fr minmax(320px, 30vw) 260px;
+  grid-template-columns: 44px 232px 1fr minmax(320px, 30vw) 260px;
 }
 
 /* ---- panels ---- */
@@ -824,11 +825,6 @@ input[type='color'] {
   border-right: none;
 }
 
-.rail > .layers {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 /* Capped rather than free-growing: a long list of warnings must never push the screen tree off
    the rail, because the tree is how you get to the thing the warning is about. */
 .problems {
@@ -929,4 +925,108 @@ input[type='color'] {
   background: var(--ink);
   color: var(--surface);
   pointer-events: none;
+}
+
+/* ---- the icon rail: three sections, and only three ---- */
+.rail-icons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 4px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.rail-icons button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.rail-icons button:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.rail-icons button.is-active {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+/* ---- the element palette ---- */
+.palette {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding: 8px;
+}
+
+.palette__search {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.palette__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.palette__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 4px 4px;
+  border: none;
+  background: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette__caret {
+  color: var(--ink-soft);
+  font-size: 9px;
+}
+
+.palette__item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px 5px 18px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette__item:hover {
+  background: var(--surface-sunken);
+}
+
+.palette__select {
+  margin: 4px 0 4px 18px;
+  width: calc(100% - 18px);
+}
+
+/* Capped so the palette always has room below it; both scroll on their own. */
+.rail > .layers {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
 }

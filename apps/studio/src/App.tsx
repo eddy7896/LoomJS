@@ -3,6 +3,9 @@ import { Canvas } from './canvas/Canvas';
 import { NodesCanvas } from './nodes/NodesCanvas';
 import { Inspector } from './inspector/Inspector';
 import { LayersPanel } from './panels/LayersPanel';
+import { ElementsPanel } from './panels/ElementsPanel';
+import { IconRail } from './panels/IconRail';
+import { DataPanel } from './panels/DataPanel';
 import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewPanel } from './preview/PreviewPanel';
@@ -20,6 +23,7 @@ export default function App({
 }) {
   const [previewOpen, setPreviewOpen] = useState(true);
   const mode = useEditor((s) => s.mode);
+  const rail = useEditor((s) => s.rail);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -56,10 +60,20 @@ export default function App({
         restoreProblem={restoreProblem}
       />
       <main className={`workspace ${previewOpen ? 'workspace--preview' : ''}`}>
-        {/* The left rail carries what is *true of the project*: its screens, and what is wrong
-            with them. Both stay visible in either mode. */}
+        <IconRail />
+
+        {/* One column, as the reference does it: what is on the screen, then what can be added,
+            then what is wrong. Problems stays put in every section — a rail that hid it would
+            make it the one thing you have to go looking for. */}
         <div className="rail">
-          <LayersPanel />
+          {rail === 'data' ? (
+            <DataPanel />
+          ) : (
+            <>
+              <LayersPanel />
+              <ElementsPanel />
+            </>
+          )}
           <ProblemsPanel />
         </div>
         {mode === 'design' ? <Canvas /> : <NodesCanvas />}

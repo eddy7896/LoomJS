@@ -1,5 +1,4 @@
 import type { Id, Snapshot } from '@loom/ir';
-import { DataPanel } from './DataPanel';
 import { useEditor } from '../state/useEditor';
 import {
   addArtboard,
@@ -10,7 +9,10 @@ import {
   setActiveArtboard,
 } from '../state/store';
 
-/** Screens and their trees. Selecting a screen makes it the one new components land in. */
+/**
+ * The elements tree (S0, `docs/11-editor-shell.md`): screens and what is on them, above the
+ * palette in one column. Selecting a screen makes it the one new components land in.
+ */
 export function LayersPanel() {
   const snapshot = useEditor((s) => s.snapshot);
   const selection = useEditor((s) => s.selection);
@@ -23,8 +25,10 @@ export function LayersPanel() {
   return (
     <aside className="panel layers">
       <div className="panel__head">
-        <h2 className="panel__title">Screens</h2>
-        <button onClick={() => addArtboard(`Screen ${artboards.length + 1}`)}>+</button>
+        <h2 className="panel__title">Elements tree</h2>
+        {/* Named the same as it was in the toolbar: adding a screen is the same act wherever the
+            button lives, and the tree is where screens are. */}
+        <button onClick={() => addArtboard(`Screen ${artboards.length + 1}`)}>+ Screen</button>
       </div>
 
       {artboards.map((artboard) => (
@@ -48,7 +52,6 @@ export function LayersPanel() {
         </div>
       ))}
 
-      <DataPanel />
     </aside>
   );
 }

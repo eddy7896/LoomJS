@@ -40,7 +40,7 @@ tree pinned above the palette; an icon rail for the major modes.
 
 ---
 
-## S0 — The shell
+## S0 — The shell ✅ _(done)_
 
 **Goal:** one left column that holds the tree and the palette, and an icon rail beside it.
 
@@ -52,17 +52,30 @@ tree pinned above the palette; an icon rail for the major modes.
 - The left column becomes: **Elements Tree** (top, resizable) → **Palette** (below, scrolls) →
   **Problems** (bottom, already built in P2).
 - The top toolbar keeps only what is genuinely global: brand, undo/redo, save state, Preview
-  toggle, `+ Screen`.
+  toggle. `+ Screen` went to the tree header instead, where screens are — one place, not two.
 - No new component types, no schema change, no compiler change.
 
 **Done-when:** every component that was a toolbar button can be placed from the sidebar, and the
 toolbar no longer lists components.
 
-**Risk:** the existing E2E specs click `+ Text field` etc. in the toolbar. They will all need
-updating in one pass — that is the real cost of this phase and it should be paid deliberately, not
-discovered.
+**What it actually cost.** Almost no spec churn: the palette buttons and rail buttons kept the
+accessible names the toolbar used (`+ Text field`, `Nodes`), so only the specs that reach the Data
+panel needed a rail click first. Two real things did surface:
 
-## S1 — Search and categories
+- **The canvas got 56px narrower and seven pointer-drag specs failed.** Not flakiness — at
+  Playwright's 1280px default, a builder with five panels leaves the Nodes canvas fitting so far
+  out that adjacent ports land within a few pixels of each other. The test viewport is now 1600×900,
+  which is the window the studio is designed for; the canvas ends up wider than before.
+- **A preview bug the shell did not cause but did expose** (see below).
+
+**Preview: a new module needs a full reload.** The first time a project uses a `message` action the
+compiler emits `src/state/messages.tsx` and rewrites `App.tsx` to wrap the router in its provider.
+HMR applied the screen's update against an App that had not re-rendered, so the screen called a
+hook whose provider was not there and the preview went blank until someone reloaded. The plugin now
+counts files it has never written before and sends a full reload when that count is non-zero. HMR
+is safe for a module's contents changing; it cannot absorb one appearing.
+
+## S1 — Search and categories ✅ _(done, folded into S0)_
 
 **Goal:** finding an element takes one keystroke, not a scan.
 
@@ -75,8 +88,11 @@ discovered.
 - Collapsible sections that remember their state.
 - The same treatment for the **Nodes** palette, which has the identical problem and more entries.
 
-**Done-when:** typing "check" surfaces the Checkbox from a collapsed category, and pressing Enter
-places it.
+**Done-when:** typing "check" surfaces the Checkbox from a collapsed category.
+
+Folded into S0 rather than run as a second pass: both are generated from the same two new
+`ComponentDef` fields, and splitting them meant editing the same three files twice. Pressing Enter
+to place the top hit is *not* built — it wants a focus model the palette does not have yet.
 
 ## S2 — The elements tree
 
