@@ -29,6 +29,26 @@ interface Entry {
   onAdd: () => void;
 }
 
+const COLLAPSED_KEY = 'loom.palette.collapsed';
+
+function readCollapsed(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    // A browser refusing storage should cost a preference, never the editor.
+    return {};
+  }
+}
+
+function writeCollapsed(value: Record<string, boolean>): void {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(value));
+  } catch {
+    /* see readCollapsed */
+  }
+}
+
 /** Label plus the words this control is called in other tools, lowercased once. */
 const haystackOf = (label: string, keywords: readonly string[] = []): string =>
   [label, ...keywords].join(' ').toLowerCase();
@@ -79,7 +99,9 @@ export function ElementsPanel() {
   const snapshot = useEditor((s) => s.snapshot);
   const selection = useEditor((s) => s.selection);
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Which sections you keep shut is a preference, not project data: it belongs to the browser,
+  // never to the snapshot. Losing it on every reload made the setting not worth having.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [table, setTable] = useState('');
 
   // A function node added while an API route is selected goes *into* its body — the server side.
@@ -155,6 +177,16 @@ export function ElementsPanel() {
         value={query}
         placeholder={mode === 'design' ? 'Search elements' : 'Search nodes'}
         onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          // Enter places the top hit. Searching for a thing and then having to aim at it is the
+          // half of "search" that does not save anyone time.
+          if (event.key !== 'Enter') return;
+          const first = filtered.flatMap((section) => section.entries)[0];
+          if (!first) return;
+          event.preventDefault();
+          first.onAdd();
+          setQuery('');
+        }}
       />
 
       {found === 0 ? <p className="panel__hint">Nothing matches “{query}”.</p> : null}
@@ -167,7 +199,11 @@ export function ElementsPanel() {
           // A search that left sections shut would hide its own results.
           open={Boolean(needle) || !collapsed[section.title]}
           onToggle={() =>
-            setCollapsed((current) => ({ ...current, [section.title]: !current[section.title] }))
+            setCollapsed((current) => {
+              const next = { ...current, [section.title]: !current[section.title] };
+              writeCollapsed(next);
+              return next;
+            })
           }
         />
       ))}

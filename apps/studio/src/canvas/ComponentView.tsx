@@ -16,6 +16,8 @@ interface Props {
   registerNode: (id: Id, node: HTMLElement | null) => void;
   onPointerDown: (id: Id, event: PointerEvent) => void;
   draggingId: Id | undefined;
+  /** Components hidden while designing. Editor-only; never reaches the compiler. */
+  hidden?: ReadonlySet<Id>;
 }
 
 function booleanProp(component: Component, key: string): boolean {
@@ -40,9 +42,14 @@ export function ComponentView({
   registerNode,
   onPointerDown,
   draggingId,
+  hidden,
 }: Props) {
   const component = snapshot.components[id];
   if (!component) return null;
+  // Hidden while designing (S2): editor-only, and gone from the canvas rather than dimmed —
+  // "hide" that still draws the thing is not hiding. The emitted app is untouched; the tree row
+  // stays, so it can always be brought back.
+  if (hidden?.has(id)) return null;
 
   const shared = {
     'data-loom-id': id,
@@ -149,6 +156,7 @@ export function ComponentView({
     >
       {(component.children ?? []).map((childId) => (
         <ComponentView
+          hidden={hidden}
           key={childId}
           snapshot={snapshot}
           id={childId}

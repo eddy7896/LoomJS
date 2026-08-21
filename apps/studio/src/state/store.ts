@@ -48,6 +48,22 @@ export interface EditorState {
   snapshot: Snapshot;
   mode: Mode;
   rail: Rail;
+  /**
+   * Components hidden **in the editor only** (S2, `docs/11-editor-shell.md`).
+   *
+   * Deliberately not in the snapshot, and deliberately not `visibleWhen`: hiding something to get
+   * it out of your way while you work must never change the app you are building. It is a view
+   * concern, so it lives beside the document — and it is gone on reload, because a project that
+   * remembered which parts you had hidden would be a project that lies about what it contains.
+   */
+  hiddenInEditor: ReadonlySet<Id>;
+  /**
+   * Branches of the elements tree that are folded shut. In the store rather than the panel so
+   * that **selecting** something can open the rows above it: a selection buried in a shut branch
+   * reads as the click having done nothing, and that has to hold whether or not the selection
+   * actually changed.
+   */
+  collapsedLayers: ReadonlySet<Id>;
   selection: Selection;
   /** The artboard the canvas is working in — where new components land. */
   activeArtboardId: Id;
@@ -91,6 +107,8 @@ function freshState(): EditorState {
     snapshot,
     mode: 'design',
     rail: 'design',
+    hiddenInEditor: new Set<Id>(),
+    collapsedLayers: new Set<Id>(),
     selection: undefined,
     activeArtboardId: artboardId,
     past: [],
@@ -147,7 +165,35 @@ export function select(selection: Selection): void {
 }
 
 export function selectComponent(id: Id | undefined): void {
-  select(id ? { kind: 'component', id } : undefined);
+  if (!id) {
+    select(undefined);
+    return;
+  }
+  // Reveal it: every ancestor opens, so the row is on screen wherever the selection came from.
+  const opened = new Set(state.collapsedLayers);
+  for (let cursor = parentOf(state.snapshot, id); cursor; cursor = parentOf(state.snapshot, cursor.id)) {
+    opened.delete(cursor.id);
+  }
+  set({ ...state, collapsedLayers: opened, selection: { kind: 'component', id } });
+}
+
+/** Fold one branch shut, or open it. */
+export function toggleLayer(componentId: Id): void {
+  const next = new Set(state.collapsedLayers);
+  if (!next.delete(componentId)) next.add(componentId);
+  set({ ...state, collapsedLayers: next });
+}
+
+/** Fold everything, or open everything — whichever the current state is not. */
+export function toggleAllLayers(): void {
+  if (state.collapsedLayers.size > 0) {
+    set({ ...state, collapsedLayers: new Set<Id>() });
+    return;
+  }
+  const parents = Object.values(state.snapshot.components)
+    .filter((component) => (component.children ?? []).length > 0)
+    .map((component) => component.id);
+  set({ ...state, collapsedLayers: new Set(parents) });
 }
 
 export function selectedComponentId(s: EditorState = state): Id | undefined {
@@ -176,6 +222,21 @@ export function setMode(mode: Mode): void {
   // The rail follows: revealing a node in Nodes mode while the column still showed the Data panel
   // would leave the two halves of the editor disagreeing about what you are looking at.
   set({ ...state, mode, rail: mode });
+}
+
+/** Hide or show a component on the canvas. Editor-only — the emitted app never knows. */
+export function toggleEditorVisibility(componentId: Id): void {
+  const next = new Set(state.hiddenInEditor);
+  if (!next.delete(componentId)) next.add(componentId);
+  set({ ...state, hiddenInEditor: next });
+}
+
+export function isHiddenInEditor(snapshot: Snapshot, hidden: ReadonlySet<Id>, id: Id): boolean {
+  // A hidden container takes its subtree with it, the same way the canvas would.
+  for (let cursor: Id | undefined = id; cursor; cursor = parentOf(snapshot, cursor)?.id) {
+    if (hidden.has(cursor)) return true;
+  }
+  return false;
 }
 
 export function setRail(rail: Rail): void {
@@ -455,6 +516,8 @@ export function loadSnapshot(snapshot: Snapshot): void {
     snapshot,
     mode: 'design',
     rail: 'design',
+    hiddenInEditor: new Set<Id>(),
+    collapsedLayers: new Set<Id>(),
     selection: undefined,
     activeArtboardId: artboardId,
     past: [],

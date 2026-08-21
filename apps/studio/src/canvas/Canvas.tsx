@@ -36,6 +36,7 @@ const MIN_SCREEN = { width: 240, height: 240 };
  */
 export function Canvas() {
   const snapshot = useEditor((s) => s.snapshot);
+  const hiddenInEditor = useEditor((s) => s.hiddenInEditor);
   const selection = useEditor((s) => s.selection);
   const activeArtboardId = useEditor((s) => s.activeArtboardId);
 
@@ -200,6 +201,7 @@ export function Canvas() {
                 registerNode={registerNode}
                 onPointerDown={dragReorder.onPointerDown}
                 draggingId={dragReorder.dragging}
+                hidden={hiddenInEditor}
               />
             </div>
 

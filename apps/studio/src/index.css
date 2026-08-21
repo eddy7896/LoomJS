@@ -1030,3 +1030,59 @@ input[type='color'] {
   min-height: 0;
   max-height: 40%;
 }
+
+/* ---- the elements tree: drag, collapse, hide ---- */
+.layer__caret {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+/* A row hidden while designing still reads as a row — it has not gone anywhere, it is just out of
+   the way — so it dims rather than disappearing from its own tree. */
+.layer.is-hidden .layer__name,
+.layer.is-hidden .layer__type {
+  opacity: 0.45;
+}
+
+/* Where the drop lands: a line under the row for "after", an outline for "inside". Two gestures
+   that mean different things must not look the same. */
+.layer.is-over--after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+.layer.is-over--inside {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--surface-sunken);
+}
+
+.layer[draggable='true'] {
+  cursor: grab;
+}
+
+/* Dim until it matters: a row of eyes shouting on every line is noise, but a *hidden* row has to
+   announce itself without being hovered. */
+.layer__eye {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  line-height: 18px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.layer:hover .layer__eye,
+.layer__eye.is-hidden {
+  opacity: 1;
+}

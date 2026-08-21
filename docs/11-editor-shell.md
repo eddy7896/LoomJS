@@ -75,7 +75,7 @@ hook whose provider was not there and the preview went blank until someone reloa
 counts files it has never written before and sends a full reload when that count is non-zero. HMR
 is safe for a module's contents changing; it cannot absorb one appearing.
 
-## S1 — Search and categories ✅ _(done, folded into S0)_
+## S1 — Search and categories ✅ _(done)_
 
 **Goal:** finding an element takes one keystroke, not a scan.
 
@@ -90,11 +90,17 @@ is safe for a module's contents changing; it cannot absorb one appearing.
 
 **Done-when:** typing "check" surfaces the Checkbox from a collapsed category.
 
-Folded into S0 rather than run as a second pass: both are generated from the same two new
-`ComponentDef` fields, and splitting them meant editing the same three files twice. Pressing Enter
-to place the top hit is *not* built — it wants a focus model the palette does not have yet.
+Search and categories landed with S0 — both are generated from the same two new `ComponentDef`
+fields, and splitting them meant editing the same three files twice. Two things followed:
 
-## S2 — The elements tree
+- **Collapse is remembered**, in `localStorage`. Which sections you keep shut is a preference, not
+  project data: it belongs to the browser and never to the snapshot. Losing it on every reload made
+  the setting not worth having.
+- **Enter places the top hit**, and clears the box. Searching for a thing and then having to aim at
+  it is the half of "search" that saves nobody any time. It needed no focus model after all: the
+  search input already has focus, which is the whole point.
+
+## S2 — The elements tree ✅ _(done)_
 
 **Goal:** the tree becomes the primary way to move around a screen.
 
@@ -109,6 +115,24 @@ to place the top hit is *not* built — it wants a focus model the palette does 
 - Selecting a row selects on canvas; selecting on canvas reveals the row.
 
 **Done-when:** a component can be dragged into a different Frame from the tree alone, in one undo.
+
+**How the drop reads.** A container takes the drop *inside* it; anything else takes it as the
+*next sibling*. Two gestures that mean different things must not look the same, so they are marked
+differently — an outline for "in here", a line beneath for "after this". A row may not be dropped
+into its own subtree; the tree refuses before dispatching, so a bad drag never becomes an op at all
+(`applyOp` guards it too).
+
+**Hiding is a view concern, and it was worth being strict about.** The eye never writes
+`visibleWhen`: a design-time convenience that silently changed the emitted app would be the worst
+kind of bug, so `hiddenInEditor` lives beside the document, takes the subtree with it on the
+canvas, and is gone on reload — a project that remembered which parts you had hidden would be a
+project that lies about what it contains. The eye also sits outside the hover-only actions, because
+which rows are hidden has to be legible without hovering every row in turn.
+
+**Collapse moved into the store**, which fixed a real bug rather than being tidiness. The reveal
+was an effect watching the *selection changing*, so clicking an already-selected component inside a
+branch you had just folded did nothing at all. Selecting now opens the rows above it whether or not
+the selection changed.
 
 ---
 
