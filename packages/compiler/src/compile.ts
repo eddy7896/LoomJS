@@ -23,7 +23,10 @@ export function compile(snapshot: Snapshot): CompileResult {
   validateServerOnlyWork(snapshot);
 
   const usesDatabase = Object.values(snapshot.nodes).some((node) => node.category === 'db');
-  const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, { usesDatabase });
+  const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, {
+    usesDatabase,
+    theme: snapshot.theme,
+  });
 
   // One serverless function per API route node, emitted once even if several screens call it.
   const emittedRoutes = new Set<string>();

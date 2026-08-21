@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 import type { Id } from '@loom/ir';
+import { themeStyle } from '@loom/ui';
 import { useEditor } from '../state/useEditor';
 import {
   entryArtboardId,
@@ -113,7 +114,13 @@ export function Canvas() {
       <div
         className="canvas__layer"
         ref={layerRef}
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
+        // The project's tokens are defined here, so the artboards below resolve the same
+        // `var(--loom-…)` the emitted app does. Without them the canvas would draw unstyled
+        // boxes and quietly disagree with the Preview.
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          ...themeStyle(snapshot.theme),
+        }}
       >
         <FlowArrows
           snapshot={snapshot}

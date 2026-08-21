@@ -1,3 +1,4 @@
+import { FONT_STYLESHEET, themeCss, type ThemeOverrides } from '@loom/ui';
 import type { EmittedFile } from '../types';
 import { DEV_API_PLUGIN } from './server';
 
@@ -33,6 +34,8 @@ export function npmName(input: string): string {
 export interface ScaffoldOptions {
   /** Adds the Supabase client, which only a project with database nodes needs. */
   usesDatabase?: boolean;
+  /** The project's token overrides, emitted into its stylesheet. */
+  theme?: ThemeOverrides;
 }
 
 export function scaffoldFiles(
@@ -40,6 +43,7 @@ export function scaffoldFiles(
   appTitle: string,
   options: ScaffoldOptions = {},
 ): EmittedFile[] {
+  const theme = options.theme ?? {};
   const pkg = {
     name: npmName(projectName),
     private: true,
@@ -95,6 +99,9 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="${FONT_STYLESHEET}" />
     <title>${appTitle}</title>
   </head>
   <body>
@@ -122,13 +129,14 @@ ReactDOM.createRoot(root).render(
 `,
     },
     {
+      // The design system, as the app's own custom properties. Restyling the whole project is a
+      // change here, because every styled property emits `var(--loom-…)` rather than a value.
+      path: 'src/theme.css',
+      content: themeCss(theme),
+    },
+    {
       path: 'src/index.css',
-      content: `:root {
-  font-family: Archivo, system-ui, sans-serif;
-  line-height: 1.5;
-  color: #111111;
-  background: #ffffff;
-}
+      content: `@import './theme.css';
 
 * {
   box-sizing: border-box;
@@ -136,6 +144,15 @@ ReactDOM.createRoot(root).render(
 
 body {
   margin: 0;
+  font-family: var(--loom-font-body);
+  line-height: 1.5;
+  color: var(--loom-color-ink);
+  background: var(--loom-color-surface);
+}
+
+code,
+pre {
+  font-family: var(--loom-font-mono);
 }
 `,
     },

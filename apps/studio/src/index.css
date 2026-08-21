@@ -1,15 +1,21 @@
 /* loom studio tokens — Archivo + JetBrains Mono, light mode only (guardrails 19-24). */
 :root {
-  --ink: #14161a;
-  --ink-soft: #5b6270;
-  --line: #e3e6ec;
+  /* loom's own brand, from docs/Design System/DesignDoc.html — the same values @loom/ui hands a
+     generated app, so the studio and what it builds are styled from one source. */
+  --brand: #ec3013;
+  --brand-tint: #fdece8;
+  --ink: #1b1d21;
+  --ink-soft: #868d97;
+  --line: #e8eaee;
   --surface: #ffffff;
-  --surface-sunken: #f4f5f8;
-  --accent: #4f46e5;
-  --ok: #16a34a;
-  --busy: #d97706;
-  --error: #dc2626;
-  --radius: 8px;
+  --surface-sunken: #f6f7f9;
+  /* Selection chrome is deliberately NOT the brand: red is reserved for the primary action and
+     the FN node category (guardrail 19-24). Editor furniture stays ink. */
+  --accent: #1b1d21;
+  --ok: #12a07a;
+  --busy: #d98a12;
+  --error: #ec3013;
+  --radius: 14px;
 
   font-family: Archivo, system-ui, -apple-system, sans-serif;
   color: var(--ink);
@@ -45,8 +51,8 @@ button:disabled {
 }
 
 button.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--brand);
+  border-color: var(--brand);
   color: #fff;
 }
 
@@ -86,7 +92,7 @@ select {
 }
 
 .brand__js {
-  color: var(--accent);
+  color: var(--brand);
 }
 
 .toolbar__mode {
@@ -490,15 +496,15 @@ select {
 
 /* Functional hues: UI mirrors, server routes and functions read differently at a glance. */
 .nnode--ui .nnode__head {
-  background: color-mix(in srgb, #6366f1 12%, transparent);
+  background: color-mix(in srgb, #7c5cff 12%, transparent);
 }
 
 .nnode--api .nnode__head {
-  background: color-mix(in srgb, #16a34a 14%, transparent);
+  background: color-mix(in srgb, #12a07a 14%, transparent);
 }
 
 .nnode--fn .nnode__head {
-  background: color-mix(in srgb, #d97706 14%, transparent);
+  background: color-mix(in srgb, #ec3013 14%, transparent);
 }
 
 .nnode__head {
@@ -716,4 +722,19 @@ select {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* A colour token's current value, so a name in a list is still a colour to the eye. */
+.swatch {
+  width: 22px;
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+input[type='color'] {
+  padding: 0;
+  height: 24px;
+  cursor: pointer;
 }

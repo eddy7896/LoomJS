@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Component, Layout, SizeMode, Snapshot } from '@loom/ir';
+import type { Component, Layout, SizeMode, Snapshot, Style } from '@loom/ir';
 import {
   LAYOUT_FIELDS,
   MATH_BODY_FIELDS,
@@ -25,10 +25,13 @@ import {
   setProp,
   setSize,
   setStaticProp,
+  setStyle,
+  setThemeToken,
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
 import { dbNodeFields } from '@loom/connectors';
+import { TOKENS, tokenValue, tokensIn, type TokenGroup } from '@loom/ui';
 import { acceptAuto, backendOffer, detachAuto, generateBackend, withdrawAuto } from '../state/autobackend';
 
 /**
@@ -92,6 +95,8 @@ export function Inspector() {
       ) : null}
 
       {def?.acceptsClickFlow ? <ClickFlowSection component={component} /> : null}
+
+      <StyleSection component={component} />
 
       {component.layout ? <AutoBackendSection component={component} /> : null}
 
@@ -358,6 +363,139 @@ function AutoSection({ group, state }: { group: string; state: 'proposed' | 'acc
   );
 }
 
+
+/** The styled properties a component owns, picked from the design system rather than typed. */
+const STYLE_FIELDS = [
+  { key: 'background', label: 'Fill', group: 'color' },
+  { key: 'textColor', label: 'Text', group: 'color' },
+  { key: 'fontSize', label: 'Size', group: 'text' },
+  { key: 'fontWeight', label: 'Weight', group: 'weight' },
+  { key: 'radius', label: 'Corners', group: 'radius' },
+  { key: 'shadow', label: 'Shadow', group: 'shadow' },
+  { key: 'borderColor', label: 'Border', group: 'color' },
+] as const satisfies readonly { key: keyof Style; label: string; group: TokenGroup }[];
+
+/**
+ * Style is chosen from the system, never typed. Every control lists the tokens in its group and
+ * writes a token *reference* into the document, so moving a token moves every surface built on
+ * it — that is what makes this a design system rather than a styling panel
+ * (`docs/05-guardrails.md` 19-24).
+ */
+function StyleSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const style = component.style ?? {};
+
+  return (
+    <section className="field-group" data-testid="style-section">
+      <h3 className="field-group__title">Style</h3>
+
+      {STYLE_FIELDS.map((entry) => {
+        const current = style[entry.key];
+        const value = current?.kind === 'token' ? current.token : '';
+        return (
+          <Field key={entry.key} label={entry.label}>
+            <div className="field__row">
+              <select
+                data-testid={`style-${entry.key}`}
+                value={value}
+                onChange={(event) =>
+                  setStyle(component.id, {
+                    [entry.key]: event.target.value
+                      ? { kind: 'token', token: event.target.value }
+                      : undefined,
+                  })
+                }
+              >
+                <option value="">—</option>
+                {tokensIn(entry.group).map((token) => (
+                  <option key={token.id} value={token.id}>
+                    {token.label}
+                  </option>
+                ))}
+              </select>
+              {entry.group === 'color' && value ? (
+                <span
+                  className="swatch"
+                  style={{ background: tokenValue(value, snapshot.theme) }}
+                  title={value}
+                />
+              ) : null}
+            </div>
+          </Field>
+        );
+      })}
+
+      <Field label="Border w">
+        <input
+          type="number"
+          min={0}
+          value={style.borderWidth ?? 0}
+          onChange={(event) =>
+            setStyle(component.id, {
+              borderWidth: Number(event.target.value) || undefined,
+            })
+          }
+        />
+      </Field>
+
+      <Field label="Align">
+        <select
+          value={style.align ?? ''}
+          onChange={(event) =>
+            setStyle(component.id, {
+              align: (event.target.value || undefined) as Style['align'],
+            })
+          }
+        >
+          <option value="">—</option>
+          <option value="start">Start</option>
+          <option value="center">Center</option>
+          <option value="end">End</option>
+        </select>
+      </Field>
+    </section>
+  );
+}
+
+/**
+ * The project's own tokens. One change here restyles everything built on that token, which is the
+ * difference between a system and a habit.
+ */
+function ThemeSection() {
+  const theme = useEditor((s) => s.snapshot.theme) ?? {};
+
+  return (
+    <section className="field-group" data-testid="theme-section">
+      <h3 className="field-group__title">Theme</h3>
+      <p className="panel__hint">
+        Every component styled with a token follows it. Clearing a value restores loom's default.
+      </p>
+      {TOKENS.filter((token) => token.group === 'color').map((token) => (
+        <Field key={token.id} label={token.label}>
+          <div className="field__row">
+            <input
+              type="color"
+              data-testid={`theme-${token.id}`}
+              value={normalizeColor(tokenValue(token.id, theme) ?? token.value)}
+              onChange={(event) => setThemeToken(token.id, event.target.value)}
+            />
+            {theme[token.id] ? (
+              <button title="Reset" onClick={() => setThemeToken(token.id, undefined)}>
+                ↺
+              </button>
+            ) : null}
+          </div>
+        </Field>
+      ))}
+    </section>
+  );
+}
+
+/** `<input type="color">` only accepts `#rrggbb`; anything else would silently show black. */
+function normalizeColor(value: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
+}
+
 function ClickFlowSection({ component }: { component: Component }) {
   const snapshot = useEditor((s) => s.snapshot);
   const flowId = flowFor(snapshot, component.id);
@@ -476,6 +614,8 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
           + Param
         </button>
       </section>
+
+      <ThemeSection />
 
       {canDelete ? (
         <section className="field-group">

@@ -53,6 +53,9 @@ importers:
       '@loom/typesys':
         specifier: workspace:*
         version: link:../../packages/typesys
+      '@loom/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@supabase/postgrest-js':
         specifier: ^2.112.3
         version: 2.112.3
@@ -108,6 +111,9 @@ importers:
       '@loom/typesys':
         specifier: workspace:*
         version: link:../typesys
+      '@loom/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       '@loom/inference':
         specifier: workspace:*
@@ -161,6 +167,8 @@ importers:
       '@loom/ir':
         specifier: workspace:*
         version: link:../ir
+
+  packages/ui: {}
 
 packages:
 

@@ -63,3 +63,25 @@ routed to the Code node rather than growing this table (guardrail 7).
 - Per-child overrides (`align-self`, `order`, `flex-basis`) — order is the tree, and a child that
   needs its own alignment gets wrapped in a Frame.
 - Min/max sizing and aspect ratio — additive later, not load-bearing for M1.
+
+## Style and tokens (the design system's half)
+
+Layout says where things sit. **Style says what they look like, and it is chosen from a token
+scale rather than typed** (`docs/05-guardrails.md` 19-24). `@loom/ui` owns the scales — colour,
+space, radius, type size, weight, shadow — and each token is a *named decision* with a stable id.
+
+- A styled property in the document holds a **token reference**, and the compiler emits
+  `var(--loom-color-brand)` rather than the value behind it. Restyling a project is one `:root`
+  change, and the emitted code says *why* a surface is that colour.
+- A **literal** is the escape hatch. It exists, and it is deliberately more effort to reach for
+  than picking from the scale.
+- `Snapshot.theme` holds per-project overrides keyed by token id. One entry moves every surface
+  built on that token. Everything else stays where it was — an override is one decision, not a
+  new palette.
+- The emitted app gets `src/theme.css` (the `:root` block) and loads Archivo + JetBrains Mono.
+  The **studio's canvas defines the same custom properties** on its artboard layer, so the canvas
+  and the Preview resolve the same variables and cannot disagree.
+- The curated property set is small on purpose: fill, text colour, size, weight, corners, shadow,
+  border, alignment. Anything past that belongs to a component kit, not to loom's core.
+- A token id that is not in the system is a **Build error naming the property**. An undefined
+  custom property renders as nothing at all, and a silent blank is worse than a stopped build.

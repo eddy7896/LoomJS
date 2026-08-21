@@ -1,6 +1,7 @@
 import type { ComponentEmitter } from '../types';
 import { CompileError } from '../types';
-import { indent } from '../emit/text';
+import { indent, styleExpr } from '../emit/text';
+import { styleToCss } from '../emit/style';
 import { valueExpr } from '../emit/props';
 
 /**
@@ -30,6 +31,9 @@ export const buttonEmitter: ComponentEmitter = {
           : ` onClick={() => ${ctx.navigateExpr(onClick.handler.flowId, component.id)}}`;
     }
 
-    return `${indent(depth)}<button type="button"${handler}>{${labelExpr}}</button>`;
+    const style = styleToCss(component);
+    const attrs = Object.keys(style).length > 0 ? ` style=${styleExpr(style)}` : '';
+
+    return `${indent(depth)}<button type="button"${attrs}${handler}>{${labelExpr}}</button>`;
   },
 };

@@ -25,7 +25,8 @@
     "@loom/components": "workspace:*",
     "@loom/connectors": "workspace:*",
     "@loom/ir": "workspace:*",
-    "@loom/typesys": "workspace:*"
+    "@loom/typesys": "workspace:*",
+    "@loom/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -203,6 +203,18 @@ Recorded here because they constrain everything downstream. Each was taken at th
   environments, one operator vocabulary: a canvas has wires, a route body has one value flowing
   through ordered steps. The Inspector shows only the fields that apply where the node sits.
 
+- **[M5.2] Style is token-first, and `@loom/ui` finally exists.** A styled property stores a token
+  id and emits `var(--loom-…)`; the project's overrides become the app's `:root`. That is the
+  difference between a design system and a pile of hex codes, and it is what makes "change the
+  brand" one edit rather than a search-and-replace.
+- **[M5.2] The canvas defines the same custom properties the emitted app does.** Design mode
+  renders real DOM, so without the variables it would draw unstyled boxes and quietly disagree
+  with the Preview. Both now resolve one source.
+- **[M5.2] The studio's own chrome is on loom's brand at last**, and the node hues match
+  `docs/Design System/DesignDoc.html` (FN was rendering orange rather than `#EC3013`). Selection
+  chrome is deliberately ink, not brand: red is reserved for the primary action and the FN
+  category.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,

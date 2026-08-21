@@ -96,6 +96,14 @@ describe('emitted app builds for real', () => {
     expect(home).toContain('type="number"');
     expect(home).toContain('type="checkbox"');
     expect(home).toContain('<option');
+
+    // And the design system reached the built app: a token reference in the markup, the
+    // project's override in the stylesheet, and the brand faces in the document head.
+    expect(home).toContain('var(--loom-color-brand)');
+    expect(await readFile(join(dir, 'src', 'theme.css'), 'utf8')).toContain(
+      '--loom-color-brand: #0055ff;',
+    );
+    expect(await readFile(join(dir, 'index.html'), 'utf8')).toContain('Archivo');
   });
 
   it('type-checks a route body holding every operator step', async () => {

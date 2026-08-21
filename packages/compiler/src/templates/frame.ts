@@ -1,12 +1,12 @@
 import type { ComponentEmitter } from '../types';
-import { layoutToStyle } from '../emit/layout';
+import { componentStyle } from '../emit/style';
 import { indent, styleExpr } from '../emit/text';
 
 /** Frame = the flex container. Owns layout; renders its children in order. */
 export const frameEmitter: ComponentEmitter = {
   type: 'Frame',
   emit(component, ctx, depth) {
-    const style = component.layout ? layoutToStyle(component.layout) : { display: 'flex' };
+    const style = { display: 'flex', ...componentStyle(component) };
     const attrs = ` style=${styleExpr(style)}`;
     const children = component.children ?? [];
 

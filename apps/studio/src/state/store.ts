@@ -13,6 +13,7 @@ import {
   type PropertyValue,
   type SizeMode,
   type Snapshot,
+  type Style,
 } from '@loom/ir';
 import { createComponent, defFor } from '@loom/components';
 
@@ -248,6 +249,16 @@ export function setProp(componentId: Id, key: string, value: PropertyValue): voi
 
 export function setStaticProp(componentId: Id, key: string, value: unknown): void {
   setProp(componentId, key, { kind: 'static', value });
+}
+
+/** Style one property. Passing `undefined` clears it back to the browser's own default. */
+export function setStyle(componentId: Id, style: Partial<Style>): void {
+  dispatch({ type: 'setStyle', componentId, style });
+}
+
+/** Override one design token for the whole project, or clear the override. */
+export function setThemeToken(token: string, value: string | undefined): void {
+  dispatch({ type: 'setThemeToken', token, value });
 }
 
 export function setLayout(componentId: Id, layout: Partial<Layout>): void {

@@ -6,6 +6,7 @@ import type {
   FlowPayload,
   Layout,
   Param,
+  Style,
   Node,
   PropertyValue,
   Snapshot,
@@ -27,6 +28,8 @@ export type Op =
   | { type: 'setProp'; componentId: string; key: string; value: PropertyValue }
   | { type: 'removeProp'; componentId: string; key: string }
   | { type: 'setLayout'; componentId: string; layout: Partial<Layout> }
+  | { type: 'setStyle'; componentId: string; style: Partial<Style> }
+  | { type: 'setThemeToken'; token: string; value: string | undefined }
   | { type: 'setName'; componentId: string; name: string }
   | { type: 'moveComponent'; componentId: string; parentId: string; index?: number }
   | { type: 'removeComponent'; componentId: string }
@@ -92,6 +95,27 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         throw new Error(`setLayout: component ${op.componentId} is not a container`);
       }
       component.layout = { ...component.layout, ...op.layout };
+      return next;
+    }
+
+    /** Style is merged, and an explicitly cleared property is removed rather than left empty. */
+    case 'setStyle': {
+      const component = next.components[op.componentId];
+      if (!component) throw new Error(`setStyle: unknown component ${op.componentId}`);
+      const style = { ...(component.style ?? {}), ...op.style } as Record<string, unknown>;
+      for (const [key, value] of Object.entries(op.style)) {
+        if (value === undefined) delete style[key];
+      }
+      component.style = style as Style;
+      return next;
+    }
+
+    /** One token override. Clearing it returns that token to loom's default. */
+    case 'setThemeToken': {
+      const theme = { ...(next.theme ?? {}) };
+      if (op.value === undefined || op.value.trim() === '') delete theme[op.token];
+      else theme[op.token] = op.value.trim();
+      next.theme = Object.keys(theme).length > 0 ? theme : undefined;
       return next;
     }
 

@@ -24,6 +24,7 @@ describe('compile(trivial snapshot)', () => {
       'src/artboards/Home.tsx',
       'src/index.css',
       'src/main.tsx',
+      'src/theme.css',
       'tsconfig.json',
       'vite.config.ts',
     ]);

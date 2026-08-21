@@ -131,6 +131,41 @@ export const AutoMarkSchema = z.object({
 export type AutoMark = z.infer<typeof AutoMarkSchema>;
 
 // ---------------------------------------------------------------------------
+// Style (token-first; the design system's half of a component)
+// ---------------------------------------------------------------------------
+
+/**
+ * One styled property. A **token** reference is the normal case and the whole point: the document
+ * records the decision ("brand"), not the value, so moving the brand moves every surface built on
+ * it (`docs/05-guardrails.md` 19-24). A literal is the escape hatch, deliberately more effort to
+ * reach for than picking from the scale.
+ */
+export const StyleValueSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('token'), token: z.string() }),
+  z.object({ kind: z.literal('literal'), value: z.string() }),
+]);
+export type StyleValue = z.infer<typeof StyleValueSchema>;
+
+/**
+ * The curated visual vocabulary. Small on purpose: every property here is one a designer reaches
+ * for constantly, and anything beyond it belongs to a component kit rather than to loom's core
+ * (`docs/02-system-architecture.md`).
+ */
+export const StyleSchema = z.object({
+  background: StyleValueSchema.optional(),
+  textColor: StyleValueSchema.optional(),
+  fontSize: StyleValueSchema.optional(),
+  fontWeight: StyleValueSchema.optional(),
+  radius: StyleValueSchema.optional(),
+  shadow: StyleValueSchema.optional(),
+  borderColor: StyleValueSchema.optional(),
+  /** Plain px. A border is one, two or none — a scale would be ceremony. */
+  borderWidth: z.number().optional(),
+  align: z.enum(['start', 'center', 'end']).optional(),
+});
+export type Style = z.infer<typeof StyleSchema>;
+
+// ---------------------------------------------------------------------------
 // Design mode: components + artboards
 // ---------------------------------------------------------------------------
 
@@ -141,6 +176,7 @@ export const ComponentSchema = z.object({
   name: z.string().optional(),
   props: z.record(z.string(), PropertyValueSchema),
   layout: LayoutSchema.optional(),
+  style: StyleSchema.optional(),
   children: z.array(IdSchema).optional(),
 });
 export type Component = z.infer<typeof ComponentSchema>;
@@ -244,6 +280,11 @@ export const SnapshotSchema = z.object({
   id: IdSchema,
   name: z.string(),
   entryArtboard: IdSchema.optional(),
+  /**
+   * Token overrides for this project, keyed by token id (`color.brand`). Absent means loom's
+   * defaults. One entry here restyles every component built on that token.
+   */
+  theme: z.record(z.string(), z.string()).optional(),
   artboards: z.record(z.string(), ArtboardSchema),
   components: z.record(z.string(), ComponentSchema),
   nodes: z.record(z.string(), NodeSchema),

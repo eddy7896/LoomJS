@@ -481,11 +481,38 @@ export function everyComponentSnapshot(): Snapshot {
     components[component.id] = component;
   }
 
+  // Styled and themed, so the build also proves the token plumbing: a project override reaches
+  // the stylesheet, and every styled property emits a custom property the app defines.
+  const styledRoot: Component = {
+    ...root,
+    children: [...(root.children ?? []), ...Object.keys(components)],
+    style: {
+      background: { kind: 'token', token: 'color.canvas' },
+      radius: { kind: 'token', token: 'radius.lg' },
+      borderColor: { kind: 'token', token: 'color.hairline' },
+      borderWidth: 1,
+    },
+  };
+
+  const styledText = components.cp_text;
+  if (styledText) {
+    components.cp_text = {
+      ...styledText,
+      style: {
+        textColor: { kind: 'token', token: 'color.brand' },
+        fontSize: { kind: 'token', token: 'text.xl' },
+        fontWeight: { kind: 'token', token: 'weight.bold' },
+        align: 'center',
+      },
+    };
+  }
+
   return {
     ...base,
+    theme: { 'color.brand': '#0055ff' },
     components: {
       ...base.components,
-      cp_root000001: { ...root, children: [...(root.children ?? []), ...Object.keys(components)] },
+      cp_root000001: styledRoot,
       ...components,
     },
   };
