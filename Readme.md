@@ -149,6 +149,89 @@ are the entry points; always-on rules live in `.agents/rules/`. They route into 
 
 ---
 
+## Running it locally
+
+Node 20+ and pnpm 8. Everything below runs offline — no Supabase project, no account, no keys.
+
+```bash
+pnpm install
+pnpm --filter @loom/studio dev      # http://localhost:5173
+```
+
+That one command is the whole system. The studio starts a **second** Vite server on **5174** for
+the Preview: the editor compiles your project in the browser, posts the emitted files to the dev
+server, and the child server serves them into the iframe. What you see previewed is real compiler
+output, not a simulation.
+
+Workspace packages resolve to their TypeScript source, so **there is no build step** before running
+or testing. `pnpm build` exists for CI and for typechecking; you do not need it to work on the app.
+
+### Try it in two minutes
+
+1. Select **Root** in the elements tree, then place a **Text field**, a **Button** and a **Text**
+   from the palette below it.
+2. Switch to **Nodes** on the icon rail. Add an **API route**, then a **Compute** inside it (adding
+   a function node while a route is selected puts it in the route's body — the container boundary
+   is the network boundary).
+3. Wire the button's `onClick` into the route's `run`, the field's `value` into its `input`, and
+   its `result` into the Text's `content`.
+4. Type in the Preview and press the button. The answer came from an emitted serverless function
+   running on the child server.
+
+### The database, without a database
+
+The connector work is exercised by a stub that speaks PostgREST's protocol, so nothing needs to be
+provisioned:
+
+```bash
+node apps/studio/e2e/stub-postgrest.mjs     # http://localhost:5412
+```
+
+Then in the studio: **Data** on the icon rail → *Connect* → URL `http://localhost:5412`, any
+non-empty keys. To point at a real Supabase project instead, run `pnpm setup:supabase` (it writes
+`apps/studio/.env.local`, which is git-ignored and never enters the project file).
+
+## Testing
+
+Four layers, fastest first. Only the last two are slow.
+
+```bash
+# 1. Unit — the compiler, the IR, the editor's state (~360 tests, seconds)
+pnpm test -- --concurrency=1
+
+# 2. Types and lint
+pnpm typecheck && pnpm lint
+
+# 3. End-to-end — the real editor, driven by Playwright (~53 specs, ~2 min)
+npx playwright install          # once
+pnpm --filter @loom/studio test:e2e
+
+# 4. Smoke gates — emit a project, `npm install` it, and build it for real (~3 min)
+pnpm --filter @loom/compiler test:smoke
+```
+
+**`--concurrency=1` on the unit tests is not optional on Windows**: turbo's parallel fan-out
+crashes the Vitest workers. It is a known issue with the runner, not with the tests.
+
+The **smoke gates are the ones that matter most** and the reason to tolerate their cost. Each one
+writes a project to a temp directory, installs its dependencies, and runs the emitted app's own
+`tsc` and Vite build — including a Supabase-shaped backend answering real requests. String matching
+in a unit test will happily accept TSX that does not compile; these will not.
+
+Individual suites:
+
+```bash
+pnpm --filter @loom/compiler test                       # one package
+pnpm --filter @loom/studio exec playwright test tree.spec.ts   # one spec
+pnpm --filter @loom/studio exec playwright test --ui           # watch it drive the editor
+```
+
+The E2E run starts the studio, the Preview server and the PostgREST stub itself, and refuses to
+reuse an existing one — a server left over from an earlier run answers happily while serving code
+from before the change under test, which is worse than a failure.
+
+---
+
 ## For contributors
 
 Because loomJS spans a compiler, a visual editor, and several external platforms, a few
