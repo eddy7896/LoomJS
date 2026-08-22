@@ -72,10 +72,10 @@ test('rows from the database render in the Preview, and a form writes one back',
   await field(page, 'Name').locator('input').fill('Row title');
 
   // A form: a field and a button.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Title');
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Save');
   await field(page, 'Label').locator('input').fill('Save');
@@ -137,7 +137,7 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   await page.getByTestId('rail-design').click();
 
   // The list, and a Text in it reading each row's title.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ List', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Notes');
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
@@ -150,7 +150,7 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
     ['+ Button', 'Rename'],
     ['+ Button', 'Remove'],
   ] as const) {
-    await page.locator('.layer', { hasText: 'Root' }).first().click();
+    await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
     await page.getByRole('button', { name: button, exact: true }).click();
     await field(page, 'Name').locator('input').fill(name);
     if (button === '+ Button') await field(page, 'Label').locator('input').fill(name);

@@ -57,10 +57,12 @@ export function PreviewPanel() {
       {status.url ? (
         <div className="preview__stage">
           <iframe
-            key={boot}
             className="preview__frame"
             style={{ width: size.width }}
-            src={status.url}
+            // Navigated rather than remounted: replacing the element would detach the frame, and
+            // anything holding on to it — a devtools panel, a test — would be left pointing at a
+            // frame that no longer exists.
+            src={boot > 0 ? `${status.url}?build=${boot}` : status.url}
             title="Preview"
           />
         </div>

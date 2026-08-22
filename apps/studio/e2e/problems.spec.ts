@@ -32,11 +32,11 @@ test('an empty project has nothing to report', async ({ page }) => {
 
 test('three distinct problems appear, and clicking one selects the offender', async ({ page }) => {
   // A number field and a Text, so there is something real to wire.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Number field', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Left');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Display');
 
@@ -74,7 +74,7 @@ test('three distinct problems appear, and clicking one selects the offender', as
 });
 
 test('a problem stops being listed the moment it is fixed', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Display');
 
@@ -94,11 +94,11 @@ test('a problem stops being listed the moment it is fixed', async ({ page }) => 
 test('clicking a component row switches to Design mode and selects it', async ({ page }) => {
   // A button that fires a Compute nothing reads: the compiler refuses it, and the row it produces
   // points at the button rather than the node.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Number field', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Left');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Go');
   await field(page, 'Label').locator('input').fill('Go');

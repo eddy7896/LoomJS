@@ -68,7 +68,7 @@ test('moving a token moves everything built on it', async ({ page }) => {
 });
 
 test('a styled input still looks like the control it is', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Placeholder').locator('input').fill('Your name');
   await page.getByTestId('style-radius').selectOption('radius.pill');

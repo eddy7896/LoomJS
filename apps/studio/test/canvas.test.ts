@@ -4,6 +4,7 @@ import {
   addComponent,
   getState,
   placeComponent,
+  placeScreen,
   rootComponentId,
   selectComponent,
   selectedComponentId,
@@ -95,5 +96,36 @@ describe('what a drawn gesture becomes', () => {
   it('selects what it just drew', () => {
     const id = placeComponent('Frame', root(), 0, {})!;
     expect(selectedComponentId()).toBe(id);
+  });
+});
+
+describe('a screen is a frame with a route', () => {
+  it('makes one from a gesture on the open canvas, at the size drawn', () => {
+    const before = Object.keys(snapshot().artboards).length;
+    const id = placeScreen({ width: 900.4, height: 600.6 });
+
+    expect(Object.keys(snapshot().artboards)).toHaveLength(before + 1);
+    expect(snapshot().artboards[id]?.size).toEqual({ width: 900, height: 601 });
+    // It owns a root frame like every other screen: there is no second kind of screen.
+    expect(snapshot().components[snapshot().artboards[id]!.root]?.type).toBe('Frame');
+  });
+
+  it('takes a preset size when one was chosen', () => {
+    const id = placeScreen({ width: 390, height: 844, preset: 'phone-sm' });
+    expect(snapshot().artboards[id]?.size).toEqual({
+      width: 390,
+      height: 844,
+      preset: 'phone-sm',
+    });
+  });
+
+  it('gives a frame placed inside a screen the same preset size, as a frame', () => {
+    // The same choice means the same shape either way; only the route differs.
+    const id = placeComponent('Frame', root(), 0, { variant: 'phone-sm' })!;
+    expect(snapshot().components[id]?.layout?.size).toEqual({
+      width: { mode: 'fixed', px: 390 },
+      height: { mode: 'fixed', px: 844 },
+    });
+    expect(snapshot().components[id]?.name).toBe('Phone');
   });
 });

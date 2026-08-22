@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Snapshot } from '@loom/ir';
-import { placeComponent, setTool, toolPlaces, type Tool } from '../state/store';
+import { screenPreset } from '@loom/components';
+import { placeComponent, placeScreen, setTool, toolPlaces, type Tool } from '../state/store';
 import { resolveDropTarget, type DropTarget } from './dropTarget';
 
 /**
@@ -26,10 +27,13 @@ export function useDrawPlace(snapshot: Snapshot, tool: Tool, scale: number) {
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent): boolean => {
-      if (event.button !== 0 || !toolPlaces(tool)) return false;
-      // Only inside a screen: the space between artboards is not part of any app.
+      const places = toolPlaces(tool);
+      if (event.button !== 0 || !places) return false;
+
+      // Inside a screen, a gesture places an element. Outside one, only a Frame means anything —
+      // and it means a new screen, because a screen is a frame with a route.
       const inside = (event.target as HTMLElement).closest('[data-loom-id]');
-      if (!inside) return false;
+      if (!inside && places.type !== 'Frame') return false;
 
       start.current = { x: event.clientX, y: event.clientY };
       setDraw({
@@ -69,13 +73,25 @@ export function useDrawPlace(snapshot: Snapshot, tool: Tool, scale: number) {
     const places = toolPlaces(tool);
     // The pointer comes back on its own, the way every design tool behaves.
     setTool('move');
-    if (!places || !draw.target) return false;
+    if (!places) return false;
 
     const drawn =
       draw.rect.width >= DRAW_THRESHOLD_PX && draw.rect.height >= DRAW_THRESHOLD_PX
         ? // Divide by the zoom, or a shape drawn at 50% comes out twice the size it looked.
           { width: draw.rect.width / scale, height: draw.rect.height / scale }
         : undefined;
+
+    // Nothing under the gesture: a frame drawn on the open canvas is a new screen.
+    if (!draw.target) {
+      if (places.type !== 'Frame') return false;
+      const preset = screenPreset(places.variant);
+      placeScreen(
+        preset
+          ? { width: preset.width, height: preset.height, preset: preset.id }
+          : drawn ?? undefined,
+      );
+      return true;
+    }
 
     placeComponent(places.type, draw.target.parentId, draw.target.index, {
       variant: places.variant,

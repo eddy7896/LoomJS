@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('work survives a reload', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Survivor');
   await field(page, 'Placeholder').locator('input').fill('still here');
@@ -54,7 +54,7 @@ test('work survives a reload', async ({ page }) => {
 });
 
 test('undo does not walk back into the previous session', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await expect(page.getByTestId('save-status')).toHaveText('saved');
 
@@ -66,7 +66,7 @@ test('undo does not walk back into the previous session', async ({ page }) => {
 });
 
 test('New starts over, and the reload agrees', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Gone soon');
   await expect(page.getByTestId('save-status')).toHaveText('saved');

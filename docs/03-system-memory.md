@@ -317,6 +317,17 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P4] A List pages what was fetched, not what exists.** Server-side paging needs an offset the
   caller supplies, and nothing on a screen can hand one over yet. Slicing is honest for the
   hundreds of rows a `limit` already caps and costs no round trip.
+- **[C] A screen is a frame with a route, and the editor now says so.** One row in the tree, one
+  panel in the inspector. They were always one object; the seam was in the UI, and it made people
+  hunt for padding in the wrong half. The IR keeps `Artboard` separate because a URL, a guard and
+  a design-time size have no business on every Button's schema — the merge is where a designer
+  looks, not where the compiler reads.
+- **[C] The same frame gesture makes a screen or a group, decided by what is underneath it.** Drawn
+  on the open canvas it is a screen; drawn inside one it is a frame. That is the whole difference
+  between them, made visible.
+- **[C] A screen drawn from a preset is named for the app, not the device.** "Screen 2", not
+  "Phone" — the size chip already says what shape it is, and a screen's name is what it is called
+  in the app.
 - **[C] Free placement is an input method, not a storage format.** The canvas lets a designer
   draw anywhere; the gesture is read into a parent, an index along that frame's axis and a size,
   and only that is stored. This is what lets loom feel like a design tool without breaking the

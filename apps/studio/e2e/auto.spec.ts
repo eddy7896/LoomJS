@@ -33,7 +33,7 @@ const rows = async (request: { get: (url: string) => Promise<{ json: () => Promi
 
 /** Draw the form the designer would draw: a frame, two fields named after columns, one button. */
 async function drawForm(page: Page): Promise<void> {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Frame' }).click();
   await field(page, 'Name').locator('input').fill('New note');
 
@@ -65,7 +65,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('the inspector explains what it would build, and why it cannot', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Frame' }).click();
   await expect(page.getByTestId('auto-backend')).toContainText('no input fields');
 
@@ -84,7 +84,7 @@ test('a form and a click become a working backend', async ({ page, request }) =>
   await drawForm(page);
 
   // Somewhere to show what came back, so the screen bucket is visibly read.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Saved');
 

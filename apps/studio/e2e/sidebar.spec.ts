@@ -35,7 +35,7 @@ test('every element is placeable from the sidebar, in its category', async ({ pa
   await expect(palette.getByTestId('palette-section-containers')).toBeVisible();
   await expect(palette.getByTestId('palette-section-input-forms')).toBeVisible();
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await palette.getByRole('button', { name: '+ Checkbox' }).click();
   await field(page, 'Name').locator('input').fill('Agree');
 
@@ -95,7 +95,7 @@ test('the new elements are placeable, and reach the running app', async ({ page 
   const palette = page.getByTestId('elements-panel');
 
   for (const name of ['+ Slider', '+ Date field', '+ Multiline field', '+ Icon']) {
-    await page.locator('.layer', { hasText: 'Root' }).first().click();
+    await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
     await palette.getByRole('button', { name, exact: true }).click();
   }
 

@@ -41,11 +41,11 @@ async function dragRow(page: Page, from: Locator, to: Locator): Promise<void> {
 }
 
 test('a component moves into a different frame, from the tree alone', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Frame', 'Card');
 
   // A Text on the root, beside the frame rather than inside it.
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Text', 'Caption');
 
   const caption = layer(page, 'Caption');
@@ -67,7 +67,7 @@ test('a component moves into a different frame, from the tree alone', async ({ p
 });
 
 test('hiding while designing takes it off the canvas and leaves the app alone', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Text', 'Secret');
   await field(page, 'Content').locator('input').fill('still shipped');
 
@@ -88,7 +88,7 @@ test('hiding while designing takes it off the canvas and leaves the app alone', 
 });
 
 test('a branch collapses, and selecting inside it opens it again', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Frame', 'Card');
   await place(page, '+ Text', 'Inside');
 
@@ -105,9 +105,9 @@ test('a branch collapses, and selecting inside it opens it again', async ({ page
 });
 
 test('a row says when it carries a condition or a sequence', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Checkbox', 'Agree');
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await place(page, '+ Text', 'Secret');
 
   await page.getByTestId('visible-when').selectOption({ label: 'Agree is checked' });
@@ -115,7 +115,7 @@ test('a row says when it carries a condition or a sequence', async ({ page }) =>
 });
 
 test('Enter places the top hit', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByTestId('palette-search').fill('dropdown');
   await page.getByTestId('palette-search').press('Enter');
 

@@ -48,7 +48,7 @@ test('placing a component adds it to the running app', async ({ page }) => {
 });
 
 test('layout edits reach the Preview', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await field(page, 'Direction').locator('select').selectOption('row');
   await field(page, 'Gap').locator('input').fill('48');
 

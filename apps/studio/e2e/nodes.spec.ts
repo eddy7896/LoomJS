@@ -32,12 +32,12 @@ test('a wired graph calls the emitted function and shows its result', async ({ p
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Input');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Shout');
   await field(page, 'Label').locator('input').fill('Shout');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Result');
 
@@ -63,7 +63,7 @@ test('a wired graph calls the emitted function and shows its result', async ({ p
 });
 
 test('an illegal wire is refused at the gesture (Problems tier)', async ({ page }) => {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Go');
 
@@ -98,7 +98,7 @@ test('a function node outside a route derives a value in the browser', async ({ 
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Input');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Length');
 
@@ -127,12 +127,12 @@ test('a trigger holds a derivation until the button is pressed', async ({ page }
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Input');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
   await field(page, 'Name').locator('input').fill('Go');
   await field(page, 'Label').locator('input').fill('Go');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Length');
 
@@ -167,7 +167,7 @@ test('a field wired straight to a Text shows what the person types', async ({ pa
   await page.getByRole('button', { name: '+ Text field' }).click();
   await field(page, 'Name').locator('input').fill('Input');
 
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
   await field(page, 'Name').locator('input').fill('Echo');
 

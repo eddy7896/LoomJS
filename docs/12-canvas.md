@@ -89,6 +89,32 @@ primitives prove the emission.
   handles; the three primitives prove the emission first, and a path that cannot be edited after
   it is drawn is worse than no pen at all.
 
+## C3b — Screens are frames ✅
+
+- **Goal:** stop showing a seam that was never a real division.
+- **The fact underneath:** a screen has always been a frame plus routing metadata — a name, a
+  size, params, a guard, an entry flag. The document already stored it that way; only the editor
+  showed it as two things, so a designer had to know which of "Home" and "Root" held the padding
+  and which held the size.
+- **Build:**
+  - **One row** in the tree per screen, carrying the screen's name, its entry chip, its size, and
+    the root frame's children beneath it. Dropping onto that row drops into the screen.
+  - **One panel** in the inspector: name, entry, size, route params and guard, *and* the frame's
+    background, padding, direction and alignment.
+  - **A frame drawn on the open canvas is a new screen.** Same tool, same gesture; the only
+    difference is that nothing was underneath it. A frame drawn inside a screen is a group.
+  - **The frame tool carries a size:** free, or one of the screen presets (Phone, Tablet, Laptop,
+    Desktop…). The same choice applies either way — a frame the shape of a phone inside a screen,
+    or a phone-shaped screen on the canvas.
+- **Not done, deliberately:** merging them in the **IR**. Deleting `Artboard` and marking
+  top-level frames as screens would move ops, the compiler, the router and forty tests, and it
+  would buy the same felt result as this. A screen also has three things a frame genuinely cannot
+  — a URL with params, a guard, and a design-time size that emits no CSS — and keeping those off
+  every Button's schema is worth one extra object in the document. Revisit if nested screens or
+  an infinite canvas ever become real requirements.
+- **Follows:** "promote this frame to a screen" is now a small, obvious feature — it is the same
+  operation the canvas already performs when a gesture lands on nothing.
+
 ## C4 — Direct manipulation _(next)_
 
 - **Goal:** the canvas is where you change things, not just where you see them.

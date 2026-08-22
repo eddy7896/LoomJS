@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { componentDefs, COMPONENT_CATEGORIES } from '@loom/components';
+import { componentDefs, COMPONENT_CATEGORIES, SCREEN_PRESETS } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { setTool } from '../state/store';
 
@@ -44,6 +44,7 @@ function Icon({ path }: { path: string }) {
 export function CanvasToolbar() {
   const tool = useEditor((s) => s.tool);
   const [open, setOpen] = useState(false);
+  const [sizes, setSizes] = useState(false);
   const [search, setSearch] = useState('');
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -57,6 +58,7 @@ export function CanvasToolbar() {
 
       if (event.key === 'Escape') {
         setOpen(false);
+        setSizes(false);
         setTool('move');
         return;
       }
@@ -64,6 +66,7 @@ export function CanvasToolbar() {
       if (!match) return;
       event.preventDefault();
       setOpen(false);
+      setSizes(false);
       setTool(match.tool);
     };
     window.addEventListener('keydown', onKey);
@@ -81,20 +84,79 @@ export function CanvasToolbar() {
   return (
     <div className="toolbelt" data-testid="toolbelt">
       {TOOLS.map((entry) => (
-        <button
-          key={entry.tool}
-          className={`toolbelt__tool ${tool === entry.tool ? 'is-active' : ''}`}
-          data-testid={`tool-${entry.tool}`}
-          title={`${entry.label} — ${entry.shortcut}`}
-          aria-label={entry.label}
-          aria-pressed={tool === entry.tool}
-          onClick={() => {
-            setOpen(false);
-            setTool(entry.tool);
-          }}
-        >
-          <Icon path={entry.path} />
-        </button>
+        <span key={entry.tool} className="toolbelt__slot">
+          <button
+            className={`toolbelt__tool ${
+              tool === entry.tool || (entry.tool === 'Frame' && tool.startsWith('Frame:'))
+                ? 'is-active'
+                : ''
+            }`}
+            data-testid={`tool-${entry.tool}`}
+            title={`${entry.label} — ${entry.shortcut}`}
+            aria-label={entry.label}
+            aria-pressed={tool === entry.tool}
+            onClick={() => {
+              setOpen(false);
+              setSizes(false);
+              setTool(entry.tool);
+            }}
+          >
+            <Icon path={entry.path} />
+          </button>
+
+          {/* A frame is free-drawn or the shape of a device, and a screen is a frame with a
+              route — so the same tool makes both (`docs/12-canvas.md`). */}
+          {entry.tool === 'Frame' ? (
+            <button
+              className="toolbelt__chevron"
+              data-testid="tool-Frame-sizes"
+              title="Frame size"
+              aria-label="Frame size"
+              aria-expanded={sizes}
+              onClick={() => {
+                setOpen(false);
+                setSizes((value) => !value);
+              }}
+            >
+              ▾
+            </button>
+          ) : null}
+
+          {entry.tool === 'Frame' && sizes ? (
+            <div className="toolbelt__popover toolbelt__popover--sizes" data-testid="frame-sizes">
+              <div className="toolbelt__group">
+                <span className="toolbelt__group-label">Frame</span>
+                <button
+                  data-testid="frame-size-free"
+                  onClick={() => {
+                    setSizes(false);
+                    setTool('Frame');
+                  }}
+                >
+                  Free size
+                </button>
+              </div>
+              <div className="toolbelt__group">
+                <span className="toolbelt__group-label">Screen sizes</span>
+                {SCREEN_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    data-testid={`frame-size-${preset.id}`}
+                    onClick={() => {
+                      setSizes(false);
+                      setTool(`Frame:${preset.id}`);
+                    }}
+                  >
+                    {preset.label}
+                    <span className="toolbelt__dim mono">
+                      {preset.width}×{preset.height}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </span>
       ))}
 
       <span className="toolbelt__split" />

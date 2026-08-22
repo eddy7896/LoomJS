@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function place(page: Page, button: string, name: string, label?: string): Promise<void> {
-  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: button, exact: true }).click();
   await field(page, 'Name').locator('input').fill(name);
   if (label !== undefined) await field(page, 'Label').locator('input').fill(label);

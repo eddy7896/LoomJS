@@ -24,6 +24,22 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.artboard').first()).toBeVisible();
 });
 
+/**
+ * Wait for something to exist in the Preview, re-resolving the frame each time.
+ *
+ * The Preview reloads on its first build, and Vite reloads it again the first time it optimises
+ * dependencies. A locator bound to the frame before either can end up holding one that no longer
+ * exists, which reads as "never appeared" — so this asks the page for the frame on every attempt.
+ */
+async function previewHas(page: Page, selector: string): Promise<void> {
+  await expect
+    .poll(
+      async () => page.frameLocator('iframe.preview__frame').locator(selector).count(),
+      { timeout: 20_000 },
+    )
+    .toBeGreaterThan(0);
+}
+
 /** Drag inside the screen, from one point to another, in viewport px. */
 async function draw(
   page: Page,
@@ -58,8 +74,7 @@ test('a rectangle drawn on the canvas reaches the running app', async ({ page })
   await expect(page.locator('.layer', { hasText: 'Rectangle' })).toBeVisible();
   await expect(page.locator('.preview__state')).toHaveText('live');
 
-  const rect = preview(page).locator('svg rect');
-  await expect(rect).toBeVisible();
+  await previewHas(page, 'svg rect');
 
   // At the size it was drawn — 200x120 of screen at 80% zoom is 250x150 of app, because a shape
   // drawn at half zoom must not come out twice the size it looked.
@@ -75,7 +90,7 @@ test('an ellipse is a different shape, not a rounded box', async ({ page }) => {
   await draw(page, { x: 40, y: 40 }, { x: 200, y: 140 });
 
   await expect(page.locator('.preview__state')).toHaveText('live');
-  await expect(preview(page).locator('svg ellipse')).toBeVisible();
+  await previewHas(page, 'svg ellipse');
   await expect(preview(page).locator('svg rect')).toHaveCount(0);
 });
 
@@ -95,7 +110,7 @@ test('keyboard shortcuts arm the tools, and Escape puts the pointer back', async
 test('a shape drawn between two components lands between them', async ({ page }) => {
   // Two texts, so there is a slot to drop into rather than an empty frame.
   for (const name of ['first', 'second']) {
-    await page.locator('.layer', { hasText: 'Root' }).first().click();
+    await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
     await page.getByRole('button', { name: '+ Text', exact: true }).click();
     await field(page, 'Name').locator('input').fill(name);
     await field(page, 'Content').locator('input').fill(name);
@@ -127,4 +142,55 @@ test('the popover reaches the rest of the vocabulary without leaving the canvas'
   await expect(page.getByTestId('toolbelt-popover')).toHaveCount(0);
   await draw(page, { x: 40, y: 40 }, { x: 42, y: 42 });
   await expect(page.locator('.layer', { hasText: 'Select' })).toBeVisible();
+});
+
+test('a screen and its frame are one row, and one panel', async ({ page }) => {
+  // They were always one object — a frame with a route — and the second row made a designer
+  // guess which half held the padding (`docs/12-canvas.md`).
+  await expect(page.locator('.layer', { hasText: 'Root' })).toHaveCount(0);
+
+  const screen = page.locator('.layer--artboard', { hasText: 'Home' }).first();
+  await expect(screen).toContainText('834×1112');
+  await screen.click();
+
+  // One inspector: what the screen is, and what its frame does.
+  await expect(page.getByTestId('guard-mode')).toBeVisible();
+  await expect(field(page, 'Padding').locator('input')).toBeVisible();
+});
+
+test('a frame drawn on the open canvas is a new screen', async ({ page }) => {
+  await page.getByTestId('tool-Frame').click();
+
+  // On the canvas itself, above the first screen, rather than inside anything.
+  const board = (await page.locator('.artboard').first().boundingBox())!;
+  const empty = { x: board.x + 120, y: board.y - 50 };
+  await page.mouse.move(empty.x, empty.y);
+  await page.mouse.down();
+  await page.mouse.move(empty.x + 260, empty.y + 30, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(page.locator('.layer--artboard')).toHaveCount(2);
+  await expect(page.locator('.artboard')).toHaveCount(2);
+});
+
+test('the frame tool can take a screen size', async ({ page }) => {
+  await page.getByTestId('tool-Frame-sizes').click();
+  await page.getByTestId('frame-size-phone-sm').click();
+
+  const board = (await page.locator('.artboard').first().boundingBox())!;
+  await page.mouse.click(board.x + 120, board.y - 50);
+
+  // A screen is named for what it is in the app, not for the device it was drawn at — the size
+  // chip is where the shape shows.
+  await expect(page.locator('.layer--artboard', { hasText: '390×844' })).toHaveCount(1);
+  await expect(page.locator('.layer--artboard')).toHaveCount(2);
+});
+
+test('a frame drawn inside a screen is a group, not a screen', async ({ page }) => {
+  await page.getByTestId('tool-Frame').click();
+  await draw(page, { x: 40, y: 40 }, { x: 240, y: 200 });
+
+  // Still one screen; the frame went in it.
+  await expect(page.locator('.layer--artboard')).toHaveCount(1);
+  await expect(page.locator('.layer', { hasText: 'Frame' })).toBeVisible();
 });

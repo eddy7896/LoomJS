@@ -797,6 +797,13 @@ function GuardSection({ artboardId }: { artboardId: string }) {
   );
 }
 
+/**
+ * A screen, which is a frame with a route (`docs/12-canvas.md`).
+ *
+ * One panel holds both halves — what the screen is (name, size, route, who may open it) and what
+ * its frame does (padding, direction, background). They were two panels for two rows that stood
+ * for one object, and the split made a designer hunt for padding in the wrong place.
+ */
 function ArtboardInspector({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
@@ -806,6 +813,7 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
   if (!artboard) return null;
 
   const params = artboard.params ?? [];
+  const root = snapshot.components[artboard.root];
 
   return (
     <aside className="panel inspector">
@@ -813,7 +821,7 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
 
       <section className="field-group">
         <div className="field-group__head">
-          <span className="badge">Artboard</span>
+          <span className="badge">Screen</span>
           <code className="mono id">{artboard.id}</code>
         </div>
         <Field label="Name">
@@ -827,6 +835,19 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
       </section>
 
       <ScreenSizeSection artboardId={artboard.id} />
+
+      {/* The frame half: this screen's own padding, direction and background. */}
+      {root ? (
+        <>
+          <StyleSection component={root} />
+          <section className="field-group">
+            <h3 className="field-group__title">Layout</h3>
+            {LAYOUT_FIELDS.map((field) => (
+              <LayoutField key={field.key} component={root} field={field} />
+            ))}
+          </section>
+        </>
+      ) : null}
 
       <GuardSection artboardId={artboard.id} />
 

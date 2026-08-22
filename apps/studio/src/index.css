@@ -356,6 +356,43 @@ select {
   color: #fff;
 }
 
+.toolbelt__slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The frame tool carries a size: free, or the shape of a device. */
+.toolbelt__chevron {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 10px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.toolbelt__chevron:hover {
+  color: var(--ink);
+}
+
+.toolbelt__popover--sizes {
+  left: 0;
+  transform: none;
+  width: 220px;
+}
+
+.toolbelt__group button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.toolbelt__dim {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
 .toolbelt__split {
   width: 1px;
   height: 20px;

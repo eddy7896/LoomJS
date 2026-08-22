@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
-import { defFor } from '@loom/components';
+import { DEFAULT_SCREEN, defFor } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import {
   addArtboard,
@@ -18,6 +18,10 @@ import {
 /**
  * The elements tree (S0/S2, `docs/11-editor-shell.md`): screens and what is on them, above the
  * palette in one column.
+ *
+ * A screen and its root frame are **one row**, not two (`docs/12-canvas.md`): they were always
+ * one object — a frame with a route — and showing the seam made a designer guess which half held
+ * the padding and which held the size.
  *
  * S2 makes it the primary way to move around a screen rather than a read-only list — a component
  * can be dragged into a different Frame from here, which the canvas cannot express at all once a
@@ -88,34 +92,87 @@ export function LayersPanel() {
         <button onClick={() => addArtboard(`Screen ${artboards.length + 1}`)}>+ Screen</button>
       </div>
 
-      {artboards.map((artboard) => (
-        <div key={artboard.id}>
-          <div
-            className={`layer layer--artboard ${
-              selection?.kind === 'artboard' && selection.id === artboard.id ? 'is-selected' : ''
-            } ${activeArtboardId === artboard.id ? 'is-active' : ''}`}
-            onClick={() => setActiveArtboard(artboard.id)}
-          >
-            <span className="layer__name">{artboard.name}</span>
-            {artboard.id === entryId ? <span className="chip">/</span> : null}
+      {artboards.map((artboard) => {
+        // A screen **is** its root frame (`docs/12-canvas.md`). One row, not two: the second row
+        // was the same object wearing a different name, and a designer had to know which of the
+        // pair held the size and which held the padding.
+        const root = snapshot.components[artboard.root];
+        const children = root?.children ?? [];
+        const isCollapsed = collapsed.has(artboard.root);
+        const isOver = over?.id === artboard.root;
+        const size = artboard.size ?? DEFAULT_SCREEN;
+
+        return (
+          <div key={artboard.id}>
+            <div
+              className={`layer layer--artboard ${
+                selection?.kind === 'artboard' && selection.id === artboard.id ? 'is-selected' : ''
+              } ${activeArtboardId === artboard.id ? 'is-active' : ''} ${
+                isOver ? 'is-over is-over--inside' : ''
+              }`}
+              data-testid={`screen-${artboard.id}`}
+              onClick={() => setActiveArtboard(artboard.id)}
+              // Dropping onto the screen row puts the component in the screen, which is what the
+              // row now stands for.
+              onDragOver={(event) => {
+                if (!dragging) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                if (!isOver) setOver({ id: artboard.root, at: 'inside' });
+              }}
+              onDragLeave={() => {
+                if (isOver) setOver(undefined);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                drop(artboard.root, 'inside');
+              }}
+            >
+              {children.length > 0 ? (
+                <button
+                  className="layer__caret"
+                  title={isCollapsed ? 'Expand' : 'Collapse'}
+                  data-testid={`layer-caret-${artboard.root}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleLayer(artboard.root);
+                  }}
+                >
+                  {isCollapsed ? '▸' : '▾'}
+                </button>
+              ) : (
+                <span className="layer__caret" />
+              )}
+              <span className="layer__name">{artboard.name}</span>
+              {artboard.id === entryId ? <span className="chip">/</span> : null}
+              <span className="chip chip--mono">
+                {size.width}×{size.height}
+              </span>
+            </div>
+
+            {isCollapsed
+              ? null
+              : children.map((childId) => (
+                  <Row
+                    key={childId}
+                    snapshot={snapshot}
+                    id={childId}
+                    depth={1}
+                    selectedId={selectedComponentId}
+                    rootId={artboard.root}
+                    hidden={hidden}
+                    collapsed={collapsed}
+                    onToggle={toggleLayer}
+                    dragging={dragging}
+                    over={over}
+                    onDragStart={setDragging}
+                    onDragOver={setOver}
+                    onDrop={drop}
+                  />
+                ))}
           </div>
-          <Row
-            snapshot={snapshot}
-            id={artboard.root}
-            depth={1}
-            selectedId={selectedComponentId}
-            rootId={artboard.root}
-            hidden={hidden}
-            collapsed={collapsed}
-            onToggle={toggleLayer}
-            dragging={dragging}
-            over={over}
-            onDragStart={setDragging}
-            onDragOver={setOver}
-            onDrop={drop}
-          />
-        </div>
-      ))}
+        );
+      })}
     </aside>
   );
 }

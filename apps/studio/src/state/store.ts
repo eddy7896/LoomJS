@@ -18,7 +18,12 @@ import {
   type Snapshot,
   type Style,
 } from '@loom/ir';
-import { createComponent, defFor, DEFAULT_LAYOUT } from '@loom/components';
+import {
+  createComponent,
+  defFor,
+  DEFAULT_LAYOUT,
+  screenPreset,
+} from '@loom/components';
 import { __resetBuildResult } from './build';
 
 /**
@@ -416,21 +421,27 @@ export function placeComponent(
   if (!def) return undefined;
 
   const component = createComponent(type, newComponentId());
-  if (options.variant) {
+  // A frame's variant is a screen size rather than a field: "a frame the shape of a phone" is a
+  // thing a designer asks for, and a screen is only a frame with a route (`docs/12-canvas.md`).
+  const preset = screenPreset(options.variant);
+  const size = preset ? { width: preset.width, height: preset.height } : options.size;
+
+  if (options.variant && !preset) {
     // The variant is the type's first field — the thing that makes a Shape a rectangle.
     const key = def.fields[0]?.key;
     if (key) component.props[key] = { kind: 'static', value: options.variant };
     component.name = `${options.variant[0]?.toUpperCase() ?? ''}${options.variant.slice(1)}`;
   }
+  if (preset) component.name = preset.label;
 
-  if (options.size) {
+  if (size) {
     // Drawn at a size means fixed at that size. Nothing else in the vocabulary starts fixed, and
     // a designer can hand either axis back to the layout from the inspector.
     component.layout = {
       ...(component.layout ?? DEFAULT_LAYOUT),
       size: {
-        width: { mode: 'fixed', px: Math.round(options.size.width) },
-        height: { mode: 'fixed', px: Math.round(options.size.height) },
+        width: { mode: 'fixed', px: Math.round(size.width) },
+        height: { mode: 'fixed', px: Math.round(size.height) },
       },
     };
   }
@@ -438,6 +449,29 @@ export function placeComponent(
   dispatch({ type: 'addComponent', component, parentId, index });
   selectComponent(component.id);
   return component.id;
+}
+
+/**
+ * A frame drawn on the open canvas is a **screen** (`docs/12-canvas.md`).
+ *
+ * That is the whole answer to "why are screens and frames different things": they are not. A
+ * frame inside a screen is a group; the same gesture with nothing under it makes a screen, and
+ * the only difference between the two is that one has a route.
+ *
+ * Where it was drawn is not kept: the canvas lays screens out in a row, because a screen's
+ * position is not something the emitted app has any use for.
+ */
+export function placeScreen(size?: { width: number; height: number; preset?: string }): Id {
+  const count = Object.keys(state.snapshot.artboards).length;
+  const id = addArtboard(`Screen ${count + 1}`);
+  if (size) {
+    setArtboardSize(id, {
+      width: Math.round(size.width),
+      height: Math.round(size.height),
+      ...(size.preset ? { preset: size.preset } : {}),
+    });
+  }
+  return id;
 }
 
 /** Reparent / reorder (canvas drag and the layers panel both land here). */
