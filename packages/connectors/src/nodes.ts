@@ -1,5 +1,5 @@
 import type { Node, Port, TypeRef } from '@loom/ir';
-import type { TableSchema } from './module';
+import type { ColumnSchema, TableSchema } from './module';
 
 /**
  * Typed per-table nodes — the differentiating half of M4. A DB node's ports are the table's real
@@ -8,23 +8,68 @@ import type { TableSchema } from './module';
  * (`docs/specs/connector-credentials.md`).
  */
 
+/**
+ * The four things you can do to a table (P4). `update` and `delete` need a **row identity**, which
+ * is the primary key from introspection — not a concept a designer has to supply.
+ */
+export type DbOperation = 'select' | 'insert' | 'update' | 'delete';
+
+/**
+ * How a filter's comparison value arrives.
+ *
+ * `value` is a literal chosen in the inspector — "status is open". `input` makes the comparison an
+ * **input port** on the node, so it becomes a route input the browser supplies at call time; that
+ * is what a search box is, and it is why search needs no separate machinery.
+ */
+export type FilterSource = 'value' | 'input';
+
+export const FILTER_OPS = {
+  equals: { label: 'is', postgrest: 'eq' },
+  notEquals: { label: 'is not', postgrest: 'neq' },
+  greaterThan: { label: 'is more than', postgrest: 'gt' },
+  lessThan: { label: 'is less than', postgrest: 'lt' },
+  contains: { label: 'contains', postgrest: 'ilike' },
+} as const satisfies Record<string, { label: string; postgrest: string }>;
+
+export type FilterOp = keyof typeof FILTER_OPS;
+
+export interface DbFilter {
+  column: string;
+  operator: FilterOp;
+  source: FilterSource;
+  /** Used when `source` is `value`. */
+  value?: string;
+}
+
 export interface DbNodeConfig {
   connectorId: string;
   table: string;
-  /** `select` reads rows; `insert` writes one. */
-  operation: 'select' | 'insert';
+  operation: DbOperation;
   /** Read options (`docs/06-glossary.md`: Query = read with filter/sort/limit). */
   limit?: number;
   orderBy?: string;
   descending?: boolean;
+  /** Narrowing on a read. Empty means every row the limit allows. */
+  filters?: DbFilter[];
 }
+
+/** The column that identifies a row. Update and delete are impossible without one. */
+export function primaryKeyOf(table: TableSchema): ColumnSchema | undefined {
+  return table.columns.find((column) => column.primaryKey);
+}
+
+/** The port a filter's comparison value arrives on, when it is supplied at call time. */
+export const filterPortId = (column: string): string => `pt_where_${column}`;
+
+/** The port carrying the row identity for an update or a delete. */
+export const ID_PORT = 'pt_id';
 
 /**
  * The inspector fields a database node shows. A read is a **query**, so how many rows and in what
  * order are part of it — that is also loom's answer to "where is the loop": you narrow the query
  * and a List renders one row at a time (`04-hallucination-check.md`: loops are never nodes).
  */
-export function dbNodeFields(operation: DbNodeConfig['operation']): readonly {
+export function dbNodeFields(operation: DbOperation): readonly {
   key: string;
   label: string;
   control: 'text' | 'number' | 'boolean';
@@ -48,45 +93,87 @@ const port = (
 /** The column id used for a port, kept stable so wires survive a re-introspect. */
 export const columnPortId = (column: string): string => `pt_col_${column}`;
 
-export function dbNodePorts(table: TableSchema, operation: DbNodeConfig['operation']): Port[] {
-  if (operation === 'select') {
-    // A select yields rows; per-column typing shows up when a row is read downstream.
-    return [
-      port('pt_rows', 'rows', 'out', { kind: 'list', of: { kind: 'record' } }),
-      port('pt_count', 'count', 'out', { kind: 'number' }),
-    ];
-  }
-
-  // An insert takes one input per writable column, typed exactly as the column is.
-  const inputs = table.columns
+/** One input per writable column, typed exactly as the column is. */
+function columnInputs(table: TableSchema, allOptional: boolean): Port[] {
+  return table.columns
     .filter((column) => !column.generated)
     .map((column) =>
       port(
         columnPortId(column.name),
         column.name,
         'in',
-        // A nullable column accepts a value or nothing; a required one does not.
-        column.required ? column.type : { kind: 'optional', of: column.type },
+        // A nullable column accepts a value or nothing; a required one does not. On an update
+        // *everything* is optional: changing one field is the common case, and demanding the rest
+        // would make an edit form re-send data it never showed.
+        !allOptional && column.required ? column.type : { kind: 'optional', of: column.type },
       ),
     );
-
-  return [...inputs, port('pt_row', 'row', 'out', { kind: 'record' })];
 }
+
+export function dbNodePorts(
+  table: TableSchema,
+  operation: DbOperation,
+  filters: readonly DbFilter[] = [],
+): Port[] {
+  if (operation === 'select') {
+    // A filter comparing against an input becomes a port, which becomes a route input: that is
+    // the whole of "search" — the value the person typed travels the same road as a form field.
+    const supplied = filters
+      .filter((filter) => filter.source === 'input')
+      .map((filter) => {
+        const column = table.columns.find((candidate) => candidate.name === filter.column);
+        return port(filterPortId(filter.column), filter.column, 'in', {
+          kind: 'optional',
+          of: column?.type ?? { kind: 'text' },
+        });
+      });
+
+    // A select yields rows; per-column typing shows up when a row is read downstream.
+    return [
+      ...supplied,
+      port('pt_rows', 'rows', 'out', { kind: 'list', of: { kind: 'record' } }),
+      port('pt_count', 'count', 'out', { kind: 'number' }),
+    ];
+  }
+
+  const key = primaryKeyOf(table);
+  const identity =
+    operation === 'update' || operation === 'delete'
+      ? [port(ID_PORT, key?.name ?? 'id', 'in', key?.type ?? { kind: 'text' })]
+      : [];
+
+  if (operation === 'delete') {
+    return [...identity, port('pt_row', 'row', 'out', { kind: 'record' })];
+  }
+
+  return [
+    ...identity,
+    ...columnInputs(table, operation === 'update'),
+    port('pt_row', 'row', 'out', { kind: 'record' }),
+  ];
+}
+
+const OPERATION_LABELS: Record<DbOperation, string> = {
+  select: 'Read',
+  insert: 'Insert',
+  update: 'Update',
+  delete: 'Delete',
+};
 
 export function createDbNode(
   id: string,
   position: { x: number; y: number },
   connectorId: string,
   table: TableSchema,
-  operation: DbNodeConfig['operation'],
+  operation: DbOperation,
 ): Node {
-  const config: DbNodeConfig = { connectorId, table: table.name, operation };
+  const config: DbNodeConfig = { connectorId, table: table.name, operation, filters: [] };
   return {
     id,
     category: 'db',
     kind: operation,
-    name: `${operation === 'select' ? 'Read' : 'Insert'} ${table.name}`,
-    ports: dbNodePorts(table, operation),
+    name: `${OPERATION_LABELS[operation]} ${table.name}`,
+    ports: dbNodePorts(table, operation, config.filters),
     position,
     config,
   };

@@ -301,6 +301,25 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P3] The sequence is edited inline, never in a modal.** loom's protection against workflow
   spaghetti is that behaviour is visible and wired, and that protection dies the moment an action
   list hides behind a dialog.
+- **[P4] A row identity is the primary key from introspection, never a designer's problem.** A
+  table with no primary key refuses update and delete by name — the alternative is a query that
+  rewrites every row, which is the worst failure a builder could ship.
+- **[P4] Every column is optional on an update.** Changing one field is the common case; demanding
+  the rest would make an edit form re-send data it never showed. `undefined` means "not on this
+  form", which is not the same as "set it to null".
+- **[P4] A search is a filter whose value the screen supplies.** An input filter becomes a port,
+  which becomes a route input — the value someone typed travels the road a form field already
+  travels, so search needed no machinery of its own. An empty box narrows nothing rather than
+  matching nothing.
+- **[P4] A write invalidates a read of the same table, per table, on the same screen.** A counter
+  bumped by the write and named in the read's dependencies: what a developer would write by hand,
+  demand-driven like every other local. Cross-screen invalidation is not attempted.
+- **[P4] A List pages what was fetched, not what exists.** Server-side paging needs an offset the
+  caller supplies, and nothing on a screen can hand one over yet. Slicing is honest for the
+  hundreds of rows a `limit` already caps and costs no round trip.
+- **[P4] A guardrail test should assert the thing it means.** The credential check scanned for the
+  word "key" and fired on a cached schema saying `primaryKey`. It was wrong in both directions — a
+  leaked key need not contain the word — so it now checks for credential-shaped *values*.
 
 - **[P1.2] A variable is one node with two scopes, not two nodes.** `screen` is one artboard's
   `useState`; `global` is the same merge point held in a React Context above the router. Same fan-in

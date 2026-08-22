@@ -223,18 +223,24 @@ export function ElementsPanel() {
               </option>
             ))}
           </select>
-          <button
-            className="palette__item"
-            onClick={() => addDbStep(containerId, table || tables[0]!.name, 'select')}
-          >
-            + Read rows
-          </button>
-          <button
-            className="palette__item"
-            onClick={() => addDbStep(containerId, table || tables[0]!.name, 'insert')}
-          >
-            + Insert row
-          </button>
+          {/* The four things you can do to a table. Read and insert were the whole vocabulary
+              until P4; an app that cannot edit or remove a row is a demo. */}
+          {(
+            [
+              ['select', 'Read rows'],
+              ['insert', 'Insert row'],
+              ['update', 'Update row'],
+              ['delete', 'Delete row'],
+            ] as const
+          ).map(([operation, label]) => (
+            <button
+              key={operation}
+              className="palette__item"
+              onClick={() => addDbStep(containerId, table || tables[0]!.name, operation)}
+            >
+              + {label}
+            </button>
+          ))}
         </section>
       ) : null}
     </aside>

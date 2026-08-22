@@ -1,7 +1,11 @@
 import { newConnectorId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
   createDbNode,
+  dbNodePorts,
   supabaseConnector,
+  type DbFilter,
+  type DbNodeConfig,
+  type DbOperation,
   type IntrospectionResult,
   type TableSchema,
 } from '@loom/connectors';
@@ -220,7 +224,7 @@ export function disconnect(): void {
 export function addDbStep(
   apiNodeId: Id,
   tableName: string,
-  operation: 'select' | 'insert',
+  operation: DbOperation,
 ): Id | undefined {
   const snapshot = getState().snapshot;
   const api = snapshot.nodes[apiNodeId];
@@ -259,4 +263,70 @@ export function addDbStep(
 
   select({ kind: 'node', id: node.id });
   return node.id;
+}
+
+/**
+ * Retype an API route from the steps in its body.
+ *
+ * The route's ports *are* its body's shape — an insert's columns, an update's identity, a read's
+ * supplied filters — so anything that changes a step has to travel with the container in the same
+ * op batch, or the route would advertise inputs that no longer exist.
+ */
+function retypeRoute(apiNodeId: Id): void {
+  const snapshot = getState().snapshot;
+  const api = snapshot.nodes[apiNodeId];
+  if (!api || api.category !== 'api') return;
+
+  const config = (api.config ?? {}) as { body?: Id[] };
+  const bodyNodes = (config.body ?? [])
+    .map((id) => snapshot.nodes[id])
+    .filter((step): step is NonNullable<typeof step> => Boolean(step));
+
+  dispatch({
+    type: 'setNodeConfig',
+    nodeId: apiNodeId,
+    config: api.config as Record<string, unknown>,
+    ports: apiPortsFromBody(bodyNodes),
+  });
+}
+
+/** The API route whose body holds `nodeId`, if any. */
+export function routeContaining(snapshot: Snapshot, nodeId: Id): Id | undefined {
+  for (const node of Object.values(snapshot.nodes)) {
+    if (node.category !== 'api') continue;
+    if (((node.config ?? {}) as { body?: Id[] }).body?.includes(nodeId)) return node.id;
+  }
+  return undefined;
+}
+
+/**
+ * Change a read's narrowing. A filter that reads its value from an input adds a port, which
+ * becomes a route input — so the container is retyped in the same breath.
+ */
+export function setDbFilters(nodeId: Id, filters: DbFilter[]): void {
+  const snapshot = getState().snapshot;
+  const node = snapshot.nodes[nodeId];
+  if (!node || node.category !== 'db') return;
+
+  const config = { ...((node.config ?? {}) as DbNodeConfig), filters };
+  const table = connectedTables(snapshot).find((candidate) => candidate.name === config.table);
+  if (!table) return;
+
+  dispatch({
+    type: 'setNodeConfig',
+    nodeId,
+    config: config as unknown as Record<string, unknown>,
+    ports: dbNodePorts(table, config.operation, filters),
+  });
+
+  const route = routeContaining(getState().snapshot, nodeId);
+  if (route) retypeRoute(route);
+}
+
+/** The columns of the table a database node reads or writes, for the inspector to offer. */
+export function columnsOf(snapshot: Snapshot, nodeId: Id): TableSchema['columns'] {
+  const node = snapshot.nodes[nodeId];
+  const config = (node?.config ?? {}) as Partial<DbNodeConfig>;
+  const table = connectedTables(snapshot).find((candidate) => candidate.name === config.table);
+  return table?.columns ?? [];
 }

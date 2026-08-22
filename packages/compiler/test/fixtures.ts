@@ -1,12 +1,13 @@
 import { apiPortsFromBody, componentDefs, createComponent } from '@loom/components';
 import { inferBackend } from '@loom/inference';
-import { columnPortId, createDbNode } from '@loom/connectors';
+import { columnPortId, createDbNode, dbNodePorts, filterPortId } from '@loom/connectors';
 import {
   applyOps,
   SCHEMA_VERSION,
   type Action,
   type Component,
   type Node,
+  type Op,
   type Snapshot,
 } from '@loom/ir';
 
@@ -231,7 +232,7 @@ export function pipelineSnapshot(): Snapshot {
   };
 }
 
-const NOTES_TABLE = {
+export const NOTES_TABLE = {
   name: 'notes',
   columns: [
     { name: 'id', type: { kind: 'number' as const }, required: false, primaryKey: true, generated: true },
@@ -377,7 +378,7 @@ export function supabaseSnapshot(): Snapshot {
         id: 'cn_supabase',
         moduleId: 'supabase',
         // Config carries the project URL and the cached schema. Never a key.
-        config: { url: 'https://demo.supabase.co' },
+        config: { url: 'https://demo.supabase.co', schema: { tables: [NOTES_TABLE] } },
         credentialRef: 'default',
       },
     },
@@ -1124,4 +1125,169 @@ function routeNodeIdOf(snapshot: Snapshot): string {
   const route = Object.values(snapshot.nodes).find((node) => node.category === 'api');
   if (!route) throw new Error('no API route in the inferred snapshot');
   return route.id;
+}
+
+/**
+ * P4's shape: one table, all four operations, and a search.
+ *
+ * Built on the M4 fixture, which already lists and inserts. What is added is the half that makes
+ * it an app rather than a demo — editing a row, removing one, and narrowing the list by something
+ * the person typed.
+ */
+export function crudSnapshot(options: { search?: boolean; pageSize?: number } = {}): Snapshot {
+  const base = supabaseSnapshot();
+
+  const updateNode = createDbNode('nd_upd', { x: 0, y: 400 }, 'cn_supabase', NOTES_TABLE, 'update');
+  const deleteNode = createDbNode('nd_del', { x: 0, y: 600 }, 'cn_supabase', NOTES_TABLE, 'delete');
+
+  const ops: Op[] = [
+    { type: 'addNode', node: updateNode },
+    { type: 'addNode', node: deleteNode },
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_edit',
+        category: 'api',
+        kind: 'route',
+        name: 'Edit note',
+        position: { x: 320, y: 400 },
+        config: { method: 'POST', path: 'editnote', body: [updateNode.id] },
+        ports: apiPortsFromBody([updateNode]),
+      },
+    },
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_remove',
+        category: 'api',
+        kind: 'route',
+        name: 'Remove note',
+        position: { x: 320, y: 600 },
+        config: { method: 'POST', path: 'removenote', body: [deleteNode.id] },
+        ports: apiPortsFromBody([deleteNode]),
+      },
+    },
+    // Buttons to fire them, so both routes belong to this screen.
+    ...['edit', 'remove'].flatMap((which): Op[] => [
+      {
+        type: 'addComponent',
+        parentId: 'cp_root000001',
+        component: {
+          id: `cp_${which}`,
+          type: 'Button',
+          name: which,
+          props: {
+            label: { kind: 'static', value: which },
+            onClick: {
+              kind: 'event',
+              handler: {
+                kind: 'trigger',
+                target: { nodeId: which === 'edit' ? 'nd_edit' : 'nd_remove', portId: 'pt_run' },
+              },
+            },
+          },
+        },
+      },
+      {
+        type: 'addNode',
+        node: {
+          id: `nd_m_${which}`,
+          category: 'ui',
+          kind: 'mirror',
+          mirrorOf: `cp_${which}`,
+          position: { x: 0, y: 0 },
+          ports: [
+            {
+              id: 'pt_click',
+              name: 'onClick',
+              direction: 'out',
+              portKind: 'trigger',
+              type: { kind: 'trigger' },
+            },
+          ],
+        },
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: `wr_${which}`,
+          from: { nodeId: `nd_m_${which}`, portId: 'pt_click' },
+          to: { nodeId: which === 'edit' ? 'nd_edit' : 'nd_remove', portId: 'pt_run' },
+        },
+      },
+    ]),
+  ];
+
+  if (options.search) {
+    // The read narrows by a value the screen supplies — which is all a search box is.
+    const filters = [{ column: 'title', operator: 'contains' as const, source: 'input' as const }];
+    const select = base.nodes.nd_select!;
+    ops.push({
+      type: 'setNodeConfig',
+      nodeId: select.id,
+      config: { ...(select.config as Record<string, unknown>), filters },
+      ports: dbNodePorts(NOTES_TABLE, 'select', filters),
+    });
+
+    const searchField: Component = {
+      id: 'cp_search',
+      type: 'TextField',
+      name: 'Search',
+      props: { value: { kind: 'static', value: '' } },
+    };
+    ops.push(
+      { type: 'addComponent', parentId: 'cp_root000001', component: searchField },
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_m_search',
+          category: 'ui',
+          kind: 'mirror',
+          mirrorOf: searchField.id,
+          position: { x: 0, y: 0 },
+          ports: [
+            {
+              id: 'pt_value',
+              name: 'value',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'text' },
+            },
+          ],
+        },
+      },
+    );
+  }
+
+  const withOps = applyOps(base, ops);
+
+  // The read route has to be retyped after its step gained a filter port, then wired.
+  if (options.search) {
+    const select = withOps.nodes.nd_select!;
+    const retyped = applyOps(withOps, [
+      {
+        type: 'setNodeConfig',
+        nodeId: 'nd_read',
+        config: (withOps.nodes.nd_read!.config ?? {}) as Record<string, unknown>,
+        ports: apiPortsFromBody([select]),
+      },
+      {
+        type: 'addWire',
+        wire: {
+          id: 'wr_search',
+          from: { nodeId: 'nd_m_search', portId: 'pt_value' },
+          to: { nodeId: 'nd_read', portId: filterPortId('title') },
+        },
+      },
+    ]);
+    return options.pageSize ? withPageSize(retyped, options.pageSize) : retyped;
+  }
+
+  return options.pageSize ? withPageSize(withOps, options.pageSize) : withOps;
+}
+
+function withPageSize(snapshot: Snapshot, pageSize: number): Snapshot {
+  return applyOps(snapshot, [
+    { type: 'setProp', componentId: 'cp_list', key: 'pageSize', value: { kind: 'static', value: pageSize } },
+  ]);
 }

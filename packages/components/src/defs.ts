@@ -140,7 +140,12 @@ export const LIST_DEF: ComponentDef = {
   category: 'container',
   keywords: ['repeating group', 'rows', 'each', 'loop'],
   isContainer: true,
-  fields: [{ key: 'empty', label: 'Empty text', control: 'text', default: 'Nothing yet' }],
+  fields: [
+    { key: 'empty', label: 'Empty text', control: 'text', default: 'Nothing yet' },
+    // 0 means "all of them". Paging what was fetched, not what exists — a server-side page needs
+    // an offset the caller supplies, which is the same gap a flow payload has (`docs/11`).
+    { key: 'pageSize', label: 'Rows per page', control: 'number', default: 0 },
+  ],
   defaultLayout: { direction: 'column', gap: 8, padding: 0, align: 'stretch', justify: 'start' },
   acceptsItems: true,
 };

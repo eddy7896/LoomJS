@@ -35,8 +35,30 @@ export interface PipelinePlan {
   /** Screen buckets this pipeline's result is kept in. The buckets themselves are declared by
    * `emit/state.ts`; a pipeline only knows which ones its success path has to set. */
   states: ScreenStatePlan[];
+  /** Tables this route reads, and tables it changes. A write invalidates a read of the same one. */
+  tables: { reads: string[]; writes: string[] };
   /** Local identifiers used in the emitted module. */
   names: { state: string; pending: string; error: string; run: string };
+}
+
+/**
+ * The re-read counter for one table.
+ *
+ * A reactive read runs on mount and when its inputs change — and a row inserted by *another*
+ * pipeline is neither, so the list on screen kept showing the world as it was before the write.
+ * The fix is the one a developer would write by hand: a counter per table, bumped by whatever
+ * changes it, and named in the effect's dependencies of whatever reads it
+ * (`docs/specs/binding-trigger-runtime.md`).
+ */
+export const tableVersionName = (table: string): string => `rows_${jsIdent(table)}`;
+
+/** Tables that are both read reactively and written on this screen — the only ones that need one. */
+export function invalidatedTables(plans: PipelinePlan[]): string[] {
+  const written = new Set(plans.flatMap((plan) => plan.tables.writes));
+  const reread = new Set(
+    plans.filter((plan) => !plan.trigger).flatMap((plan) => plan.tables.reads),
+  );
+  return [...written].filter((table) => reread.has(table)).sort();
 }
 
 /** Output ports of an API route node that a property may bind to. */
@@ -174,6 +196,17 @@ export function planPipelines(
       }
     }
 
+    // Which tables the body touches, so a write can invalidate a read of the same one.
+    const tables = { reads: [] as string[], writes: [] as string[] };
+    for (const step of body) {
+      if (step.category !== 'db') continue;
+      const stepConfig = (step.config ?? {}) as { table?: string; operation?: string };
+      const table = String(stepConfig.table ?? '');
+      if (!table) continue;
+      const side = stepConfig.operation === 'select' ? tables.reads : tables.writes;
+      if (!side.includes(table)) side.push(table);
+    }
+
     // Writes: the screen buckets this route's result is kept in.
     const states = statesWrittenBy(screenStates, node.id);
     const resultType = portOf(node, 'pt_result')?.type ?? { kind: 'any' };
@@ -194,6 +227,7 @@ export function planPipelines(
       resultType,
       binds,
       states,
+      tables,
       names: {
         state: `result_${ident}`,
         pending: `pending_${ident}`,
@@ -304,6 +338,11 @@ export function boundTypeOf(
 export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
   const lines: string[] = [];
 
+  for (const table of invalidatedTables(plans)) {
+    const name = tableVersionName(table);
+    lines.push(`  const [${name}, set_${name}] = useState(0);`);
+  }
+
   for (const plan of plans) {
     if (plan.binds.result) {
       const type = tsTypeOf(plan.resultType);
@@ -355,7 +394,14 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
       // `setState` after the call returns, not a second round trip.
       ...plan.states.map((state) => `      ${state.setter}((body.result ?? null) ${cast});`),
     ];
-    const store = writes.length > 0 ? writes.join('\n') : '      void body;';
+    // Anything this route changed is now stale everywhere it is read on this screen.
+    const invalidate = invalidatedTables(plans)
+      .filter((table) => plan.tables.writes.includes(table))
+      .map((table) => `      set_${tableVersionName(table)}((n) => n + 1);`);
+    const store =
+      writes.length > 0 || invalidate.length > 0
+        ? [...writes, ...invalidate].join('\n')
+        : '      void body;';
     const onError = plan.binds.error
       ? `      set_${plan.names.error}(error instanceof Error ? error.message : String(error));`
       : '      console.error(error);';
@@ -380,12 +426,17 @@ ${onError}
 ${settle}
   }, [${[...new Set(plan.inputs.map((input) => stateNameForComponent(input.componentId)))].join(', ')}]);`);
 
-    // No trigger wired in means the pipeline is reactive: run on mount and on input change.
+    // No trigger wired in means the pipeline is reactive: run on mount, on input change, and
+    // whenever something else on this screen changed a table it reads.
     if (!plan.trigger) {
+      const watching = invalidatedTables(plans)
+        .filter((table) => plan.tables.reads.includes(table))
+        .map((table) => `, ${tableVersionName(table)}`)
+        .join('');
       lines.push(`
   useEffect(() => {
     void ${plan.names.run}();
-  }, [${plan.names.run}]);`);
+  }, [${plan.names.run}${watching}]);`);
     }
   }
 

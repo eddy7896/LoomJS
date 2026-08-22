@@ -26,7 +26,9 @@ async function connect(page: Page): Promise<void> {
   await expect(page.locator('.table-row')).toContainText('notes');
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, request }) => {
+  // Fresh rows: these specs now edit and delete, so one must not leak into the next.
+  await request.get(`${STUB}/__reset`);
   // Clear once per test, not per navigation: an init script runs again on reload, and two of
   // these tests reload on purpose. sessionStorage survives the reload; the flag makes the clear
   // happen exactly once.
@@ -124,8 +126,85 @@ test('rows from the database render in the Preview, and a form writes one back',
     })
     .toContainEqual(expect.objectContaining({ title: 'written from loom' }));
 
-  // And it shows in the app on the next read. The read pipeline is reactive with no inputs, so
-  // it runs on mount — a write does not invalidate it (`docs/specs/binding-trigger-runtime.md`).
-  await page.reload();
+  // And it shows in the app **without a reload**. Until P4 the read ran on mount and never again,
+  // so a row you had just added was invisible until you refreshed; a write now makes a read of the
+  // same table stale (`docs/specs/binding-trigger-runtime.md`).
   await expect(preview(page).locator('span', { hasText: 'written from loom' })).toBeVisible();
+});
+
+test('a row can be edited and removed, and the list keeps up', async ({ page, request }) => {
+  await connect(page);
+  await page.getByTestId('rail-design').click();
+
+  // The list, and a Text in it reading each row's title.
+  await page.locator('.layer', { hasText: 'Root' }).first().click();
+  await page.getByRole('button', { name: '+ List', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Notes');
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Row title');
+
+  // A field for the new title, and two buttons.
+  for (const [button, name] of [
+    ['+ Number field', 'Which'],
+    ['+ Text field', 'NewTitle'],
+    ['+ Button', 'Rename'],
+    ['+ Button', 'Remove'],
+  ] as const) {
+    await page.locator('.layer', { hasText: 'Root' }).first().click();
+    await page.getByRole('button', { name: button, exact: true }).click();
+    await field(page, 'Name').locator('input').fill(name);
+    if (button === '+ Button') await field(page, 'Label').locator('input').fill(name);
+  }
+
+  await page.getByTestId('rail-nodes').click();
+
+  // Read.
+  await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByRole('button', { name: '+ Read rows' }).click();
+  await drag(
+    page,
+    handle(graphNode(page, 'API route'), 'pt_result'),
+    handle(graphNode(page, 'Notes'), 'pt_items'),
+  );
+
+  // Update.
+  await page.locator('.react-flow__pane').click();
+  await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByRole('button', { name: '+ Update row' }).click();
+  const edit = graphNode(page, 'API route').last();
+  await drag(page, handle(graphNode(page, 'Rename'), 'pt_click'), handle(edit, 'pt_run'));
+  await drag(page, handle(graphNode(page, 'Which'), 'pt_value'), handle(edit, 'pt_id'));
+  await drag(page, handle(graphNode(page, 'NewTitle'), 'pt_value'), handle(edit, 'pt_col_title'));
+
+  // Delete.
+  await page.locator('.react-flow__pane').click();
+  await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByRole('button', { name: '+ Delete row' }).click();
+  const remove = graphNode(page, 'API route').last();
+  await drag(page, handle(graphNode(page, 'Remove'), 'pt_click'), handle(remove, 'pt_run'));
+  await drag(page, handle(graphNode(page, 'Which'), 'pt_value'), handle(remove, 'pt_id'));
+
+  await page.getByRole('button', { name: 'Design' }).click();
+  await page.locator('.layer', { hasText: 'Row title' }).first().click();
+  await field(page, 'Content').locator('select').selectOption('title');
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await expect(preview(page).locator('span', { hasText: 'first note' })).toBeVisible();
+
+  // Edit row 1. The identity comes from the primary key, which the designer never had to name.
+  await preview(page).locator('input[type="number"]').fill('1');
+  await preview(page).locator('input[type="text"]').fill('renamed by loom');
+  await preview(page).getByRole('button', { name: 'Rename' }).click();
+
+  await expect(preview(page).locator('span', { hasText: 'renamed by loom' })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const response = await request.get(`${STUB}/rest/v1/notes`);
+      return (await response.json()) as { title: string }[];
+    })
+    .toContainEqual(expect.objectContaining({ title: 'renamed by loom' }));
+
+  // Remove it. The list empties itself, again with no reload.
+  await preview(page).getByRole('button', { name: 'Remove' }).click();
+  await expect(preview(page).locator('span', { hasText: 'renamed by loom' })).toHaveCount(0);
 });

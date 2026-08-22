@@ -31,11 +31,19 @@ describe('database nodes -> server code (M4)', () => {
     expect(api).toContain('process.env.SUPABASE_URL');
     expect(api).toContain('process.env.SUPABASE_SERVICE_ROLE_KEY');
 
-    // Nothing key-shaped may reach any emitted file, nor the document it came from.
+    // No credential *value* may reach the document or an emitted file. Scanning for the word
+    // "key" used to stand in for this, and it was wrong in both directions: a cached schema says
+    // `primaryKey` and holds no secret, while a leaked key need not contain the word at all.
     const snapshot = supabaseSnapshot();
-    expect(JSON.stringify(snapshot.connectors)).not.toMatch(/key|secret|token/i);
+    for (const connector of Object.values(snapshot.connectors)) {
+      expect(connector.credentialRef, 'a reference is a name, not a value').toMatch(/^[\w-]{1,40}$/);
+      for (const value of stringsIn(connector.config)) {
+        expect(value, 'a value this long in a connector is a key').not.toMatch(/^[\w-]{60,}$/);
+        expect(value).not.toMatch(/eyJhbGciOi/); // a JWT, which every Supabase key is
+      }
+    }
     for (const file of compile(snapshot).files) {
-      expect(file.content).not.toMatch(/eyJhbGciOi/); // a JWT, which every Supabase key is
+      expect(file.content).not.toMatch(/eyJhbGciOi/);
     }
   });
 
@@ -124,3 +132,11 @@ describe('the security gate is a build gate', () => {
     expect(() => compile(snapshot)).toThrow(/is not inside a List/);
   });
 });
+
+/** Every string anywhere inside a value, however deeply nested. */
+function stringsIn(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsIn);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(stringsIn);
+  return [];
+}

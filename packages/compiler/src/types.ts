@@ -83,6 +83,8 @@ export interface EmitContext {
   requireLink: () => string;
   /** The type a property value carries, when it is knowable (bindings). */
   typeOfValue: (value: PropertyValue) => TypeRef | undefined;
+  /** Declare a page number for a paging List; returns its state variable name. */
+  requirePageState: (componentId: Id) => string;
   /** Declare that this module needs the text coercion helper; returns its name. */
   requireTextHelper: () => string;
   /** The JS expression a condition compiles to, already truthy-coerced (spec 6). */

@@ -5,7 +5,7 @@ import {
   type OperandConfig,
   type ValidationField,
 } from '@loom/components';
-import type { DbNodeConfig } from '@loom/connectors';
+import { FILTER_OPS, type DbFilter, type DbNodeConfig, type FilterOp } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
 import { CompileError, type EmittedFile } from '../types';
 import type { PipelinePlan } from './pipeline';
@@ -24,6 +24,52 @@ import type { PipelinePlan } from './pipeline';
  * container boundary is the boundary it may not cross (`docs/specs/connector-credentials.md`).
  * The key is read from the environment **by name** — the compiler never emits a secret.
  */
+/**
+ * The narrowing clauses of a read, as PostgREST calls.
+ *
+ * A `value` filter compares against a literal chosen in the inspector. An `input` filter compares
+ * against something the caller supplied — which is all a search box is: the value the person typed
+ * travels the same road a form field does, and arrives keyed by column name.
+ */
+function emitFilters(node: Node, filters: readonly DbFilter[]): string {
+  return filters
+    .map((filter) => {
+      const op = FILTER_OPS[filter.operator as FilterOp];
+      if (!op) {
+        throw new CompileError(
+          `Filter on "${filter.column}" uses an unknown comparison "${filter.operator}".`,
+          node.id,
+        );
+      }
+      if (!filter.column) {
+        throw new CompileError('A filter has no column chosen.', node.id);
+      }
+
+      const column = JSON.stringify(filter.column);
+      if (filter.source === 'value') {
+        const literal = String(filter.value ?? '');
+        // `contains` is a wildcard match; the others compare the value as given.
+        const argument =
+          filter.operator === 'contains'
+            ? JSON.stringify(`%${literal}%`)
+            : JSON.stringify(literal);
+        return `    query = query.${op.postgrest}(${column}, ${argument});`;
+      }
+
+      // Supplied at call time. An empty box must mean "no narrowing" rather than "match nothing",
+      // or a search field would blank the list before anyone had typed in it.
+      const read = `input[${column}]`;
+      const argument =
+        filter.operator === 'contains'
+          ? `"%" + String(${read}) + "%"`
+          : `${read} as never`;
+      return `    if (${read} !== undefined && ${read} !== null && ${read} !== "") {
+      query = query.${op.postgrest}(${column}, ${argument});
+    }`;
+    })
+    .join('\n');
+}
+
 function emitDbStep(node: Node, snapshot: Snapshot): string {
   const config = (node.config ?? {}) as Partial<DbNodeConfig>;
   const table = String(config.table ?? '');
@@ -37,10 +83,46 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
     throw new CompileError(`Unsupported connector "${connector.moduleId}".`, node.id);
   }
 
+  const name = JSON.stringify(table);
+  const key = JSON.stringify(primaryKeyName(node, snapshot, table));
+
   if (config.operation === 'insert') {
     return `  {
     const row = (value ?? {}) as Record<string, unknown>;
-    const { data, error } = await supabase.from(${JSON.stringify(table)}).insert(row).select().single();
+    const { data, error } = await supabase.from(${name}).insert(row).select().single();
+    if (error) throw new Error(error.message);
+    value = data;
+  }`;
+  }
+
+  if (config.operation === 'update') {
+    // The identity is pulled out and the rest is the patch; sending the key back as a column
+    // would ask the database to rewrite the row it is being used to find.
+    return `  {
+    const input = (value ?? {}) as Record<string, unknown>;
+    const id = input[${key}];
+    if (id === undefined || id === null || id === "") {
+      throw new Error("Update needs the row it is changing.");
+    }
+    const patch: Record<string, unknown> = {};
+    for (const [column, entry] of Object.entries(input)) {
+      // Undefined means "not shown on this form", which is different from "set it to null".
+      if (column !== ${key} && entry !== undefined) patch[column] = entry;
+    }
+    const { data, error } = await supabase.from(${name}).update(patch).eq(${key}, id).select().single();
+    if (error) throw new Error(error.message);
+    value = data;
+  }`;
+  }
+
+  if (config.operation === 'delete') {
+    return `  {
+    const input = (value ?? {}) as Record<string, unknown>;
+    const id = input[${key}];
+    if (id === undefined || id === null || id === "") {
+      throw new Error("Delete needs the row it is removing.");
+    }
+    const { data, error } = await supabase.from(${name}).delete().eq(${key}, id).select().single();
     if (error) throw new Error(error.message);
     value = data;
   }`;
@@ -54,14 +136,46 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
       .order(${JSON.stringify(orderBy)}, { ascending: ${config.descending ? 'false' : 'true'} })`
     : '';
 
+  const filters = config.filters ?? [];
+  const narrowing = filters.length > 0 ? `\n${emitFilters(node, filters)}` : '';
+  const input = filters.some((filter) => filter.source === 'input')
+    ? '    const input = (value ?? {}) as Record<string, unknown>;\n'
+    : '';
+
   return `  {
-    const { data, error } = await supabase
-      .from(${JSON.stringify(table)})
+${input}    let query = supabase
+      .from(${name})
       .select('*')${order}
-      .limit(${Number.isFinite(limit) ? limit : 100});
+      .limit(${Number.isFinite(limit) ? limit : 100});${narrowing}
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     value = data ?? [];
   }`;
+}
+
+/**
+ * The column that identifies a row, from the cached introspection.
+ *
+ * A table with no primary key cannot be updated or deleted from — there is no way to name one row
+ * — and saying so here beats emitting a query that would rewrite the whole table.
+ */
+function primaryKeyName(node: Node, snapshot: Snapshot, table: string): string {
+  const config = (node.config ?? {}) as Partial<DbNodeConfig>;
+  if (config.operation !== 'update' && config.operation !== 'delete') return 'id';
+
+  const connector = config.connectorId ? snapshot.connectors[config.connectorId] : undefined;
+  const schema = (connector?.config as { schema?: { tables?: { name: string; columns?: { name: string; primaryKey?: boolean }[] }[] } } | undefined)?.schema;
+  const found = schema?.tables?.find((candidate) => candidate.name === table);
+  const key = found?.columns?.find((column) => column.primaryKey);
+
+  if (!key) {
+    throw new CompileError(
+      `"${table}" has no primary key, so there is no way to say which row to change. ` +
+        `Add one in the database and reconnect.`,
+      node.id,
+    );
+  }
+  return key.name;
 }
 
 /**

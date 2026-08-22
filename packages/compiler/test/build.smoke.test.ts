@@ -10,6 +10,7 @@ import { writeFiles } from '../src/node';
 import {
   calculatorSnapshot,
   conditionalSnapshot,
+  crudSnapshot,
   everyComponentSnapshot,
   operatorPipelineSnapshot,
   triggeredMathSnapshot,
@@ -315,6 +316,150 @@ describe('emitted app talks to a Supabase-shaped backend', () => {
  * here is written by hand — the document comes out of `inferBackend`, and the same compiler that
  * handles a hand-wired graph emits it.
  */
+describe('a CRUD resource runs for real', () => {
+  /**
+   * P4's gate: create, list, edit, delete and search one table, through the emitted functions.
+   *
+   * The stub speaks PostgREST including its filter grammar (`col=eq.1`, `col=ilike.*term*`),
+   * because the emitted client is the real `@supabase/postgrest-js` and the point is that it
+   * cannot tell the difference.
+   */
+  it('creates, searches, edits and deletes through the emitted functions', async () => {
+    let rows: Record<string, unknown>[] = [{ id: 1, title: 'first note', body: null }];
+    let nextId = 2;
+
+    const matches = (row: Record<string, unknown>, url: URL): boolean => {
+      for (const [column, raw] of url.searchParams) {
+        if (['select', 'order', 'limit', 'offset'].includes(column)) continue;
+        const [operator, ...rest] = String(raw).split('.');
+        const value = rest.join('.');
+        const actual = row[column];
+        if (operator === 'eq' && String(actual) !== value) return false;
+        if (operator === 'ilike') {
+          const needle = value.replace(/[*%]/g, '').toLowerCase();
+          if (!String(actual ?? '').toLowerCase().includes(needle)) return false;
+        }
+      }
+      return true;
+    };
+
+    const body = async (req: Parameters<Parameters<typeof createServer>[0]>[0]) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          resolve(raw ? (JSON.parse(raw) as Record<string, unknown>) : {});
+        });
+      });
+
+    const stub = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      res.setHeader('content-type', 'application/json');
+      if (url.pathname !== '/rest/v1/notes') {
+        res.end(JSON.stringify({ definitions: {} }));
+        return;
+      }
+
+      const one = (req.headers.accept ?? '').includes('vnd.pgrst.object+json');
+      const selected = rows.filter((row) => matches(row, url));
+
+      if (req.method === 'GET') {
+        res.end(JSON.stringify(selected));
+        return;
+      }
+      if (req.method === 'POST') {
+        void body(req).then((posted) => {
+          const inserted = { id: nextId++, body: null, ...posted };
+          rows.push(inserted);
+          res.statusCode = 201;
+          res.end(JSON.stringify(one ? inserted : [inserted]));
+        });
+        return;
+      }
+      if (req.method === 'PATCH') {
+        void body(req).then((patch) => {
+          for (const row of selected) Object.assign(row, patch);
+          res.end(JSON.stringify(one ? selected[0] : selected));
+        });
+        return;
+      }
+      if (req.method === 'DELETE') {
+        rows = rows.filter((row) => !selected.includes(row));
+        res.end(JSON.stringify(one ? selected[0] : selected));
+        return;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ message: 'no' }));
+    });
+
+    const stubPort = takePort();
+    await new Promise<void>((resolve) => stub.listen(stubPort, resolve));
+
+    try {
+      const snapshot = crudSnapshot({ search: true, pageSize: 2 });
+      snapshot.connectors.cn_supabase!.config = {
+        url: `http://localhost:${stubPort}`,
+        schema: (snapshot.connectors.cn_supabase!.config as { schema: unknown }).schema,
+      };
+
+      const dir = await mkdtemp(join(tmpdir(), 'loom-smoke-'));
+      await writeFiles(compile(snapshot).files, dir, { clean: true });
+      await run(npm, ['install', '--no-audit', '--no-fund'], { cwd: dir, shell: true });
+
+      const port = takePort();
+      const child = spawn(npm, ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
+        cwd: dir,
+        shell: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          SUPABASE_URL: `http://localhost:${stubPort}`,
+          SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key',
+        },
+      });
+      children.push(child);
+      expect(await waitForServer(port)).toBe(true);
+
+      const call = async (route: string, input?: unknown) => {
+        const response = await fetch(`http://localhost:${port}/api/${route}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input === undefined ? {} : { input }),
+        });
+        return (await response.json()) as { result?: unknown; error?: string };
+      };
+
+      // Create.
+      const created = (await call('createnote', { title: 'buy milk' })).result as { id: number };
+      expect(created.id).toBe(2);
+
+      // Search — the filter value travels as a route input, keyed by column name.
+      const found = (await call('notes', { title: 'milk' })).result as { title: string }[];
+      expect(found).toHaveLength(1);
+      expect(found[0]!.title).toBe('buy milk');
+
+      // An empty search narrows nothing, rather than matching nothing.
+      expect((await call('notes', { title: '' })).result).toHaveLength(2);
+
+      // Edit.
+      const edited = (await call('editnote', { id: created.id, title: 'buy oat milk' })).result as {
+        title: string;
+      };
+      expect(edited.title).toBe('buy oat milk');
+
+      // Delete, and it is gone from the list.
+      await call('removenote', { id: created.id });
+      expect((await call('notes', { title: '' })).result).toHaveLength(1);
+
+      // An update with no row named is refused rather than rewriting the table.
+      expect((await call('editnote', { title: 'nope' })).error).toMatch(/needs the row/);
+    } finally {
+      stub.close();
+    }
+  });
+});
+
 describe('an inferred backend runs for real', () => {
   it('validates on the server and inserts the row the form filled', async () => {
     const rows: Record<string, unknown>[] = [];

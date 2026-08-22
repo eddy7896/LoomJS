@@ -125,7 +125,7 @@ Written before their consumers, per `09`'s rule.
   duplication starts the moment sequences exist. `07` defers reusable *sub-graphs* to v1.5; that
   deferral should be re-examined here rather than assumed.
 
-### P4 — CRUD and search
+### P4 — CRUD and search ✅ _(done)_
 
 - **Goal:** the acceptance test's "a CRUD resource, one search" becomes possible.
 - **Build:** **update** and **delete** database nodes (update needs a row identity — the primary
@@ -209,8 +209,9 @@ any empty state.
    would not compile anyway), no for lint-level ones.
 4. **Where does persistence live in P0?** _Recommend:_ local storage now behind a storage interface,
    so the platform's R2-then-Postgres order (`02`) swaps in without touching the editor.
-5. **Does a write invalidate a reactive read?** _Recommend:_ yes, per table, in P4 — the current
-   "it does not" is a known gap, not a design.
+5. **Does a write invalidate a reactive read?** _Settled:_ yes, per table, via a counter bumped by
+   the write and named in the read's dependencies. Only for tables both written and reactively read
+   on the same screen; a screen you are not looking at re-reads when you arrive.
 
 ## Immediate next actions
 

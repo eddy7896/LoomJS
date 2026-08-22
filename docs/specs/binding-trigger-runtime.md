@@ -182,6 +182,52 @@ scope to global"), rather than a `useState` that silently never updates.
 Nothing refuses it today because a triggered write cannot loop on its own, but nothing tests it
 either — the shape has no demand behind it yet.
 
+## CRUD, and what makes a read stale (P4)
+
+A table has four operations, and until P4 it had two. `update` and `delete` need something the
+other two do not: a **row identity**. That comes from the **primary key in the cached schema**, so
+a designer never names it — and a table without one is refused with the reason, because the query
+that would follow is one that rewrites every row.
+
+Two rules fall out of the shape rather than being chosen:
+
+- **Every column is optional on an update.** Changing one field is the common case, and demanding
+  the rest would make an edit form re-send data it never showed. `undefined` means "not on this
+  form", which is a different fact from "set it to null" — so the patch is built by skipping the
+  former, and the key is never sent as a column.
+- **A search is a filter, not a feature.** A filter compares a column against either a literal
+  chosen in the inspector or an **input**, and an input filter becomes a port on the node, which
+  becomes an input on the route, which the browser supplies at call time. The value someone typed
+  travels the road a form field already travels. An empty one narrows nothing rather than matching
+  nothing, or a list would be blank before anyone had typed in it.
+
+### A write invalidates a read
+
+A reactive read runs on mount and when its inputs change. A row inserted by *another* pipeline is
+neither, so the list on screen kept showing the world as it was before the write — the gap this
+document used to record, and which the M4 end-to-end test papered over with a page reload.
+
+The fix is what a developer would write by hand: a counter per table, bumped by whatever changes
+it, and named in the dependencies of whatever reads it.
+
+```tsx
+const [rows_notes, set_rows_notes] = useState(0);
+// …in the insert, update and delete success paths:
+set_rows_notes((n) => n + 1);
+// …in the reactive read:
+useEffect(() => { void run_nd_read(); }, [run_nd_read, rows_notes]);
+```
+
+It is **demand-driven** like everything else: a counter exists only for a table that is both
+written and reactively read on the same screen. Cross-screen invalidation is not attempted — a
+screen you are not looking at re-reads when you arrive.
+
+### Deliberately deferred
+
+**Server-side pagination.** A List can page what was fetched, which is honest for the hundreds of
+rows a `limit` already caps and costs no round trip. Paging what *exists* needs an offset the
+caller supplies, and nothing on a screen can hand one over yet — the same gap a flow payload has.
+
 ## The expression vocabulary (typed inputs, booleans, Gate)
 
 - **Inputs carry their own type.** A number field's state is a `number`, a checkbox's is a

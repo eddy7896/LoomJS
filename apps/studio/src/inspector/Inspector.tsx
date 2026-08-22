@@ -36,7 +36,8 @@ import {
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
-import { dbNodeFields } from '@loom/connectors';
+import { dbNodeFields, FILTER_OPS, type DbFilter, type FilterOp } from '@loom/connectors';
+import { columnsOf, setDbFilters } from '../state/connectors';
 import { TOKENS, tokenValue, tokensIn, type TokenGroup } from '@loom/ui';
 import type { Condition } from '@loom/ir';
 import {
@@ -878,7 +879,7 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
   const applicable = new Set<string>(insideRoute ? MATH_BODY_FIELDS : MATH_CANVAS_FIELDS);
   const fields =
     node.category === 'db'
-      ? dbNodeFields(node.kind === 'select' ? 'select' : 'insert')
+      ? dbNodeFields(node.kind as 'select' | 'insert' | 'update' | 'delete')
       : node.kind === 'math'
         ? (def?.fields ?? []).filter((entry) => applicable.has(entry.key))
         : (def?.fields ?? []);
@@ -900,6 +901,10 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
       </section>
 
       {node.auto ? <AutoSection group={node.auto.group} state={node.auto.state} /> : null}
+
+      {node.category === 'db' && node.kind === 'select' ? (
+        <FiltersSection nodeId={node.id} />
+      ) : null}
 
       {fields.length > 0 ? (
         <section className="field-group">
@@ -1010,4 +1015,122 @@ function rowFieldsFor(snapshot: Snapshot, componentId: string): string[] {
   }
 
   return [];
+}
+
+/**
+ * Narrowing a read (P4).
+ *
+ * A filter comparing against a **value** is a fixed rule — "status is open". One comparing against
+ * an **input** becomes a port on the node, which becomes an input on the route, which the browser
+ * supplies at call time: that is the whole of search, and it is why search needed no machinery of
+ * its own (`packages/connectors/src/nodes.ts`).
+ */
+function FiltersSection({ nodeId }: { nodeId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const node = snapshot.nodes[nodeId];
+  const columns = columnsOf(snapshot, nodeId);
+  if (!node) return null;
+
+  const filters = ((node.config ?? {}) as { filters?: DbFilter[] }).filters ?? [];
+
+  const patch = (index: number, next: Partial<DbFilter>): void =>
+    setDbFilters(
+      nodeId,
+      filters.map((filter, i) => (i === index ? { ...filter, ...next } : filter)),
+    );
+
+  return (
+    <section className="field-group" data-testid="filters-section">
+      <h3 className="field-group__title">Only rows where</h3>
+
+      {columns.length === 0 ? (
+        <p className="panel__hint">Reconnect the database to choose columns.</p>
+      ) : null}
+
+      {filters.map((filter, index) => (
+        <div key={index} className="action-row" data-testid={`filter-${index}`}>
+          <div className="field-group__head">
+            <span className="badge">{index + 1}</span>
+            <button
+              title="Remove"
+              data-testid={`filter-${index}-remove`}
+              onClick={() => setDbFilters(nodeId, filters.filter((_, i) => i !== index))}
+            >
+              ×
+            </button>
+          </div>
+
+          <Field label="Column">
+            <select
+              data-testid={`filter-${index}-column`}
+              value={filter.column}
+              onChange={(event) => patch(index, { column: event.target.value })}
+            >
+              {columns.map((column) => (
+                <option key={column.name} value={column.name}>
+                  {column.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Comparison">
+            <select
+              data-testid={`filter-${index}-operator`}
+              value={filter.operator}
+              onChange={(event) => patch(index, { operator: event.target.value as FilterOp })}
+            >
+              {Object.entries(FILTER_OPS).map(([key, op]) => (
+                <option key={key} value={key}>
+                  {op.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Compared with">
+            <select
+              data-testid={`filter-${index}-source`}
+              value={filter.source}
+              onChange={(event) =>
+                patch(index, { source: event.target.value === 'input' ? 'input' : 'value' })
+              }
+            >
+              <option value="value">A fixed value</option>
+              <option value="input">Something the screen supplies</option>
+            </select>
+          </Field>
+
+          {filter.source === 'value' ? (
+            <Field label="Value">
+              <input
+                data-testid={`filter-${index}-value`}
+                value={filter.value ?? ''}
+                onChange={(event) => patch(index, { value: event.target.value })}
+              />
+            </Field>
+          ) : (
+            <p className="panel__hint">
+              Wire a field into the route input named “{filter.column}”. An empty one narrows
+              nothing, so the list is not blank before anyone has typed.
+            </p>
+          )}
+        </div>
+      ))}
+
+      {columns.length > 0 ? (
+        <button
+          data-testid="add-filter"
+          onClick={() =>
+            setDbFilters(nodeId, [
+              ...filters,
+              { column: columns[0]!.name, operator: 'contains', source: 'input' },
+            ])
+          }
+        >
+          + Narrow it down…
+        </button>
+      ) : null}
+    </section>
+  );
 }

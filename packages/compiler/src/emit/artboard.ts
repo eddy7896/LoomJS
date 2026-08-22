@@ -77,6 +77,7 @@ export function emitArtboardModule(
   };
   const itemScope: string[] = [];
   const fields = new Map<Id, unknown>();
+  const pages = new Set<string>();
   // Buckets first: they are the merge point every other plan needs to know about. A pipeline has
   // to know which buckets its success path sets, and a derivation is *demanded* by a bucket it
   // writes even when no property binds it (`emit/state.ts`).
@@ -115,6 +116,11 @@ export function emitArtboardModule(
     requireFieldState: (componentId, initial) => {
       fields.set(componentId, initial);
       return stateNameForComponent(componentId);
+    },
+    requirePageState: (componentId) => {
+      const name = `page_${componentId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+      pages.add(name);
+      return name;
     },
     requireMessage: () => {
       hooks.message = true;
@@ -217,7 +223,7 @@ ${indent(depth)}) : null}`;
   const reactHooks = reactHooksUsed(
     plans,
     states,
-    fields.size > 0 || derived.some((d) => d.runName),
+    fields.size > 0 || pages.size > 0 || derived.some((d) => d.runName),
   );
   if (reactHooks.length > 0) imports.push(`import { ${reactHooks.join(', ')} } from 'react';\n`);
 
@@ -239,6 +245,7 @@ ${indent(depth)}) : null}`;
   // The toast is one host above the router, so a message outlives the screen that sent it.
   if (hooks.message) prelude.push(`  const { ${MESSAGE_FN} } = useMessages();`);
   if (hooks.params) prelude.push(`  const ${PARAMS_VAR} = useParams();`);
+  for (const name of pages) prelude.push(`  const [${name}, set_${name}] = useState(0);`);
   for (const [componentId, initial] of fields) {
     const name = stateNameForComponent(componentId);
     prelude.push(`  const [${name}, set_${name}] = useState(${JSON.stringify(initial)});`);
