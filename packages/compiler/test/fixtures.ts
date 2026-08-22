@@ -1,4 +1,9 @@
-import { apiPortsFromBody, componentDefs, createComponent } from '@loom/components';
+import {
+  apiPortsFromBody,
+  componentDefs,
+  createComponent,
+  CURRENT_USER_DEF,
+} from '@loom/components';
 import { inferBackend } from '@loom/inference';
 import { columnPortId, createDbNode, dbNodePorts, filterPortId } from '@loom/connectors';
 import {
@@ -1284,6 +1289,152 @@ export function crudSnapshot(options: { search?: boolean; pageSize?: number } = 
   }
 
   return options.pageSize ? withPageSize(withOps, options.pageSize) : withOps;
+}
+
+/**
+ * A project with users (P5, `docs/specs/app-auth.md`).
+ *
+ * The CRUD project, plus a Sign in screen and a guard on the one that shows the rows. The sign-in
+ * form is what a designer would build: two fields, a button, and a sequence that signs in and then
+ * goes somewhere.
+ */
+export function authSnapshot(options: { guard?: boolean } = {}): Snapshot {
+  const base = crudSnapshot();
+
+  const ops: Op[] = [
+    {
+      type: 'addArtboard',
+      artboard: { id: 'ab_signin00001', name: 'Sign in', root: 'cp_signin_root' },
+      root: {
+        id: 'cp_signin_root',
+        type: 'Frame',
+        name: 'Root',
+        props: {},
+        layout: { direction: 'column', gap: 8, padding: 24, align: 'start', justify: 'start' },
+        children: [],
+      },
+    },
+    {
+      type: 'addComponent',
+      parentId: 'cp_signin_root',
+      component: {
+        id: 'cp_email',
+        type: 'TextField',
+        name: 'Email',
+        props: { value: { kind: 'static', value: '' } },
+      },
+    },
+    {
+      type: 'addComponent',
+      parentId: 'cp_signin_root',
+      component: {
+        id: 'cp_password',
+        type: 'TextField',
+        name: 'Password',
+        props: { value: { kind: 'static', value: '' } },
+      },
+    },
+    ...['email', 'password'].map((which): Op => ({
+      type: 'addNode',
+      node: {
+        id: `nd_m_${which}`,
+        category: 'ui',
+        kind: 'mirror',
+        mirrorOf: `cp_${which}`,
+        position: { x: 0, y: 0 },
+        ports: [
+          { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+        ],
+      },
+    })),
+    { type: 'addFlow', flow: { id: 'fl_in', from: 'ab_signin00001', to: 'ab_home000001' } },
+    {
+      type: 'addComponent',
+      parentId: 'cp_signin_root',
+      component: {
+        id: 'cp_signin',
+        type: 'Button',
+        name: 'Sign in',
+        props: {
+          label: { kind: 'static', value: 'Sign in' },
+          onClick: {
+            kind: 'event',
+            handler: {
+              kind: 'actions',
+              actions: [
+                {
+                  kind: 'signIn',
+                  email: { kind: 'bound', source: { nodeId: 'nd_m_email', portId: 'pt_value' } },
+                  password: {
+                    kind: 'bound',
+                    source: { nodeId: 'nd_m_password', portId: 'pt_value' },
+                  },
+                },
+                { kind: 'navigate', flowId: 'fl_in' },
+              ],
+            },
+          },
+        },
+      },
+    },
+    // What went wrong, shown where someone typing a password can see it.
+    {
+      type: 'addNode',
+      node: {
+        id: 'nd_me',
+        category: 'state',
+        kind: 'currentUser',
+        name: 'Current user',
+        position: { x: 0, y: 0 },
+        config: {},
+        ports: CURRENT_USER_DEF.ports({}),
+      },
+    },
+    {
+      type: 'addComponent',
+      parentId: 'cp_signin_root',
+      component: {
+        id: 'cp_autherror',
+        type: 'Text',
+        name: 'Sign in problem',
+        props: { content: { kind: 'bound', source: { nodeId: 'nd_me', portId: 'pt_error' } } },
+      },
+    },
+    // On the guarded screen: who is here, and a way to stop being here.
+    {
+      type: 'addComponent',
+      parentId: 'cp_root000001',
+      component: {
+        id: 'cp_who',
+        type: 'Text',
+        name: 'Who',
+        props: { content: { kind: 'bound', source: { nodeId: 'nd_me', portId: 'pt_email' } } },
+      },
+    },
+    {
+      type: 'addComponent',
+      parentId: 'cp_root000001',
+      component: {
+        id: 'cp_signout',
+        type: 'Button',
+        name: 'Sign out',
+        props: {
+          label: { kind: 'static', value: 'Sign out' },
+          onClick: { kind: 'event', handler: { kind: 'actions', actions: [{ kind: 'signOut' }] } },
+        },
+      },
+    },
+  ];
+
+  if (options.guard !== false) {
+    ops.push({
+      type: 'setArtboardGuard',
+      artboardId: 'ab_home000001',
+      guard: { redirectTo: 'ab_signin00001' },
+    });
+  }
+
+  return applyOps(base, ops);
 }
 
 function withPageSize(snapshot: Snapshot, pageSize: number): Snapshot {

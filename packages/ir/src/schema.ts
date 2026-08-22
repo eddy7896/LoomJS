@@ -105,8 +105,9 @@ export type ValueSource = z.infer<typeof ValueSourceSchema>;
 const withCondition = { when: ConditionSchema.optional() };
 
 /**
- * **The eight.** Bubble has roughly sixty; the number here is the product decision, and a ninth
- * needs an argument rather than a ticket (`docs/specs/actions.md`).
+ * **The eleven.** Bubble has roughly sixty; the number here is the product decision, and a twelfth
+ * needs an argument rather than a ticket (`docs/specs/actions.md`). Eight were the original
+ * catalogue; the three auth actions arrived with P5, already argued for in `docs/10`.
  *
  * `navigate` and `trigger` keep the shapes they had as standalone handlers, so every document
  * written before sequences existed reads as a one-action sequence — no migration, and no second
@@ -127,6 +128,24 @@ export const ActionSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('openUrl'), url: z.string(), ...withCondition }),
   z.object({ kind: z.literal('copy'), value: ValueSourceSchema, ...withCondition }),
+  /**
+   * App auth (spec 10). These sign in the **app's** users, never the designer — two universes on
+   * opposite sides of a wall (guardrail 3). Like `trigger`, they can fail, and a failure stops the
+   * sequence: "sign in, then go to the dashboard" must not reach the dashboard on a wrong password.
+   */
+  z.object({
+    kind: z.literal('signIn'),
+    email: ValueSourceSchema,
+    password: ValueSourceSchema,
+    ...withCondition,
+  }),
+  z.object({
+    kind: z.literal('signUp'),
+    email: ValueSourceSchema,
+    password: ValueSourceSchema,
+    ...withCondition,
+  }),
+  z.object({ kind: z.literal('signOut'), ...withCondition }),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionKind = Action['kind'];
@@ -282,12 +301,24 @@ export const ScreenSizeSchema = z.object({
 });
 export type ScreenSize = z.infer<typeof ScreenSizeSchema>;
 
+/**
+ * "Only for signed-in people, and send everyone else there" (spec 10).
+ *
+ * A router-level convenience rather than a security boundary: the boundary is the server, which
+ * answers every request as whoever is asking. This keeps a signed-out visitor from landing on a
+ * screen built for someone else and seeing its empty shape.
+ */
+export const GuardSchema = z.object({ redirectTo: IdSchema });
+export type Guard = z.infer<typeof GuardSchema>;
+
 export const ArtboardSchema = z.object({
   id: IdSchema,
   name: z.string(),
   root: IdSchema,
   params: z.array(ParamSchema).optional(),
   size: ScreenSizeSchema.optional(),
+  /** Absent means anyone may open the screen. */
+  guard: GuardSchema.optional(),
 });
 export type Artboard = z.infer<typeof ArtboardSchema>;
 

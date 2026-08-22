@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/index';
 import { writeFiles } from '../src/node';
 import {
+  authSnapshot,
   calculatorSnapshot,
   conditionalSnapshot,
   crudSnapshot,
@@ -454,6 +455,211 @@ describe('a CRUD resource runs for real', () => {
 
       // An update with no row named is refused rather than rewriting the table.
       expect((await call('editnote', { title: 'nope' })).error).toMatch(/needs the row/);
+    } finally {
+      stub.close();
+    }
+  });
+});
+
+describe('an app with users runs for real', () => {
+  /**
+   * P5's gate: sign up, sign in, be recognised, be answered as yourself, and sign out — through
+   * the emitted functions, against a stub that speaks GoTrue and PostgREST.
+   *
+   * The stub enforces the thing the design rests on: a request carrying a person's access token
+   * sees that person's rows, and a request carrying only the publishable key sees none. If the
+   * emitted route ever went back to the service-role key, every row would come back and this
+   * would fail.
+   */
+  it('signs someone up, in, and out, and answers as them in between', async () => {
+    const ANON = 'stub-anon-key';
+    const accounts = new Map<string, { id: string; password: string }>();
+    const tokens = new Map<string, string>(); // access token -> user id
+    const rows = [
+      { id: 1, title: 'ada note', body: null, owner: 'user-1' },
+      { id: 2, title: 'grace note', body: null, owner: 'user-2' },
+    ];
+
+    const body = async (req: Parameters<Parameters<typeof createServer>[0]>[0]) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => chunks.push(chunk));
+        req.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          resolve(raw ? (JSON.parse(raw) as Record<string, unknown>) : {});
+        });
+      });
+
+    // A token that carries its own expiry, because the emitted server reads `exp` to decide when
+    // to spend the refresh token. Unsigned: nothing in this test verifies it, and neither does
+    // the emitted code — only Supabase does.
+    const mint = (userId: string): string => {
+      const claims = Buffer.from(
+        JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600 }),
+      ).toString('base64url');
+      const token = `header.${claims}.signature`;
+      tokens.set(token, userId);
+      return token;
+    };
+
+    const sessionFor = (userId: string, email: string) => ({
+      access_token: mint(userId),
+      refresh_token: `refresh-${userId}`,
+      token_type: 'bearer',
+      expires_in: 3600,
+      user: { id: userId, email },
+    });
+
+    const stub = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      res.setHeader('content-type', 'application/json');
+      const bearer = (req.headers.authorization ?? '').replace(/^Bearer /, '');
+      const who = tokens.get(bearer);
+
+      if (url.pathname === '/auth/v1/signup') {
+        void body(req).then((posted) => {
+          const email = String(posted.email ?? '');
+          const id = `user-${accounts.size + 1}`;
+          accounts.set(email, { id, password: String(posted.password ?? '') });
+          res.statusCode = 200;
+          res.end(JSON.stringify(sessionFor(id, email)));
+        });
+        return;
+      }
+
+      if (url.pathname === '/auth/v1/token') {
+        void body(req).then((posted) => {
+          if (url.searchParams.get('grant_type') === 'refresh_token') {
+            res.end(JSON.stringify(sessionFor('user-1', 'ada@example.com')));
+            return;
+          }
+          const email = String(posted.email ?? '');
+          const account = accounts.get(email);
+          if (!account || account.password !== String(posted.password ?? '')) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: 'invalid_grant', error_description: 'no' }));
+            return;
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify(sessionFor(account.id, email)));
+        });
+        return;
+      }
+
+      if (url.pathname === '/auth/v1/user') {
+        if (!who) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ message: 'no' }));
+          return;
+        }
+        const email = [...accounts].find(([, account]) => account.id === who)?.[0] ?? '';
+        res.end(JSON.stringify({ id: who, email }));
+        return;
+      }
+
+      if (url.pathname === '/auth/v1/logout') {
+        tokens.delete(bearer);
+        res.statusCode = 204;
+        res.end('');
+        return;
+      }
+
+      if (url.pathname === '/rest/v1/notes') {
+        // Row-level security, in one line: you see your own rows, and a request with only the
+        // publishable key sees none.
+        res.end(JSON.stringify(who ? rows.filter((row) => row.owner === who) : []));
+        return;
+      }
+
+      res.end(JSON.stringify({ definitions: {} }));
+    });
+
+    const stubPort = takePort();
+    await new Promise<void>((resolve) => stub.listen(stubPort, resolve));
+
+    try {
+      const snapshot = authSnapshot();
+      snapshot.connectors.cn_supabase!.config = {
+        url: `http://localhost:${stubPort}`,
+        schema: (snapshot.connectors.cn_supabase!.config as { schema: unknown }).schema,
+      };
+
+      const dir = await emitProject(snapshot);
+      // The auth modules are the ones a dev server would never typecheck, so this gate does:
+      // `npm run build` is `tsc --noEmit && vite build`, and the emitted app builds with
+      // noUnusedLocals.
+      await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+      const port = takePort();
+      const child = spawn(npm, ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
+        cwd: dir,
+        shell: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          SUPABASE_URL: `http://localhost:${stubPort}`,
+          SUPABASE_ANON_KEY: ANON,
+        },
+      });
+      children.push(child);
+      expect(await waitForServer(port)).toBe(true);
+
+      const base = `http://localhost:${port}`;
+      let jar = '';
+      const call = async (route: string, payload?: unknown) => {
+        const response = await fetch(`${base}${route}`, {
+          method: payload === undefined ? 'GET' : 'POST',
+          headers: {
+            ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+            ...(jar ? { cookie: jar } : {}),
+          },
+          body: payload === undefined ? undefined : JSON.stringify(payload),
+        });
+        const cookies = response.headers.getSetCookie?.() ?? [];
+        if (cookies.length > 0) {
+          jar = cookies.map((cookie) => cookie.split(';')[0]).join('; ');
+        }
+        return { response, body: (await response.json()) as Record<string, unknown> };
+      };
+
+      // Nobody, before anyone signs in.
+      expect((await call('/api/auth/session')).body.user).toBeNull();
+
+      // Sign up. The tokens come back as cookies the browser could not read.
+      const signup = await call('/api/auth/signup', {
+        email: 'ada@example.com',
+        password: 'correct horse',
+      });
+      const setCookie = signup.response.headers.getSetCookie?.() ?? [];
+      expect(setCookie.join(' ')).toContain('HttpOnly');
+      expect(setCookie.join(' ')).toContain('SameSite=Lax');
+      expect(signup.body.user).toMatchObject({ email: 'ada@example.com' });
+
+      // Signed in, and answered as themselves: their row, and not the other one.
+      const mine = (await call('/api/notes', { title: '' })).body.result as { title: string }[];
+      expect(mine).toHaveLength(1);
+      expect(mine[0]!.title).toBe('ada note');
+
+      // A wrong password is refused, and says nothing about whether the address exists.
+      const wrong = await call('/api/auth/signin', {
+        email: 'ada@example.com',
+        password: 'wrong',
+      });
+      expect(wrong.response.status).toBe(401);
+
+      // Signing back in works, and so does signing out.
+      jar = '';
+      const back = await call('/api/auth/signin', {
+        email: 'ada@example.com',
+        password: 'correct horse',
+      });
+      expect(back.body.user).toMatchObject({ email: 'ada@example.com' });
+      expect((await call('/api/auth/session')).body.user).toMatchObject({ id: 'user-1' });
+
+      await call('/api/auth/signout', {});
+      expect((await call('/api/auth/session')).body.user).toBeNull();
+      // And with nobody signed in, the route sees nothing rather than everything.
+      expect((await call('/api/notes', { title: '' })).body.result).toHaveLength(0);
     } finally {
       stub.close();
     }

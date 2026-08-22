@@ -1,5 +1,11 @@
 import type { Artboard, Id, Node, PortRef, Snapshot, TypeRef } from '@loom/ir';
-import { COMPUTE_OPS, mathInputCount, mathInputPortId, MATH_OPERATORS } from '@loom/components';
+import {
+  COMPUTE_OPS,
+  isVariable,
+  mathInputCount,
+  mathInputPortId,
+  MATH_OPERATORS,
+} from '@loom/components';
 import { tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 import { stateNameForComponent, type PipelinePlan } from './pipeline';
@@ -265,6 +271,16 @@ export function planDerived(
       // The route's result has to exist as state for this derivation to read it.
       plan.binds.result = true;
       return `(${plan.names.state} ?? "")`;
+    }
+
+    if (source.category === 'state' && !isVariable(source)) {
+      // The current user is read where it is shown, not computed from. Nothing needs it yet, and
+      // inventing a way to fold a session into an expression would be a mechanism with no demand.
+      throw new CompileError(
+        `"${node.name ?? node.id}" reads the current user, which only a property or a condition ` +
+          `can do. Bind the current user to what should show it.`,
+        node.id,
+      );
     }
 
     if (source.category === 'state') {

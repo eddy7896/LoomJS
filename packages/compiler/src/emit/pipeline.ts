@@ -398,10 +398,12 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
     const invalidate = invalidatedTables(plans)
       .filter((table) => plan.tables.writes.includes(table))
       .map((table) => `      set_${tableVersionName(table)}((n) => n + 1);`);
+    // `body` is read only where a value is kept. A route that merely invalidates a table still
+    // has to acknowledge it, or the emitted app fails its own tsc under `noUnusedLocals`.
     const store =
-      writes.length > 0 || invalidate.length > 0
+      writes.length > 0
         ? [...writes, ...invalidate].join('\n')
-        : '      void body;';
+        : ['      void body;', ...invalidate].join('\n');
     const onError = plan.binds.error
       ? `      set_${plan.names.error}(error instanceof Error ? error.message : String(error));`
       : '      console.error(error);';

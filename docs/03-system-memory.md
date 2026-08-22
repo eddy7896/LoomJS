@@ -317,6 +317,28 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P4] A List pages what was fetched, not what exists.** Server-side paging needs an offset the
   caller supplies, and nothing on a screen can hand one over yet. Slicing is honest for the
   hundreds of rows a `limit` already caps and costs no round trip.
+- **[P5] The app's session lives in HttpOnly cookies, not in the browser.** The tutorial answer
+  is supabase-js with tokens in `localStorage`, and it means any script reaching the page can take
+  the token. In the one feature whose job is keeping a person's data theirs, the weaker option is
+  indefensible — so signing in is a request to the app's own server, and the browser only ever
+  learns who it is, never how to prove it.
+- **[P5] A project with users answers its database as the person asking.** The caller's token goes
+  on the request and row-level security decides; the service-role key is not used by those routes.
+  Letting a designer wire the current user's id into a filter was rejected: that id would travel
+  from the browser, so anyone could send someone else's, and it would look right in the editor
+  while handing out other people's rows.
+- **[P5] The current user is a value, not a subsystem.** One node with `signed in`, `email`, `id`
+  and `error` ports. Auth-gated visibility is then `visibleWhen` (spec 6) with nothing new behind
+  it, and showing who is here is an ordinary binding.
+- **[P5] A screen guard is a convenience; the server is the boundary.** It keeps a signed-out
+  visitor off a screen built for someone else, and it renders nothing while the session is still
+  unknown. Someone who types the URL still sees nothing, because every request they make is
+  answered as whoever they are.
+- **[P5] Sign-in failure says one sentence for both causes.** Telling an unknown address apart
+  from a wrong password tells a stranger which addresses have accounts.
+- **[P5] Signing up with email confirmation on is a success that signs nobody in.** Supabase
+  answers with a user and no session; the app is told so rather than left looking signed out for a
+  reason nobody can see.
 - **[P4] A guardrail test should assert the thing it means.** The credential check scanned for the
   word "key" and fired on a cached schema saying `primaryKey`. It was wrong in both directions — a
   leaked key need not contain the word — so it now checks for credential-shaped *values*.

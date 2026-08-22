@@ -8,6 +8,15 @@ import { scaffoldFiles } from './emit/project';
 import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
 import { planGlobals, type GlobalPlan } from './emit/state';
+import {
+  AUTH_MODULE_PATH,
+  emitAuthModule,
+  guardedElement,
+  requireAuthConnector,
+  usesAuth,
+  validateGuards,
+} from './emit/auth';
+import { emitAuthFunctions } from './emit/authServer';
 
 /**
  * Compile a snapshot into the file set of a runnable Vite + React + TS app.
@@ -17,6 +26,8 @@ import { planGlobals, type GlobalPlan } from './emit/state';
  * inside the artboard module. Connectors (M4) plug in here later. Nothing in the snapshot carries
  * a secret (guardrail 1), so nothing secret can reach the emitted repo.
  */
+const NEWLINE = String.fromCharCode(10);
+
 export function compile(snapshot: Snapshot): CompileResult {
   const entry = resolveEntryArtboard(snapshot);
   const routes = planRoutes(snapshot, entry);
@@ -24,6 +35,13 @@ export function compile(snapshot: Snapshot): CompileResult {
   validateFlows(snapshot);
   validateWires(snapshot);
   validateServerOnlyWork(snapshot);
+  validateGuards(snapshot);
+
+  // A project with users emits an auth server and stops using the service-role key for its data:
+  // the database answers as the person asking, and row-level security decides
+  // (`docs/specs/app-auth.md`).
+  const auth = usesAuth(snapshot);
+  if (auth) requireAuthConnector(snapshot);
 
   // App-wide variables are planned once for the whole project: a global's identity is its name,
   // and the screen that writes it is rarely the screen that reads it (`emit/state.ts`).
@@ -41,7 +59,7 @@ export function compile(snapshot: Snapshot): CompileResult {
     for (const plan of planPipelines(snapshot, artboard)) {
       if (emittedRoutes.has(plan.routePath)) continue;
       emittedRoutes.add(plan.routePath);
-      files.push(emitApiFunction(plan, snapshot));
+      files.push(emitApiFunction(plan, snapshot, auth));
     }
   }
 
@@ -54,7 +72,15 @@ export function compile(snapshot: Snapshot): CompileResult {
   }
 
   const messages = usesMessages(snapshot);
-  files.push({ path: 'src/App.tsx', content: emitApp(entry, routes, globals, messages) });
+  files.push({
+    path: 'src/App.tsx',
+    content: emitApp(snapshot, entry, routes, globals, messages, auth),
+  });
+
+  if (auth) {
+    files.push({ path: AUTH_MODULE_PATH, content: emitAuthModule() });
+    files.push(...emitAuthFunctions());
+  }
 
   if (globals.length > 0) {
     files.push({ path: GLOBALS_MODULE_PATH, content: emitGlobalsModule(globals) });
@@ -64,14 +90,19 @@ export function compile(snapshot: Snapshot): CompileResult {
     files.push({ path: MESSAGES_MODULE_PATH, content: emitMessagesModule() });
   }
 
-  if (usesDatabase) {
+  if (usesDatabase || auth) {
     // Names only. The values live in the env bucket and are injected at deploy
     // (docs/specs/connector-credentials.md).
+    //
+    // Which names depends on who the routes are. With users, every request is answered as the
+    // person asking, so the publishable key is what the server needs — and the service-role key,
+    // which bypasses the rules keeping one person's rows theirs, is not asked for at all.
+    const names = auth
+      ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
+      : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
     files.push({
       path: '.env.example',
-      content: `SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-`,
+      content: `${names.map((name) => `${name}=`).join(NEWLINE)}${NEWLINE}`,
     });
   }
 
@@ -81,10 +112,12 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 /** The router module: one `<Route>` per artboard, entry first, inside the globals provider. */
 function emitApp(
+  snapshot: Snapshot,
   entry: Artboard,
   routes: Map<string, RouteInfo>,
   globals: GlobalPlan[],
   messages: boolean,
+  auth: boolean,
 ): string {
   const ordered = [...routes.values()].sort((a, b) => {
     if (a.artboardId === entry.id) return -1;
@@ -97,10 +130,13 @@ function emitApp(
     .join('\n');
 
   const routeElements = ordered
-    .map(
-      (route) =>
-        `        <Route path="${route.path}" element={<${route.componentName} />} />`,
-    )
+    .map((route) => {
+      const artboard = snapshot.artboards[route.artboardId]!;
+      // A guarded screen is wrapped where the router mounts it, so there is no moment where the
+      // screen has rendered and the redirect has not happened yet (`emit/auth.ts`).
+      const element = guardedElement(artboard, `<${route.componentName} />`, routes);
+      return `        <Route path="${route.path}" element={${element}} />`;
+    })
     .join('\n');
 
   // An app-wide variable has to outlive the screen that wrote it, so its provider sits above the
@@ -124,16 +160,23 @@ ${routeElements}
 
   let tree = router;
   if (globals.length > 0) tree = wrap(tree, 'GlobalsProvider');
+  // Who is signed in sits above the router as well: the guard reads it while deciding whether a
+  // route may mount at all.
+  if (auth) tree = wrap(tree, 'AuthProvider');
   if (messages) tree = wrap(tree, 'MessagesProvider');
 
   const globalsImport =
     globals.length > 0 ? `import { GlobalsProvider } from './state/globals';\n` : '';
   const messagesImport = messages ? `import { MessagesProvider } from './state/messages';\n` : '';
+  const guarded = ordered.some((route) => snapshot.artboards[route.artboardId]?.guard);
+  const authImport = auth
+    ? `import { AuthProvider${guarded ? ', RequireSignIn' : ''} } from './state/auth';\n`
+    : '';
 
   return `// Generated by @loom/compiler. Entry artboard: "${entry.name}".
 // Routes come from the artboards and the flow arrows between them — never hand-authored.
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-${globalsImport}${messagesImport}${imports}
+${globalsImport}${messagesImport}${authImport}${imports}
 
 export default function App() {
   return (

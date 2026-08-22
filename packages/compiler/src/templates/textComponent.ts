@@ -15,8 +15,12 @@ export const textEmitter: ComponentEmitter = {
     const expr = valueExpr(value, ctx, component.id, 'content');
     // Anything that is not plainly text goes through the coercion helper: a record rendered as
     // a JSX child is a runtime crash, and the compiler knows the type here.
+    //
+    // A row field is always coerced: what a column holds is not knowable from the document, and
+    // `unknown` is not something React will render — the emitted app would fail its own tsc.
     const type = ctx.typeOfValue(value);
-    const safe = type && type.kind !== 'text' ? `${ctx.requireTextHelper()}(${expr})` : expr;
+    const raw = value.kind === 'item' || (type && type.kind !== 'text');
+    const safe = raw ? `${ctx.requireTextHelper()}(${expr})` : expr;
     return `${indent(depth)}<span${attrs}>{${safe}}</span>`;
   },
 };

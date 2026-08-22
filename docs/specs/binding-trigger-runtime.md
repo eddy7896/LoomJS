@@ -228,6 +228,22 @@ screen you are not looking at re-reads when you arrive.
 rows a `limit` already caps and costs no round trip. Paging what *exists* needs an offset the
 caller supplies, and nothing on a screen can hand one over yet — the same gap a flow payload has.
 
+## Who a route runs as (P5)
+
+A route has always run on the server with the service-role key, which bypasses row-level security
+— correct while an app has no users, because there is nobody to be.
+
+Once a project has users, that stops being correct: the same query would hand every row to every
+visitor. So **a project with auth answers as the person asking**. The caller's access token, taken
+from its own cookie, goes on the PostgREST request; signed out, the publishable key goes instead
+and the request is anonymous. Row-level security decides either way, and the service-role key is
+not used by those routes at all.
+
+Nothing about wiring changes: a designer never names a user, never filters by one, and never sees
+a token. The identity travels beside the request rather than inside it, which is also why it
+cannot be spoofed by a browser — see `docs/specs/app-auth.md` for the filter-by-user-id design
+that was rejected for exactly that reason.
+
 ## The expression vocabulary (typed inputs, booleans, Gate)
 
 - **Inputs carry their own type.** A number field's state is a `number`, a checkbox's is a

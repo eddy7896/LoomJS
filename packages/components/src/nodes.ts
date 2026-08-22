@@ -229,6 +229,44 @@ export const STATE_WRITE_DEF: NodeDef = {
 
 
 /**
+ * Current user — the app's own signed-in person (spec 10), read in the browser.
+ *
+ * It is `state` because that is what a session is: something the app holds while someone is here.
+ * That also means the compiler's existing rule applies unchanged — a state node cannot sit inside
+ * an API route's body, and inside a stateless function the session comes from the request's cookie
+ * rather than from a node.
+ *
+ * There is no new mechanism behind any of its ports: binding `email` to a Text shows who is here,
+ * and `signed in` in a `visibleWhen` is auth-gated visibility using spec 6 exactly as written.
+ */
+export const CURRENT_USER_DEF: NodeDef = {
+  category: 'state',
+  kind: 'currentUser',
+  label: 'Current user',
+  group: 'data',
+  keywords: ['auth', 'session', 'signed in', 'login', 'account', 'me'],
+  defaultConfig: {},
+  fields: [],
+  ports: () => [
+    port('pt_signedIn', 'signed in', 'out', 'data', { kind: 'boolean' }),
+    port('pt_email', 'email', 'out', 'data', { kind: 'text' }),
+    port('pt_id', 'id', 'out', 'data', { kind: 'text' }),
+    // Why the last attempt failed, for the designer to show. Unbound, it emits nothing.
+    port('pt_error', 'error', 'out', 'data', { kind: 'optional', of: { kind: 'text' } }),
+  ],
+};
+
+/**
+ * A variable, as opposed to the other thing in the `state` category.
+ *
+ * Everything that means "a bucket someone writes into" has to ask this rather than the category:
+  * the Current user is app state too, and it is nobody's to set.
+ */
+export function isVariable(node: Node): boolean {
+  return node.category === 'state' && node.kind === 'write';
+}
+
+/**
  * The conditions a Gate can test. Each is a phrase, not an operator symbol — "is greater than"
  * rather than `>` — because the promise is that a designer never feels they left the canvas
  * (`docs/06-glossary.md`: "calmest accurate word for the scary things").
@@ -479,6 +517,7 @@ const DEFS: readonly NodeDef[] = [
   CODE_DEF,
   VALIDATE_DEF,
   STATE_WRITE_DEF,
+  CURRENT_USER_DEF,
 ];
 const BY_KIND = new Map(DEFS.map((def) => [`${def.category}:${def.kind}`, def]));
 
@@ -610,7 +649,7 @@ export function nodeTitle(node: Node): string {
     const op = COMPUTE_OPS[config.op as ComputeOp];
     return op ? `${def.label} — ${op.label.toLowerCase()}` : def.label;
   }
-  if (node.category === 'state') {
+  if (isVariable(node)) {
     // A variable's name is the whole point of it: several results answer into "total", and the
     // reader needs to know which "total" a wire is landing in — and whether that "total" is this
     // screen's or the whole app's, because a global one is shared with every other screen.
@@ -631,7 +670,7 @@ export function nodeTitle(node: Node): string {
  * other way. Many writers, one reader, last write wins (`packages/compiler/src/emit/state.ts`).
  */
 export function acceptsManyWires(node: Node, portId: Id): boolean {
-  return node.category === 'state' && portId === 'pt_set';
+  return isVariable(node) && portId === 'pt_set';
 }
 
 /**

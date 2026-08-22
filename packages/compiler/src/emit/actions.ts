@@ -150,6 +150,29 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
         async: false,
       };
 
+    // Auth (spec 10). Like a trigger, these can fail, and a failure stops the sequence: "sign in,
+    // then go to the dashboard" must not reach the dashboard on a wrong password. Signing out
+    // cannot really fail, but it is a request, so it waits for the same reason.
+    case 'signIn':
+    case 'signUp': {
+      const auth = ctx.requireAuth();
+      const method = action.kind === 'signIn' ? 'signIn' : 'signUp';
+      const email = `String(${valueSourceExpr(action.email, ctx, id)})`;
+      const password = `String(${valueSourceExpr(action.password, ctx, id)})`;
+      const call = `${auth}.${method}(${email}, ${password})`;
+      return hasFollowing
+        ? { lines: [`if (!(await ${call})) return;`], async: true }
+        : { lines: [`void ${call};`], async: false };
+    }
+
+    case 'signOut': {
+      const auth = ctx.requireAuth();
+      const call = `${auth}.signOut()`;
+      return hasFollowing
+        ? { lines: [`if (!(await ${call})) return;`], async: true }
+        : { lines: [`void ${call};`], async: false };
+    }
+
     case 'copy':
       // Best-effort: a browser that refuses clipboard access should not swallow the confirmation
       // that follows, so this is not awaited and not allowed to reject the handler.

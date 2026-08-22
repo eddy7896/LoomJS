@@ -1,4 +1,4 @@
-import type { Action, ActionKind, Component, Id, Snapshot } from '@loom/ir';
+import type { Action, ActionKind, Component, Id, Snapshot, ValueSource } from '@loom/ir';
 import { useEditor } from '../state/useEditor';
 import { setFlowPayload } from '../state/store';
 import {
@@ -14,6 +14,8 @@ import {
   screenChoices,
   triggerChoices,
   updateAction,
+  valueFromKey,
+  valueKey,
   variableChoices,
   type Choice,
 } from '../state/actions';
@@ -60,6 +62,53 @@ function Picker({
         ))}
       </select>
     </Field>
+  );
+}
+
+/**
+ * A value an action carries: a field on this screen, or something typed in.
+ *
+ * Auth is where this first matters — a password is always a field, never a literal — so the field
+ * comes first in the list and a typed value is the fallback rather than the default.
+ */
+function ValuePicker({
+  label,
+  testId,
+  value,
+  fields,
+  onPick,
+}: {
+  label: string;
+  testId: string;
+  value: ValueSource;
+  fields: Choice[];
+  onPick: (next: ValueSource) => void;
+}) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const key = valueKey(snapshot, value);
+
+  return (
+    <>
+      <Field label={label}>
+        <select data-testid={testId} value={key} onChange={(e) => onPick(valueFromKey(e.target.value))}>
+          {fields.map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.label}
+            </option>
+          ))}
+          <option value="static">Typed value…</option>
+        </select>
+      </Field>
+      {key === 'static' ? (
+        <Field label={`${label} value`}>
+          <input
+            data-testid={`${testId}-typed`}
+            value={value.kind === 'static' ? String(value.value ?? '') : ''}
+            onChange={(e) => onPick({ kind: 'static', value: e.target.value })}
+          />
+        </Field>
+      ) : null}
+    </>
   );
 }
 
@@ -260,6 +309,25 @@ export function ActionsSection({ component }: { component: Component }) {
                 onChange={(event) => patch(index, { ...action, url: event.target.value })}
               />
             </Field>
+          ) : null}
+
+          {action.kind === 'signIn' || action.kind === 'signUp' ? (
+            <>
+              <ValuePicker
+                label="Email"
+                testId={`action-${index}-email`}
+                value={action.email}
+                fields={fields}
+                onPick={(email) => patch(index, { ...action, email })}
+              />
+              <ValuePicker
+                label="Password"
+                testId={`action-${index}-password`}
+                value={action.password}
+                fields={fields}
+                onPick={(password) => patch(index, { ...action, password })}
+              />
+            </>
           ) : null}
 
           {action.kind === 'copy' ? (

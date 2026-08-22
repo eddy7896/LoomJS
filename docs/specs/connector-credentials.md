@@ -95,3 +95,21 @@ browser, so introspection moved to the dev server:
   secret — the key is, and it never leaves the process that holds it.
 
 The same shape applies on the platform: the relay becomes a server route, not a browser call.
+
+## What a project with users asks for (P5)
+
+The names a deployment needs depend on who its routes are.
+
+| The project | Names in `.env.example` |
+| --- | --- |
+| No users | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| With users | `SUPABASE_URL`, `SUPABASE_ANON_KEY` |
+
+The second row is the interesting one: a project with auth **stops asking for the service-role
+key**, because its routes answer as the person asking and the key that bypasses row-level security
+would defeat the point (`docs/specs/app-auth.md`). The publishable key is used server-side there,
+which is not a contradiction — `client` scope says where a value *may* go, not where it must.
+
+Session cookies are minted by the emitted server and are `HttpOnly`, so the browser holds a
+session it cannot read. That is the same rule as everywhere else in this document, applied to a
+credential the app issues rather than one the designer supplies.

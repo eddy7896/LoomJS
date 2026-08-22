@@ -23,6 +23,7 @@ import {
   rename,
   renameArtboard,
   setArtboardParams,
+  setArtboardGuard,
   setArtboardSize,
   setClickFlow,
   setEntryArtboard,
@@ -734,6 +735,68 @@ function normalizeColor(value: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
 }
 
+/**
+ * Who may open this screen (spec 10).
+ *
+ * The guard is a router-level convenience, and the hint says so: the thing that actually keeps one
+ * person's rows theirs is the server, which answers every request as whoever is asking.
+ */
+function GuardSection({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  if (!artboard) return null;
+
+  // Sending people to a screen that is itself signed-in-only is a bounce with no floor, so it is
+  // not offered — the compiler refuses it, and a picker should never offer what will be refused.
+  const elsewhere = Object.values(snapshot.artboards).filter(
+    (other) => other.id !== artboardId && !other.guard,
+  );
+  const guard = artboard.guard;
+
+  return (
+    <section className="field-group" data-testid="guard-section">
+      <h3 className="field-group__title">Who can open this</h3>
+      <Field label="Visitors">
+        <select
+          data-testid="guard-mode"
+          value={guard ? 'signedIn' : 'anyone'}
+          onChange={(e) => {
+            if (e.target.value === 'anyone') return setArtboardGuard(artboardId, undefined);
+            const first = elsewhere[0];
+            if (first) setArtboardGuard(artboardId, { redirectTo: first.id });
+          }}
+        >
+          <option value="anyone">Anyone</option>
+          <option value="signedIn" disabled={!guard && elsewhere.length === 0}>
+            Only signed-in people
+          </option>
+        </select>
+      </Field>
+      {guard ? (
+        <>
+          <Field label="Send others to">
+            <select
+              data-testid="guard-redirect"
+              value={guard.redirectTo}
+              onChange={(e) => setArtboardGuard(artboardId, { redirectTo: e.target.value })}
+            >
+              {elsewhere.map((other) => (
+                <option key={other.id} value={other.id}>
+                  {other.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="panel__hint">
+            This keeps a signed-out visitor from landing here. What keeps their data private is the
+            server, which answers every request as whoever is asking.
+          </p>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function ArtboardInspector({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
@@ -764,6 +827,8 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
       </section>
 
       <ScreenSizeSection artboardId={artboard.id} />
+
+      <GuardSection artboardId={artboard.id} />
 
       <section className="field-group">
         <h3 className="field-group__title">Params</h3>

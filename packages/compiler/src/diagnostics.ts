@@ -1,5 +1,6 @@
 import { actionsOf, type Component, type Id, type Node, type PortRef, type Snapshot } from '@loom/ir';
-import { nodeTitle } from '@loom/components';
+import { isVariable, nodeTitle } from '@loom/components';
+import { usesAuth } from './emit/auth';
 import { compile } from './compile';
 import { CompileError } from './types';
 
@@ -123,6 +124,51 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
     });
   };
 
+  // ---- Screens: who may open them (spec 10) -------------------------------
+
+  for (const artboard of Object.values(snapshot.artboards)) {
+    const guard = artboard.guard;
+    if (!guard) continue;
+
+    const destination = snapshot.artboards[guard.redirectTo];
+    if (!destination) {
+      add(
+        'dangling-guard',
+        'error',
+        `"${artboard.name}" sends signed-out visitors to a screen that no longer exists.`,
+        artboard.id,
+        'artboard',
+      );
+      continue;
+    }
+    if (destination.guard) {
+      add(
+        'guard-loop',
+        'error',
+        `"${artboard.name}" sends signed-out visitors to "${destination.name}", which is also ` +
+          `only for signed-in people. They would bounce between the two forever.`,
+        artboard.id,
+        'artboard',
+      );
+    }
+  }
+
+  // Signing in needs somewhere to sign in to. This is the compiler's sentence, said earlier.
+  if (usesAuth(snapshot)) {
+    const connected = Object.values(snapshot.connectors).some(
+      (connector) => connector.moduleId === 'supabase',
+    );
+    if (!connected) {
+      add(
+        'auth-without-connection',
+        'error',
+        'This app signs people in, which needs a Supabase connection. Connect one in Data.',
+        undefined,
+        undefined,
+      );
+    }
+  }
+
   // ---- Components: everything a property can point at ---------------------
 
   for (const component of Object.values(snapshot.components)) {
@@ -188,6 +234,24 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
             'component',
             `:${key}:${index}`,
           );
+        }
+
+        // An auth step with nothing to sign in with runs, fails, and says the details did not
+        // match — which is true and useless. The empty box is the actual fault.
+        if (action.kind === 'signIn' || action.kind === 'signUp') {
+          const blank = (source: { kind: string; value?: unknown }): boolean =>
+            source.kind === 'static' && String(source.value ?? '').trim() === '';
+          if (blank(action.email) || blank(action.password)) {
+            add(
+              'auth-without-details',
+              'warning',
+              `Step ${index + 1} of "${name}" signs someone in without an email and a password ` +
+                `wired to it, so it can only fail.`,
+              component.id,
+              'component',
+              `:${key}:${index}`,
+            );
+          }
         }
 
         if (action.when && !resolves(snapshot, action.when.source)) {
@@ -290,7 +354,7 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
       }
     }
 
-    if (node.category === 'state') {
+    if (isVariable(node)) {
       const writers = wires.filter(
         (wire) => wire.to.nodeId === node.id && wire.to.portId === 'pt_set',
       );

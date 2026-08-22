@@ -7,6 +7,9 @@ import { createServer } from 'node:http';
  *
  * It understands the four verbs and the filter grammar the compiler emits (`col=eq.1`,
  * `col=ilike.*term*`), because the point of a protocol stub is that the client cannot tell.
+ *
+ * It also speaks the part of GoTrue that P5 needs — sign up, sign in, refresh, sign out and who
+ * am I — so an emitted app can hold a real session against it (`docs/specs/app-auth.md`).
  */
 
 const PORT = Number(process.env.STUB_PORT ?? 5412);
@@ -28,6 +31,33 @@ const OPENAPI = {
 
 let rows = [{ id: 1, title: 'first note', body: null }];
 let nextId = 2;
+
+/** Accounts, and the tokens handed out for them. Nothing is hashed; nothing here is real. */
+const accounts = new Map();
+const tokens = new Map();
+
+/**
+ * A token that carries its own expiry, because the emitted server reads `exp` from the payload to
+ * decide when to spend the refresh token. Unsigned: only Supabase would ever check a signature.
+ */
+function mint(userId) {
+  const claims = Buffer.from(
+    JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600 }),
+  ).toString('base64url');
+  const token = `header.${claims}.signature`;
+  tokens.set(token, userId);
+  return token;
+}
+
+const sessionFor = (userId, email) => ({
+  access_token: mint(userId),
+  refresh_token: `refresh-${userId}`,
+  token_type: 'bearer',
+  expires_in: 3600,
+  user: { id: userId, email },
+});
+
+const bearerOf = (req) => (req.headers.authorization ?? '').replace(/^Bearer /, '');
 
 const send = (res, status, body) => {
   res.statusCode = status;
@@ -100,6 +130,50 @@ createServer((req, res) => {
     return;
   }
 
+  // ---- GoTrue -------------------------------------------------------------
+
+  if (url.pathname === '/auth/v1/signup') {
+    void readBody(req).then((body) => {
+      const email = String(body.email ?? '');
+      const existing = accounts.get(email);
+      const id = existing?.id ?? `user-${accounts.size + 1}`;
+      accounts.set(email, { id, password: String(body.password ?? '') });
+      send(res, 200, sessionFor(id, email));
+    });
+    return;
+  }
+
+  if (url.pathname === '/auth/v1/token') {
+    void readBody(req).then((body) => {
+      if (url.searchParams.get('grant_type') === 'refresh_token') {
+        const entry = [...accounts].find(([, account]) => body.refresh_token === `refresh-${account.id}`);
+        if (!entry) return send(res, 400, { error: 'invalid_grant' });
+        return send(res, 200, sessionFor(entry[1].id, entry[0]));
+      }
+      const email = String(body.email ?? '');
+      const account = accounts.get(email);
+      if (!account || account.password !== String(body.password ?? '')) {
+        return send(res, 400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
+      }
+      send(res, 200, sessionFor(account.id, email));
+    });
+    return;
+  }
+
+  if (url.pathname === '/auth/v1/user') {
+    const who = tokens.get(bearerOf(req));
+    if (!who) return send(res, 401, { message: 'invalid token' });
+    const email = [...accounts].find(([, account]) => account.id === who)?.[0] ?? '';
+    send(res, 200, { id: who, email });
+    return;
+  }
+
+  if (url.pathname === '/auth/v1/logout') {
+    tokens.delete(bearerOf(req));
+    send(res, 200, {});
+    return;
+  }
+
   if (url.pathname === '/rest/v1/' || url.pathname === '/rest/v1') {
     send(res, 200, OPENAPI);
     return;
@@ -109,6 +183,8 @@ createServer((req, res) => {
   if (url.pathname === '/__reset') {
     rows = [{ id: 1, title: 'first note', body: null }];
     nextId = 2;
+    accounts.clear();
+    tokens.clear();
     send(res, 200, { ok: true });
     return;
   }

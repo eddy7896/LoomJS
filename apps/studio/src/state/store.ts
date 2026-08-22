@@ -7,6 +7,7 @@ import {
   newFlowId,
   type Component,
   type FlowPayload,
+  type Guard,
   type Id,
   type Layout,
   type Op,
@@ -409,6 +410,14 @@ export function setArtboardParams(artboardId: Id, params: Param[]): void {
  */
 export function setArtboardSize(artboardId: Id, size: ScreenSize): void {
   dispatch({ type: 'setArtboardSize', artboardId, size });
+}
+
+/**
+ * "Only for signed-in people, and send everyone else there" (spec 10). Undefined is the absence
+ * of a guard, which is not the same as a guard nobody can satisfy.
+ */
+export function setArtboardGuard(artboardId: Id, guard: Guard | undefined): void {
+  dispatch({ type: 'setArtboardGuard', artboardId, guard });
 }
 
 export function setEntryArtboard(artboardId: Id): void {

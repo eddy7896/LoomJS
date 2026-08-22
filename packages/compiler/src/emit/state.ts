@@ -1,5 +1,5 @@
 import { actionsOf, type Artboard, type Component, type Id, type Node, type Snapshot, type TypeRef, type ValueSource } from '@loom/ir';
-import { stateKeyOf, stateScopeOf, type StateScope } from '@loom/components';
+import { isVariable, stateKeyOf, stateScopeOf, type StateScope } from '@loom/components';
 import { inferType, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 
@@ -387,7 +387,7 @@ export function planScreenStates(
     const node = snapshot.nodes[nodeId];
     if (!node) continue;
 
-    if (node.category === 'state') {
+    if (isVariable(node)) {
       wanted.add(nodeId);
       // Reading a variable demands whatever writes it, on this screen.
       for (const writer of writersOf(snapshot, node, inside)) {

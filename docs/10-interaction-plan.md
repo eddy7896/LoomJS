@@ -135,7 +135,7 @@ Written before their consumers, per `09`'s rule.
 - **Done-when:** the sample app can create, list, edit, delete and search one table's rows against
   a real Supabase.
 
-### P5 — App auth
+### P5 — App auth ✅ _(done)_
 
 - **Goal:** the acceptance test's "auth" stops being a hole.
 - **Build:** Supabase app auth as a connector capability — sign up, sign in, sign out as **actions**

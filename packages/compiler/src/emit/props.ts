@@ -2,6 +2,7 @@ import type { Component, Id, PortRef, PropertyValue } from '@loom/ir';
 import { hasFieldState } from '@loom/components';
 import { CompileError, type EmitContext } from '../types';
 import { bindingExpr, stateNameForComponent } from './pipeline';
+import { sessionExpr } from './auth';
 
 /**
  * A property value becomes a JS expression.
@@ -79,7 +80,11 @@ export function valueExpr(
     }
     case 'bound': {
       const field = fieldStateExpr(ctx, value.source, componentId);
-      return field ?? bindingExpr(ctx.plans, ctx.derived, ctx.states, value.source, componentId);
+      if (field) return field;
+      // Who is signed in is read straight off the auth context — no pipeline, no state of its own.
+      const session = sessionExpr(ctx, value.source, componentId);
+      if (session) return session;
+      return bindingExpr(ctx.plans, ctx.derived, ctx.states, value.source, componentId);
     }
     case 'item': {
       const item = ctx.itemVar();

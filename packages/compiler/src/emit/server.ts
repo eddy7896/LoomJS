@@ -454,7 +454,11 @@ ${source
   );
 }
 
-export function emitApiFunction(plan: PipelinePlan, snapshot: Snapshot): EmittedFile {
+export function emitApiFunction(
+  plan: PipelinePlan,
+  snapshot: Snapshot,
+  auth = false,
+): EmittedFile {
   const steps = plan.body.map((node) => emitStep(node, snapshot));
   const routeName = plan.routePath.replace('/api/', '');
   const usesDb = plan.body.some((node) => node.category === 'db');
@@ -462,8 +466,19 @@ export function emitApiFunction(plan: PipelinePlan, snapshot: Snapshot): Emitted
   // A serverless route talks REST, so it takes Supabase's REST client rather than the full
   // supabase-js: the umbrella package builds a realtime client on import, which needs Node 22's
   // native WebSocket and is dead weight in a stateless function. Same query API either way.
-  const dbPrelude = usesDb
-    ? `import { PostgrestClient } from '@supabase/postgrest-js';
+  //
+  // **Who the client is depends on whether the app has users.** Without them, the service-role
+  // key is the only identity there is. With them, the caller's own token goes on the request and
+  // row-level security decides what comes back — the service-role key is not used here at all,
+  // because it bypasses exactly the rules that keep one person's rows theirs
+  // (`docs/specs/app-auth.md`).
+  const dbPrelude = !usesDb
+    ? ''
+    : auth
+      ? `import { PostgrestClient } from '@supabase/postgrest-js';
+import { accessTokenFor } from '../src/server/auth';
+`
+      : `import { PostgrestClient } from '@supabase/postgrest-js';
 
 // Credentials are read by NAME from the environment; the value never enters the document,
 // the snapshot, or this file (docs/05-guardrails.md #1).
@@ -471,8 +486,21 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const supabase = new PostgrestClient(\`\${process.env.SUPABASE_URL ?? ''}/rest/v1\`, {
   headers: { apikey: serviceKey, Authorization: \`Bearer \${serviceKey}\` },
 });
+`;
+
+  // With users, the client is built per request, because the identity on it is per request.
+  const dbHandlerPrelude =
+    usesDb && auth
+      ? `    // Answered as whoever is asking; signed out, that is the anon role, and row-level
+    // security decides either way.
+    const token = await accessTokenFor(req, res);
+    const anonKey = process.env.SUPABASE_ANON_KEY ?? '';
+    const supabase = new PostgrestClient(\`\${process.env.SUPABASE_URL ?? ''}/rest/v1\`, {
+      headers: { apikey: anonKey, Authorization: \`Bearer \${token ?? anonKey}\` },
+    });
+
 `
-    : '';
+      : '';
 
   return {
     path: `api/${routeName}.ts`,
@@ -502,7 +530,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader('content-type', 'application/json');
 
   try {
-    let value: unknown = await readInput(req);
+${dbHandlerPrelude}    let value: unknown = await readInput(req);
 
 ${steps.join('\n')}
 

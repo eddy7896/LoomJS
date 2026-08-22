@@ -35,8 +35,11 @@ already exist, and it is needed by the 80% — forms, CRUD, auth, dashboards.**
 "clear" means *back to what it started as* — a number field returns to its initial number, not to
 the empty string, and a select returns to its first option.
 
-Auth actions (sign in, sign out, sign up) arrive with **P5**. They are three more, taking the
-catalogue to eleven, and they are already argued for in `10`.
+Auth actions arrived with **P5**, taking the catalogue to **eleven**: `signIn`, `signUp` and
+`signOut` (`docs/specs/app-auth.md`). They earn their place the same way `trigger` does — nothing
+already in the list can sign a person in — and they behave like it too: each is a request that can
+fail, and a failure stops the sequence, so "sign in, then go to the dashboard" cannot reach the
+dashboard on a wrong password.
 
 ## What was proposed and rejected
 

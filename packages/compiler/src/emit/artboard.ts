@@ -12,6 +12,7 @@ import {
 import { valueExpr } from './props';
 import { indent } from './text';
 import { MESSAGE_FN } from './messages';
+import { authVar, sessionTypeOf } from './auth';
 import {
   DIVIDE_HELPER_SOURCE,
   emitDerived,
@@ -74,6 +75,7 @@ export function emitArtboardModule(
     truthy: false,
     message: false,
     link: false,
+    auth: false,
   };
   const itemScope: string[] = [];
   const fields = new Map<Id, unknown>();
@@ -139,6 +141,10 @@ export function emitArtboardModule(
     },
     typeOfValue: (value) => {
       if (value.kind !== 'bound') return undefined;
+      // The current user's ports carry their own types, so a Text bound to "signed in" still
+      // knows it is holding a boolean rather than something to print raw.
+      const session = sessionTypeOf(snapshot, value.source);
+      if (session) return session;
       // A binding straight to an input's mirror carries that port's type: a number field read
       // into a Text still has to go through the coercion helper.
       const source = snapshot.nodes[value.source.nodeId];
@@ -154,6 +160,10 @@ export function emitArtboardModule(
     requireLink: () => {
       hooks.link = true;
       return 'Link';
+    },
+    requireAuth: () => {
+      hooks.auth = true;
+      return authVar();
     },
     pathExpr: (flowId, componentId) => {
       const flow = snapshot.flows[flowId];
@@ -239,12 +249,16 @@ ${indent(depth)}) : null}`;
   // rather than owning it (`emit/globals.ts`).
   if (usesGlobals(states)) imports.push(`import { useGlobals } from '../state/globals';\n`);
   if (hooks.message) imports.push(`import { useMessages } from '../state/messages';\n`);
+  // The session is held above the router too: it outlives every screen, and the screen showing
+  // who is here should not be the thing deciding who is here (`emit/auth.ts`).
+  if (hooks.auth) imports.push(`import { useAuth } from '../state/auth';\n`);
 
   const prelude: string[] = [];
   if (hooks.navigate) prelude.push(`  const ${NAVIGATE_VAR} = useNavigate();`);
   // The toast is one host above the router, so a message outlives the screen that sent it.
   if (hooks.message) prelude.push(`  const { ${MESSAGE_FN} } = useMessages();`);
   if (hooks.params) prelude.push(`  const ${PARAMS_VAR} = useParams();`);
+  if (hooks.auth) prelude.push(`  const ${authVar()} = useAuth();`);
   for (const name of pages) prelude.push(`  const [${name}, set_${name}] = useState(0);`);
   for (const [componentId, initial] of fields) {
     const name = stateNameForComponent(componentId);

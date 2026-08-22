@@ -6,8 +6,10 @@ import {
   type ActionKind,
   type Id,
   type Snapshot,
+  type ValueSource,
 } from '@loom/ir';
-import { hasFieldState, nodeTitle } from '@loom/components';
+import { hasFieldState, isVariable, nodeTitle } from '@loom/components';
+import { ensureMirror, mirrorNodeFor } from './graph';
 import { artboardOf, dispatch, getState, rootComponentId } from './store';
 
 /**
@@ -27,6 +29,9 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   message: 'Show a message',
   openUrl: 'Open a link',
   copy: 'Copy to clipboard',
+  signIn: 'Sign in',
+  signUp: 'Sign up',
+  signOut: 'Sign out',
 };
 
 /** The order they appear in the "add" menu: the ones a form needs, first. */
@@ -39,12 +44,54 @@ export const ACTION_ORDER: ActionKind[] = [
   'navigate',
   'openUrl',
   'copy',
+  'signIn',
+  'signUp',
+  'signOut',
 ];
 
 export interface Choice {
   value: string;
   label: string;
 }
+
+// ---------------------------------------------------------------------------
+// Values an action carries: something typed in, or a field on this screen
+// ---------------------------------------------------------------------------
+
+const blankValue = (): ValueSource => ({ kind: 'static', value: '' });
+
+/**
+ * A field as a value, materialising its mirror if it has none.
+ *
+ * Picking "the Email field" has to work on the first click. Needing a trip to Nodes mode to wire
+ * the field to nothing first would be a rule nobody could guess — the same reason the condition
+ * picker materialises a checkbox's mirror.
+ */
+export function fieldValue(componentId: Id): ValueSource {
+  const nodeId = ensureMirror(componentId, { x: 24, y: 24 });
+  return nodeId ? { kind: 'bound', source: { nodeId, portId: 'pt_value' } } : blankValue();
+}
+
+/** The `<select>` key for a value: the component behind it, or `static` for something typed. */
+export function valueKey(snapshot: Snapshot, value: ValueSource): string {
+  if (value.kind !== 'bound') return 'static';
+  const node = snapshot.nodes[value.source.nodeId];
+  return node?.mirrorOf ?? 'static';
+}
+
+export function valueFromKey(key: string): ValueSource {
+  return key === 'static' ? blankValue() : fieldValue(key);
+}
+
+/** True when the field this value reads has been removed under it. */
+export function valueIsDangling(snapshot: Snapshot, value: ValueSource): boolean {
+  if (value.kind !== 'bound') return false;
+  const node = snapshot.nodes[value.source.nodeId];
+  return !node || !node.mirrorOf || !snapshot.components[node.mirrorOf];
+}
+
+/** Kept for the mirror lookup the value pickers need. */
+export const mirrorFor = mirrorNodeFor;
 
 export function actionsFor(snapshot: Snapshot, componentId: Id): Action[] {
   const prop = snapshot.components[componentId]?.props.onClick;
@@ -115,7 +162,8 @@ export function triggerChoices(snapshot: Snapshot): Choice[] {
 
 export function variableChoices(snapshot: Snapshot): Choice[] {
   return Object.values(snapshot.nodes)
-    .filter((node) => node.category === 'state')
+    // The current user is app state too, and it is nobody's to set: signing in is what writes it.
+    .filter(isVariable)
     .map((node) => ({ value: node.id, label: nodeTitle(node) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -205,6 +253,17 @@ function defaultAction(snapshot: Snapshot, componentId: Id, kind: ActionKind): A
     }
     case 'message':
       return { kind, text: 'Saved', tone: 'ok' };
+    case 'signIn':
+    case 'signUp': {
+      // A sign-in form is two fields and a button, so the two fields are the guess. Wrong is
+      // better than blank here: a wrong pick is one click to change, a blank one is a puzzle.
+      const fields = fieldChoices(snapshot, componentId);
+      const email = fields[0] ? fieldValue(fields[0].value) : blankValue();
+      const password = fields[1] ? fieldValue(fields[1].value) : blankValue();
+      return { kind, email, password };
+    }
+    case 'signOut':
+      return { kind };
     case 'openUrl':
       return { kind, url: 'https://' };
     case 'copy':

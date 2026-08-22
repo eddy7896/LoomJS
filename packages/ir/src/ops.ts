@@ -4,6 +4,7 @@ import type {
   ConnectorInstance,
   Flow,
   FlowPayload,
+  Guard,
   Condition,
   ConditionalStyle,
   Layout,
@@ -50,6 +51,7 @@ export type Op =
   | { type: 'renameArtboard'; artboardId: string; name: string }
   | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
   | { type: 'setArtboardSize'; artboardId: string; size: ScreenSize }
+  | { type: 'setArtboardGuard'; artboardId: string; guard: Guard | undefined }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
   | { type: 'addConnector'; connector: ConnectorInstance }
@@ -280,6 +282,16 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       return next;
     }
 
+    case 'setArtboardGuard': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardGuard: unknown artboard ${op.artboardId}`);
+      // Undefined is "anyone may open it", which is the absence of the key rather than an empty
+      // object — a guard nobody can satisfy is not the same fact as no guard.
+      if (op.guard) artboard.guard = op.guard;
+      else delete artboard.guard;
+      return next;
+    }
+
     case 'setArtboardSize': {
       const artboard = next.artboards[op.artboardId];
       if (!artboard) throw new Error(`setArtboardSize: unknown artboard ${op.artboardId}`);
@@ -389,6 +401,10 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       const artboard = next.artboards[op.artboardId];
       if (!artboard) return next;
       // The artboard's whole component tree and every flow touching it go with it.
+      // A guard sending people to a screen that no longer exists would bounce them nowhere.
+      for (const other of Object.values(next.artboards)) {
+        if (other.guard?.redirectTo === op.artboardId) delete other.guard;
+      }
       for (const id of [artboard.root, ...descendants(next, artboard.root)]) {
         delete next.components[id];
         for (const [nodeId, node] of Object.entries(next.nodes)) {
