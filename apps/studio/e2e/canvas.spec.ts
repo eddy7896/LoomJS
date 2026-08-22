@@ -81,8 +81,8 @@ test('a rectangle drawn on the canvas reaches the running app', async ({ page })
   const svg = preview(page).locator('svg').first();
   await expect(svg).toHaveCSS('width', '250px');
   await expect(svg).toHaveCSS('height', '150px');
-  // Laid out by flex, never placed at a coordinate.
-  await expect(svg).toHaveCSS('position', 'static');
+  // And *where* it was drawn: a screen is a drawing board until someone asks for auto layout.
+  await expect(svg).toHaveCSS('position', 'absolute');
 });
 
 test('an ellipse is a different shape, not a rounded box', async ({ page }) => {
@@ -108,6 +108,10 @@ test('keyboard shortcuts arm the tools, and Escape puts the pointer back', async
 });
 
 test('a shape drawn between two components lands between them', async ({ page }) => {
+  // Slots only exist where a frame arranges its children, so this is one that does.
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
+  await page.getByTestId('layout-mode').selectOption('stack');
+
   // Two texts, so there is a slot to drop into rather than an empty frame.
   for (const name of ['first', 'second']) {
     await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
@@ -193,4 +197,140 @@ test('a frame drawn inside a screen is a group, not a screen', async ({ page }) 
   // Still one screen; the frame went in it.
   await expect(page.locator('.layer--artboard')).toHaveCount(1);
   await expect(page.locator('.layer', { hasText: 'Frame' })).toBeVisible();
+});
+
+test('two things drawn in different places stay in different places', async ({ page }) => {
+  // The whole point of free placement: the gesture decides, not the frame.
+  await page.getByTestId('tool-Shape:rectangle').click();
+  await draw(page, { x: 40, y: 40 }, { x: 160, y: 120 });
+
+  await page.getByTestId('tool-Shape:ellipse').click();
+  await draw(page, { x: 260, y: 300 }, { x: 380, y: 400 });
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await previewHas(page, 'svg rect');
+
+  const rect = (await preview(page).locator('svg').first().boundingBox())!;
+  const ellipse = (await preview(page).locator('svg').nth(1).boundingBox())!;
+  // Down and to the right of the first, rather than stacked under it.
+  expect(ellipse.x).toBeGreaterThan(rect.x + 100);
+  expect(ellipse.y).toBeGreaterThan(rect.y + 100);
+});
+
+test('a component can be dragged to another place on the canvas', async ({ page }) => {
+  await page.getByTestId('tool-Shape:rectangle').click();
+  await draw(page, { x: 60, y: 60 }, { x: 200, y: 160 });
+
+  const board = (await page.locator('.artboard').first().boundingBox())!;
+  const shape = page.locator('.artboard svg').first();
+  const before = (await shape.boundingBox())!;
+
+  await page.mouse.move(before.x + 30, before.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(board.x + 400, board.y + 420, { steps: 10 });
+  await page.mouse.up();
+
+  const after = (await shape.boundingBox())!;
+  expect(after.x).toBeGreaterThan(before.x + 100);
+  // Moved, not reparented: dragging in a free frame is a position, not a slot.
+  await expect(page.locator('.layer', { hasText: 'Rectangle' })).toHaveCount(1);
+});
+
+test('a frame can be handed back to auto layout', async ({ page }) => {
+  await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
+  await expect(page.getByTestId('layout-mode')).toHaveValue('free');
+
+  await page.getByTestId('layout-mode').selectOption('stack');
+  await expect(field(page, 'Direction').locator('select')).toBeVisible();
+
+  // And what it holds is arranged from then on.
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await expect(preview(page).locator('span').first()).toHaveCSS('position', 'static');
+});
+
+test('rulers, a grid and guides are there to line things up against', async ({ page }) => {
+  await expect(page.getByTestId('ruler-x')).toBeVisible();
+  await expect(page.getByTestId('ruler-y')).toBeVisible();
+
+  // The grid is off until asked for, and lives on the screen rather than over the canvas.
+  await expect(page.locator('.artboard.has-grid')).toHaveCount(0);
+  await page.getByTestId('toggle-grid').click();
+  await expect(page.locator('.artboard.has-grid')).toHaveCount(1);
+
+  // A guide is *pulled out* of the ruler, and shows where it will land on the way.
+  const ruler = (await page.getByTestId('ruler-x').boundingBox())!;
+  await page.mouse.move(ruler.x + 300, ruler.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(ruler.x + 300, ruler.y + 200, { steps: 8 });
+  await expect(page.getByTestId('guide-draft')).toBeVisible();
+  await page.mouse.up();
+  await expect(page.locator('.guide--x')).toHaveCount(1);
+  await expect(page.getByTestId('guide-draft')).toHaveCount(0);
+
+  // Letting go without leaving the ruler drops nothing: that is how it is called off.
+  await page.mouse.move(ruler.x + 500, ruler.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(ruler.x + 520, ruler.y + 12, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator('.guide--x')).toHaveCount(1);
+
+  // It survives a reload, because it belongs to the composition rather than to the session.
+  await page.reload();
+  await expect(page.locator('.guide--x')).toHaveCount(1);
+
+  // Rulers can be turned off; the toggle is remembered too.
+  await page.getByTestId('toggle-rulers').click();
+  await expect(page.getByTestId('ruler-x')).toHaveCount(0);
+});
+
+test('anything on the canvas can be resized by its handles', async ({ page }) => {
+  await page.getByTestId('tool-Shape:rectangle').click();
+  await draw(page, { x: 60, y: 60 }, { x: 200, y: 160 });
+
+  // Eight of them: the corners and the edges, on the selection rather than on the component.
+  await expect(page.locator('.overlay__handle')).toHaveCount(8);
+
+  const shape = page.locator('.artboard svg').first();
+  const before = (await shape.boundingBox())!;
+
+  const handle = (await page.getByTestId('resize-se').boundingBox())!;
+  await page.mouse.move(handle.x + 4, handle.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 124, handle.y + 84, { steps: 10 });
+  await page.mouse.up();
+
+  const after = (await shape.boundingBox())!;
+  expect(after.width).toBeGreaterThan(before.width + 80);
+  expect(after.height).toBeGreaterThan(before.height + 50);
+
+  // It reaches the running app as a size, not as a drawing the editor kept to itself.
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await previewHas(page, 'svg rect');
+  const inApp = (await preview(page).locator('svg').first().boundingBox())!;
+  expect(Math.round(inApp.width)).toBeGreaterThan(Math.round(before.width));
+
+  // And the whole drag is one undo, not one per pixel.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  const undone = (await shape.boundingBox())!;
+  expect(Math.abs(undone.width - before.width)).toBeLessThan(3);
+});
+
+test('a top-left handle moves the box as well as sizing it', async ({ page }) => {
+  await page.getByTestId('tool-Shape:rectangle').click();
+  await draw(page, { x: 160, y: 160 }, { x: 300, y: 260 });
+
+  const shape = page.locator('.artboard svg').first();
+  const before = (await shape.boundingBox())!;
+
+  const handle = (await page.getByTestId('resize-nw').boundingBox())!;
+  await page.mouse.move(handle.x + 4, handle.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 60, handle.y - 40, { steps: 8 });
+  await page.mouse.up();
+
+  const after = (await shape.boundingBox())!;
+  // The edge that moved took the origin with it: bigger, and further up and to the left.
+  expect(after.width).toBeGreaterThan(before.width + 30);
+  expect(after.x).toBeLessThan(before.x - 30);
 });

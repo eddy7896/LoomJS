@@ -21,6 +21,7 @@ import {
   selectComponent,
   selectedComponentId,
   setLayout,
+  setLayoutMode,
   setStaticProp,
   undo,
 } from '../src/state/store';
@@ -104,6 +105,9 @@ describe('editor -> compiler', () => {
   it('compiles whatever the editor currently holds', () => {
     const textId = place('Text');
     setStaticProp(textId, 'content', 'From the editor');
+    // Gap is an auto-layout property, and a screen starts as a drawing board
+    // (`docs/12-canvas.md`), so this is the frame being handed back to the layout.
+    setLayoutMode(root(), 'stack');
     setLayout(root(), { gap: 32 });
 
     const { files } = compile(snapshot());

@@ -1,8 +1,16 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Snapshot } from '@loom/ir';
 import { screenPreset } from '@loom/components';
-import { placeComponent, placeScreen, setTool, toolPlaces, type Tool } from '../state/store';
+import {
+  isFree,
+  placeComponent,
+  placeScreen,
+  setTool,
+  toolPlaces,
+  type Tool,
+} from '../state/store';
 import { resolveDropTarget, type DropTarget } from './dropTarget';
+import { guidesFor, snapValue, type ChromeState } from './CanvasChrome';
 
 /**
  * Draw to place (`docs/12-canvas.md` C2): press, drag, release, and the element exists at the
@@ -21,7 +29,12 @@ export interface DrawState {
   target: DropTarget | undefined;
 }
 
-export function useDrawPlace(snapshot: Snapshot, tool: Tool, scale: number) {
+export function useDrawPlace(
+  snapshot: Snapshot,
+  tool: Tool,
+  scale: number,
+  chrome: ChromeState,
+) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const [draw, setDraw] = useState<DrawState | undefined>();
 
@@ -93,12 +106,39 @@ export function useDrawPlace(snapshot: Snapshot, tool: Tool, scale: number) {
       return true;
     }
 
+    // Inside a free frame, what survives the gesture is *where it was drawn* — the pointer's
+    // position turned into the child's own place in its parent, once, on release.
+    const raw = isFree(snapshot, draw.target.parentId)
+      ? pointInside(draw.target.parentId, { x: draw.rect.left, y: draw.rect.top }, scale)
+      : undefined;
+    const guides = guidesFor(snapshot, draw.target.parentId);
+    const position = raw
+      ? {
+          x: snapValue(raw.x, guides.x, chrome, scale),
+          y: snapValue(raw.y, guides.y, chrome, scale),
+        }
+      : undefined;
+
     placeComponent(places.type, draw.target.parentId, draw.target.index, {
       variant: places.variant,
       ...(drawn ? { size: drawn } : {}),
+      ...(position ? { position } : {}),
     });
     return true;
-  }, [draw, scale, tool]);
+  }, [chrome, draw, scale, snapshot, tool]);
 
   return { draw, onPointerDown, onPointerMove, onPointerUp };
+}
+
+/** A viewport point as a place inside a parent, in the document's own pixels. */
+function pointInside(
+  parentId: string,
+  point: { x: number; y: number },
+  scale: number,
+): { x: number; y: number } | undefined {
+  const node = document.querySelector<HTMLElement>(`[data-loom-id="${parentId}"]`);
+  if (!node) return undefined;
+  const box = node.getBoundingClientRect();
+  // Divide by the zoom, or something drawn at 50% lands twice as far in as it looked.
+  return { x: (point.x - box.left) / scale, y: (point.y - box.top) / scale };
 }

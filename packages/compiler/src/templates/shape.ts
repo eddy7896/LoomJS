@@ -77,7 +77,11 @@ export const shapeEmitter: ComponentEmitter = {
     // `overflow: visible` keeps a stroke sitting on the edge from being clipped by the SVG
     // viewport, which is hidden by default.
     const layout = component.layout ? layoutToStyle(component.layout) : {};
-    const box: Record<string, string | number> = { display: 'block', overflow: 'visible' };
+    const box: Record<string, string | number> = {
+      display: 'block',
+      overflow: 'visible',
+      ...ctx.positionStyle(component),
+    };
     for (const key of ['width', 'height', 'flexGrow', 'flexShrink'] as const) {
       if (layout[key] !== undefined) box[key] = layout[key]!;
     }

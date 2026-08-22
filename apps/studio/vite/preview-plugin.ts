@@ -145,6 +145,12 @@ function json(res: ServerResponse, status: number, body: unknown): void {
  */
 let activePreview: ViteDevServer | undefined;
 
+/** In flight while the emitted app is being written; the Preview waits on it before serving. */
+let writing: Promise<void> | undefined;
+
+/** What the last build actually changed, so a repeat of it names the same modules and no others. */
+let lastPaths: string[] = [];
+
 export function loomPreview(): Plugin {
   let previewServer: ViteDevServer | undefined;
   let previewUrl = `http://localhost:${PREVIEW_PORT}/`;
@@ -172,6 +178,22 @@ export function loomPreview(): Plugin {
         server: { port: PREVIEW_PORT },
         cacheDir: `${PREVIEW_DIR}/.vite`,
       });
+      /**
+       * While a build is being written, the Preview serves nothing.
+       *
+       * This is the race that made the first edit after opening look like it did nothing: a page
+       * asks for its modules, a build lands mid-flight, and the hot update goes to a page that is
+       * not listening yet — so it renders the app from *before* the edit and never hears the
+       * correction. Holding requests for the length of a write means a page loads either wholly
+       * before it or wholly after it, and there is no in-between state to be caught in.
+       *
+       * A write is a handful of small files, so the wait is milliseconds.
+       */
+      previewServer.middlewares.use((_req, _res, next) => {
+        if (!writing) return next();
+        void writing.then(() => next(), () => next());
+      });
+
       await previewServer.listen();
       activePreview = previewServer;
       previewUrl = previewServer.resolvedUrls?.local[0] ?? previewUrl;
@@ -267,8 +289,27 @@ export function loomPreview(): Plugin {
 
         void (async () => {
           try {
-            const body = JSON.parse(await readBody(req)) as { files?: EmittedFile[] };
-            const { written, added, paths } = await writeEmitted(body.files ?? []);
+            const body = JSON.parse(await readBody(req)) as {
+              files?: EmittedFile[];
+              /** A repeat of a build nobody was connected to hear the first time. */
+              redeliver?: boolean;
+            };
+            let release = (): void => {};
+            writing = new Promise<void>((resolve) => {
+              release = resolve;
+            });
+            const { written, added, paths } = await writeEmitted(body.files ?? []).finally(() => {
+              writing = undefined;
+              release();
+            });
+
+            // A repeat writes nothing — the files are already right — so there is nothing for the
+            // watcher to notice and nothing to hot-swap. Saying it again means naming the same
+            // modules again, and **only** those: naming every emitted file would name `main.tsx`,
+            // which nothing can hot-swap, so the page would reload and throw away whatever the
+            // person had done in the running app.
+            if (body.redeliver && written === 0) paths.push(...lastPaths);
+            else if (written > 0) lastPaths = [...paths];
             // See `writeEmitted`: a module that did not exist a moment ago cannot be hot-swapped
             // into a page that never imported it.
             //
@@ -278,6 +319,8 @@ export function loomPreview(): Plugin {
             if (added > 0) {
               previewServer?.ws.send({ type: 'full-reload', path: '*' });
             } else {
+              // Only modules a page has actually imported are in the graph, so a repeat naming
+              // every emitted file still only wakes the ones being looked at.
               // Say what changed rather than waiting for the file watcher to notice: a watcher
               // still settling at start-up misses these writes entirely, and the studio already
               // knows exactly which files it wrote.

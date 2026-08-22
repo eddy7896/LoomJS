@@ -5,6 +5,7 @@ import type {
   Flow,
   FlowPayload,
   Guard,
+  Guides,
   Condition,
   ConditionalStyle,
   Layout,
@@ -32,6 +33,7 @@ export type Op =
   | { type: 'setProp'; componentId: string; key: string; value: PropertyValue }
   | { type: 'removeProp'; componentId: string; key: string }
   | { type: 'setLayout'; componentId: string; layout: Partial<Layout> }
+  | { type: 'setPosition'; componentId: string; position: { x: number; y: number } | undefined }
   | { type: 'setStyle'; componentId: string; style: Partial<Style> }
   | { type: 'setVisibleWhen'; componentId: string; condition: Condition | undefined }
   | { type: 'setConditionalStyles'; componentId: string; styles: ConditionalStyle[] }
@@ -52,6 +54,7 @@ export type Op =
   | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
   | { type: 'setArtboardSize'; artboardId: string; size: ScreenSize }
   | { type: 'setArtboardGuard'; artboardId: string; guard: Guard | undefined }
+  | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
   | { type: 'addConnector'; connector: ConnectorInstance }
@@ -93,6 +96,16 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       const component = next.components[op.componentId];
       if (!component) throw new Error(`removeProp: unknown component ${op.componentId}`);
       delete component.props[op.key];
+      return next;
+    }
+
+    case 'setPosition': {
+      const component = next.components[op.componentId];
+      if (!component) throw new Error(`setPosition: unknown component ${op.componentId}`);
+      // Undefined is "wherever the layout puts it", which is the absence of the key rather than
+      // a position of zero.
+      if (op.position) component.position = op.position;
+      else delete component.position;
       return next;
     }
 
@@ -279,6 +292,15 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       const artboard = next.artboards[op.artboardId];
       if (!artboard) throw new Error(`setArtboardParams: unknown artboard ${op.artboardId}`);
       artboard.params = op.params;
+      return next;
+    }
+
+    case 'setArtboardGuides': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardGuides: unknown artboard ${op.artboardId}`);
+      const empty = op.guides.x.length === 0 && op.guides.y.length === 0;
+      if (empty) delete artboard.guides;
+      else artboard.guides = op.guides;
       return next;
     }
 

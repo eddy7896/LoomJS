@@ -187,7 +187,23 @@ export const SizeModeSchema = z.discriminatedUnion('mode', [
 ]);
 export type SizeMode = z.infer<typeof SizeModeSchema>;
 
+/**
+ * How a frame arranges what is inside it (`docs/12-canvas.md`).
+ *
+ * `stack` is auto layout: children follow one another along an axis, and the app reflows. `free`
+ * is the drawing board: each child keeps the place it was put, and the frame emits
+ * `position: relative` with absolutely placed children.
+ *
+ * Free is what a designer reaches for while composing, and it is honest about the cost — a screen
+ * laid out freely does not reflow at another width. Any frame can be switched to `stack` to get
+ * that back, which is why this is a per-frame mode rather than a decision for the whole product.
+ */
+export const LayoutModeSchema = z.enum(['stack', 'free']);
+export type LayoutMode = z.infer<typeof LayoutModeSchema>;
+
 export const LayoutSchema = z.object({
+  /** Absent means `stack`: every document written before free placement existed reads as one. */
+  mode: LayoutModeSchema.optional(),
   direction: z.enum(['row', 'column']),
   gap: z.number(),
   padding: z.number(),
@@ -275,6 +291,8 @@ export const ComponentSchema = z.object({
   props: z.record(z.string(), PropertyValueSchema),
   layout: LayoutSchema.optional(),
   style: StyleSchema.optional(),
+  /** Where this sits inside a `free` parent. Ignored by a `stack` parent, which owns the order. */
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
   /** Absent means always rendered. False means not rendered at all — never `display: none`. */
   visibleWhen: ConditionSchema.optional(),
   /** Overrides merged over `style`, in order, for each condition that holds. */
@@ -311,6 +329,16 @@ export type ScreenSize = z.infer<typeof ScreenSizeSchema>;
 export const GuardSchema = z.object({ redirectTo: IdSchema });
 export type Guard = z.infer<typeof GuardSchema>;
 
+/**
+ * The lines a designer lines things up against, in the screen's own pixels.
+ *
+ * In the document rather than in the editor's settings, because a guide is a decision about
+ * *this composition* — it should still be there tomorrow, and for whoever opens the project next.
+ * It emits nothing: the app has never heard of it.
+ */
+export const GuidesSchema = z.object({ x: z.array(z.number()), y: z.array(z.number()) });
+export type Guides = z.infer<typeof GuidesSchema>;
+
 export const ArtboardSchema = z.object({
   id: IdSchema,
   name: z.string(),
@@ -319,6 +347,7 @@ export const ArtboardSchema = z.object({
   size: ScreenSizeSchema.optional(),
   /** Absent means anyone may open the screen. */
   guard: GuardSchema.optional(),
+  guides: GuidesSchema.optional(),
 });
 export type Artboard = z.infer<typeof ArtboardSchema>;
 

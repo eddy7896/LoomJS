@@ -94,6 +94,12 @@ export interface EmitContext {
   requireTextHelper: () => string;
   /** The JS expression a condition compiles to, already truthy-coerced (spec 6). */
   conditionExpr: (condition: Condition, componentId: Id) => string;
+  /**
+   * Where a component sits, when its parent is a **free** frame — empty for everything else.
+   * Asked here rather than computed in each template, because it depends on the *parent*, which
+   * only the walker knows (`docs/12-canvas.md`).
+   */
+  positionStyle: (component: Component) => Record<string, string | number>;
 }
 
 /** A component type owns its code template (docs/02 — compile = stitch templates). */

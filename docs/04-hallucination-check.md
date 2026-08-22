@@ -54,11 +54,14 @@ Do not propose these. They were considered and ruled out for the reasons given.
   goal. The Code node is the escape hatch precisely so the node vocabulary stays small.
 - **"Use plain JS output"** or **"make TypeScript optional."** REJECTED. TS is a hard dependency
   (it *is* the type system + checker).
-- **"Absolute-positioned canvas that emits pixel coordinates."** REJECTED — brittle, non-
-  responsive, unshippable; irreversible trap. Flex-first only. Note that **free placement on the
-  canvas is not this**: a designer draws anywhere, and the gesture is read into a parent, an index
-  and a size before it is stored (`docs/12-canvas.md`). Coordinates are an input method, never a
-  storage format — if a gesture cannot be read as flex, it does not ship.
+- **"Absolute-positioned canvas that emits pixel coordinates."** REJECTED *as a default nobody
+  chose*. What this rules out is a canvas that emits coordinates behind the designer's back with
+  no way back to a layout that adapts. A frame **can** be set to hold its children where they were
+  put — `position: relative` with absolute children — and a new screen starts that way, but it is
+  a visible per-frame choice with its cost stated in the inspector, and auto layout is one click
+  away on any frame (`docs/12-canvas.md` C4). Flex is still what loom emits wherever a frame
+  arranges its own children, and switching a frame to auto layout drops the coordinates rather
+  than keeping two descriptions of the same thing.
 - **"Build live multiplayer / CRDT sync for V1."** REJECTED — deferred to Git-style async
   branch/merge. Don't add realtime sync infrastructure to V1.
 - **"Store secrets in the graph / snapshot / repo so the app can use them."** SECURITY-FALSE.

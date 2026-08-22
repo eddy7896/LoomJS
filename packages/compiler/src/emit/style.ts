@@ -88,7 +88,9 @@ export function styleAttr(
   ctx: EmitContext,
   base: Record<string, string | number> = {},
 ): string {
-  const own = { ...base, ...styleToCss(component) };
+  // Position last: where the parent puts this is not something the component's own style block
+  // gets to argue with.
+  const own = { ...base, ...styleToCss(component), ...ctx.positionStyle(component) };
   const conditionals = component.conditionalStyles ?? [];
 
   if (conditionals.length === 0) {

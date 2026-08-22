@@ -314,6 +314,164 @@ select {
   flex: 1 1 auto;
 }
 
+/* Resize handles: on the selection, one per edge and corner (docs/12-canvas.md). */
+.overlay__handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.overlay__handle:hover {
+  background: var(--accent);
+}
+
+/* ---- rulers, grid and guides (docs/12-canvas.md) ----
+   Free placement is only as good as what you can line things up against. None of this emits any
+   CSS into the app: it is how someone works, not what they built. */
+.canvas.has-rulers .canvas__layer {
+  margin: 22px 0 0 22px;
+}
+
+.ruler {
+  position: absolute;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 9px;
+  z-index: 4;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.ruler--x {
+  top: 0;
+  left: 22px;
+  right: 0;
+  height: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ruler--y {
+  top: 22px;
+  left: 0;
+  bottom: 0;
+  width: 22px;
+  border-right: 1px solid var(--line);
+}
+
+.ruler__corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+}
+
+.ruler__mark {
+  position: absolute;
+  padding: 1px 2px;
+}
+
+.ruler--x .ruler__mark {
+  top: 4px;
+  border-left: 1px solid var(--line);
+}
+
+.ruler--y .ruler__mark {
+  left: 3px;
+  border-top: 1px solid var(--line);
+}
+
+/* Where each screen sits along the ruler, so a number means something inside one. */
+.ruler__span {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* The grid is drawn on the screen itself, under everything on it. */
+.artboard.has-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px);
+  background-size: var(--grid-step, 8px) var(--grid-step, 8px);
+}
+
+.guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.guide {
+  position: absolute;
+  background: color-mix(in srgb, var(--brand) 70%, transparent);
+  pointer-events: auto;
+}
+
+.guide--x {
+  top: 0;
+  width: 1px;
+  cursor: ew-resize;
+}
+
+.guide--y {
+  left: 0;
+  height: 1px;
+  cursor: ns-resize;
+}
+
+/* The one being pulled out of a ruler: dashed until it is let go of. */
+.guide--draft {
+  position: absolute;
+  background: transparent;
+  border-left: 1px dashed var(--brand);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.guide--draft.guide--y {
+  border-left: 0;
+  border-top: 1px dashed var(--brand);
+}
+
+.guide::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.canvas__chrome {
+  position: absolute;
+  right: 12px;
+  top: 34px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  z-index: 6;
+  font-size: 11px;
+}
+
+.canvas__chrome button.is-active {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
 /* ---- the floating toolbar (docs/12-canvas.md) ----
    On the canvas, centred at the bottom, because that is where the hand already is. */
 .toolbelt {

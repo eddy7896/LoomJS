@@ -16,24 +16,31 @@ dragging feels like moving paper. loom's whole output promise is the opposite �
 pixel coordinates, `04-hallucination-check.md` lists "absolute-positioned canvas that emits pixel
 coordinates" as an **irreversible trap**.
 
-**Both are kept, and the reconciliation is that free placement is an input method, not a storage
-format.**
+**Both are kept, as a choice made per frame.**
 
-- You place things **anywhere**. Drag from the toolbar, draw a rectangle, drop a card between two
-  others.
-- loom **reads the arrangement**: which frame you dropped into, which slot along its axis, what
-  gap the spacing implies, what alignment the edges imply.
-- The document stores **that reading** — parent, index, direction, gap, align, size mode — never
-  the pointer's coordinates.
-- The app emits flex, and stays responsive, exactly as it does today.
+A frame is either a **drawing board** or an **auto layout**:
 
-This is what Figma itself converged on with auto layout, arrived at from the other side. The
-difference is that in loom auto layout is not a mode you switch on; it is the only thing there is,
-and the canvas simply never makes you say so.
+| | Free | Auto layout |
+| --- | --- | --- |
+| Holding | each child where it was put | children arranged along an axis |
+| Emits | `position: relative` + absolute children | flex, with gap and alignment |
+| At another width | keeps its shape | reflows |
+| Made by | drawing anything; the default for a new screen | one click in the inspector |
 
-Where free placement genuinely cannot be read as flex — overlapping hero art, a badge on a corner
-— the answer is **not** an absolute mode. It is a shape or an image with its own intrinsic
-drawing, and overlap inside a frame is a v1.5 question recorded in `specs/layout-model.md`.
+The first version of this document said free placement was "an input method, not a storage
+format" — draw anywhere, and loom infers the flex slot. That was the right instinct about
+*emission* and the wrong answer for **drawing**: a designer composing a screen puts something at a
+place and means it, and a canvas that immediately relocates it into a column is arguing with the
+gesture. So the inference is gone, and the choice is explicit and visible instead.
+
+What that costs is stated plainly in the inspector: a frame placed by hand keeps its shape at any
+width, and auto layout is what makes it reflow. Nothing is hidden, and either mode is one click
+away on any frame — including a screen's own root.
+
+The guardrail in `04-hallucination-check.md` still stands where it matters: loom never emits a
+pixel canvas *behind the designer's back*. Absolute positioning happens where it was asked for,
+inside a frame that says so, and a frame handed back to auto layout drops the coordinates rather
+than carrying two descriptions of itself.
 
 ## What "vector tools" means here
 
@@ -142,7 +149,31 @@ primitives prove the emission.
   the app moved on while it was in the air. It terminates on its own: a load with no build behind
   it is the last one.
 
-## C4 — Direct manipulation _(next)_
+## C4 — Free placement, rulers, grid and guides ✅
+
+- **Goal:** the canvas stops arguing with the gesture.
+- **Build:**
+  - `layout.mode` on every frame — `free` or `stack` — and `position` on a child of a free frame.
+    A new screen, and any frame drawn on the canvas, starts free.
+  - Dragging inside a free frame **moves** rather than reorders; dragging in an auto-layout frame
+    still finds a slot, because that is what a slot is for.
+  - **Rulers** along both edges, in the document's own pixels, with each screen marked on them.
+  - A **grid** on the screen itself, under everything, at a step the designer sets.
+  - **Guides**, *pulled* out of a ruler — press, drag onto the canvas, let go, with a dashed line
+    showing where it will land; let go without leaving the ruler and nothing is dropped. Moved by
+    dragging, removed by dragging off the screen.
+  - **Snapping** to guides first and the grid second, with a reach measured in *screen* pixels so
+    the pull feels the same at any zoom. All three toggle from the canvas.
+  - **Resize handles** on the selection — eight of them, corners and edges. They write a fixed
+    size; a handle on the top or left edge also moves the box, because that edge cannot move
+    without the origin moving with it. They snap like everything else, and the whole drag is one
+    undo rather than one per pixel.
+- **Where each thing lives:** rulers, grid and snap are **editor state** — how a person works,
+  remembered per browser. Guides are **document** state, kept beside the screen they belong to,
+  because a guide is a decision about that composition and should be there tomorrow and for
+  whoever opens the project next. None of it emits a line of CSS.
+
+## C5 — Direct manipulation _(next)_
 
 - **Goal:** the canvas is where you change things, not just where you see them.
 - **Build:** resize handles that write **size modes** (drag an edge to fixed, double-click to hug,
@@ -151,13 +182,13 @@ primitives prove the emission.
 - **Why here:** every one of these is a *reading* of a gesture into the flex model, so they need
   C2's inference to exist first.
 
-## C5 — Frames as auto-layout _(next)_
+## C6 — Frames as auto-layout _(next)_
 
 - **Goal:** the structure the canvas inferred is visible and editable in place.
 - **Build:** frame chrome showing direction, gap and padding with inline controls; "wrap in frame"
   over a selection; select-through into nested frames.
 
-## C6 — The rest of the feel _(next)_
+## C7 — The rest of the feel _(next)_
 
 - **Goal:** the hundred small things that make a canvas feel like a canvas.
 - **Build:** space-drag pan, zoom to fit / to selection, marquee multi-select, align and distribute

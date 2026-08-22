@@ -10,6 +10,7 @@ import {
   type PipelinePlan,
 } from './pipeline';
 import { valueExpr } from './props';
+import { positionToStyle } from './layout';
 import { indent } from './text';
 import { MESSAGE_FN } from './messages';
 import { authVar, sessionTypeOf } from './auth';
@@ -66,6 +67,12 @@ export function emitArtboardModule(
     if (!found) throw new CompileError(`Unknown component id "${id}".`, id);
     return found;
   };
+
+  /** Who holds whom, so a child can be asked where its parent puts it. */
+  const parents = new Map<Id, Component>();
+  for (const candidate of Object.values(snapshot.components)) {
+    for (const child of candidate.children ?? []) parents.set(child, candidate);
+  }
 
   const seen = new Set<Id>();
   const hooks = {
@@ -165,6 +172,7 @@ export function emitArtboardModule(
       hooks.auth = true;
       return authVar();
     },
+    positionStyle: (target) => positionToStyle(target, parents.get(target.id)),
     pathExpr: (flowId, componentId) => {
       const flow = snapshot.flows[flowId];
       if (!flow) throw new CompileError(`Unknown flow "${flowId}".`, componentId);

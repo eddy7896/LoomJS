@@ -18,6 +18,8 @@ interface Props {
   draggingId: Id | undefined;
   /** Components hidden while designing. Editor-only; never reaches the compiler. */
   hidden?: ReadonlySet<Id>;
+  /** True when the parent holds its children where they were put rather than arranging them. */
+  placed?: boolean;
 }
 
 function booleanProp(component: Component, key: string): boolean {
@@ -43,6 +45,7 @@ export function ComponentView({
   onPointerDown,
   draggingId,
   hidden,
+  placed,
 }: Props) {
   const component = snapshot.components[id];
   if (!component) return null;
@@ -67,8 +70,17 @@ export function ComponentView({
     'data-steps': stepCount(component) > 1 ? String(stepCount(component)) : undefined,
   };
 
-  const style = componentStyle(component) as CSSProperties;
-  const leafStyle = styleToCss(component) as CSSProperties;
+  // Inside a free frame a child sits where it was put — the same absolute placement the compiler
+  // emits, so the canvas and the app agree about it (`docs/12-canvas.md`).
+  const placement: CSSProperties = placed
+    ? {
+        position: 'absolute',
+        left: Math.round(component.position?.x ?? 0),
+        top: Math.round(component.position?.y ?? 0),
+      }
+    : {};
+  const style = { ...(componentStyle(component) as CSSProperties), ...placement };
+  const leafStyle = { ...(styleToCss(component) as CSSProperties), ...placement };
 
   if (component.type === 'Text') {
     return (
@@ -213,6 +225,7 @@ export function ComponentView({
     >
       {(component.children ?? []).map((childId) => (
         <ComponentView
+          placed={component.layout?.mode === 'free'}
           hidden={hidden}
           key={childId}
           snapshot={snapshot}

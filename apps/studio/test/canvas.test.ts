@@ -3,8 +3,12 @@ import {
   __resetStore,
   addComponent,
   getState,
+  isFree,
+  moveTo,
   placeComponent,
   placeScreen,
+  setArtboardGuides,
+  setLayoutMode,
   rootComponentId,
   selectComponent,
   selectedComponentId,
@@ -55,10 +59,11 @@ describe('the tool', () => {
 });
 
 describe('what a drawn gesture becomes', () => {
-  it('is a parent, an index and a size — never a coordinate', () => {
+  it('is a parent, a place and a size', () => {
     const id = placeComponent('Shape', root(), 0, {
       variant: 'ellipse',
       size: { width: 220.4, height: 90.6 },
+      position: { x: 60, y: 90 },
     })!;
 
     const shape = snapshot().components[id]!;
@@ -68,7 +73,14 @@ describe('what a drawn gesture becomes', () => {
       width: { mode: 'fixed', px: 220 },
       height: { mode: 'fixed', px: 91 },
     });
-    expect(JSON.stringify(shape)).not.toMatch(/"x"|"y"|left|top/);
+    expect(shape.position).toEqual({ x: 60, y: 90 });
+  });
+
+  it('carries no coordinate at all into a frame that arranges its own children', () => {
+    // Two layouts described at once is how a document starts lying about itself.
+    setLayoutMode(root(), 'stack');
+    const id = placeComponent('Shape', root(), 0, { position: { x: 60, y: 90 } })!;
+    expect(JSON.stringify(snapshot().components[id])).not.toMatch(/"x"|"y"/);
   });
 
   it('lands in the slot it was dropped into, not at the end', () => {
@@ -127,5 +139,54 @@ describe('a screen is a frame with a route', () => {
       height: { mode: 'fixed', px: 844 },
     });
     expect(snapshot().components[id]?.name).toBe('Phone');
+  });
+});
+
+describe('a screen is a drawing board', () => {
+  it('starts free, so what you put somewhere stays there', () => {
+    expect(isFree(snapshot(), root())).toBe(true);
+    const id = placeScreen();
+    expect(isFree(snapshot(), snapshot().artboards[id]!.root)).toBe(true);
+  });
+
+  it('keeps where a component was drawn', () => {
+    const id = placeComponent('Shape', root(), 0, { position: { x: 120.6, y: 40.2 } })!;
+    expect(snapshot().components[id]?.position).toEqual({ x: 121, y: 40 });
+  });
+
+  it('drops the position when the frame is handed back to auto layout', () => {
+    // Two layouts described at once is how a document starts lying about itself.
+    const id = placeComponent('Text', root(), 0, { position: { x: 100, y: 100 } })!;
+    setLayoutMode(root(), 'stack');
+    expect(snapshot().components[id]?.position).toBeUndefined();
+    expect(isFree(snapshot(), root())).toBe(false);
+  });
+
+  it('moves a component without touching the tree', () => {
+    const id = placeComponent('Text', root(), 0, { position: { x: 10, y: 10 } })!;
+    moveTo(id, { x: 200, y: 300 });
+    expect(snapshot().components[id]?.position).toEqual({ x: 200, y: 300 });
+    expect(snapshot().components[root()]?.children).toEqual([id]);
+  });
+
+  it('ignores a position in a frame that arranges its own children', () => {
+    setLayoutMode(root(), 'stack');
+    const id = placeComponent('Text', root(), 0, { position: { x: 100, y: 100 } })!;
+    expect(snapshot().components[id]?.position).toBeUndefined();
+  });
+});
+
+describe('guides belong to the screen', () => {
+  it('are kept in the document, so they are still there tomorrow', () => {
+    const id = Object.keys(snapshot().artboards)[0]!;
+    setArtboardGuides(id, { x: [120], y: [64, 320] });
+    expect(snapshot().artboards[id]?.guides).toEqual({ x: [120], y: [64, 320] });
+  });
+
+  it('leave nothing behind when the last one is dragged away', () => {
+    const id = Object.keys(snapshot().artboards)[0]!;
+    setArtboardGuides(id, { x: [120], y: [] });
+    setArtboardGuides(id, { x: [], y: [] });
+    expect(snapshot().artboards[id]).not.toHaveProperty('guides');
   });
 });

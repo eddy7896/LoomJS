@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_SCREEN, SCREEN_PRESETS, screenPreset } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { selectComponent } from '../state/store';
-import { usePreviewSync } from './usePreviewSync';
+import { notePreviewLoaded, usePreviewSync } from './usePreviewSync';
 
 /**
  * The Preview, as a floating window (`docs/12-canvas.md`).
@@ -154,9 +154,41 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
    * mid-interaction and wiping whatever had just been typed into the app.
    */
   const [nonce, setNonce] = useState(0);
+  /**
+   * Misses that happened before this page existed are not this page's problem.
+   *
+   * While the window is folded — the whole time someone is wiring in Nodes — there is no frame to
+   * hear anything, so every build counts as missed. Reloading for those would throw away whatever
+   * the person had just done in the app: a form half filled in, a toast they were reading. The
+   * baseline is taken when the frame loads, and only a miss *after* that is worth correcting.
+   */
+  const heard = useRef(0);
+  /** The misses that already existed when this page went to fetch its modules. */
+  const startedAt = useRef(0);
+  const missedNow = useRef(0);
+  missedNow.current = status.missed;
+
+  // A stable callback, so it runs when the frame really mounts rather than on every render.
+  const corrections = useRef(0);
+  const mountFrame = useCallback((node: HTMLIFrameElement | null) => {
+    if (!node) return;
+    startedAt.current = missedNow.current;
+    corrections.current = 0;
+  }, []);
 
   useEffect(() => {
-    if (status.missed > 0) setNonce(status.missed);
+    if (status.missed <= heard.current) return;
+    // After the burst, not during it: a page still loading misses every build in a fast sequence,
+    // and reloading per miss is a page that reloads forever and never finishes.
+    const timer = setTimeout(() => {
+      // Checked again on the way out: the frame may have mounted while this was waiting, in which
+      // case it has already fetched the current build and reloading it would only throw away
+      // whatever the person has done in the app since.
+      if (status.missed <= heard.current) return;
+      heard.current = status.missed;
+      setNonce(status.missed);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [status.missed]);
 
   // Placed in the bottom-right of the **canvas** on first open: clear of the inspector, which is
@@ -369,6 +401,23 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
                     className="preview__frame"
                     src={nonce > 0 ? `${status.url}?load=${nonce}` : status.url}
                     title="Preview"
+                    ref={mountFrame}
+                    // What it missed *before it went to fetch* is in what it just fetched. What it
+                    // missed **while it was loading** is not — that is the whole race, and it is
+                    // corrected here, immediately: a moment later is a moment in which someone has
+                    // typed something into the app that the reload would throw away.
+                    onLoad={() => {
+                      notePreviewLoaded();
+                      const behind = missedNow.current > startedAt.current;
+                      startedAt.current = missedNow.current;
+                      heard.current = missedNow.current;
+                      // Capped, because each correction can itself be overtaken while it loads,
+                      // and a page that reloads forever is worse than one a build behind.
+                      if (behind && corrections.current < 3) {
+                        corrections.current += 1;
+                        setNonce((value) => value + 1);
+                      }
+                    }}
                     style={
                       device
                         ? {

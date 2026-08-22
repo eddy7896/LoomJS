@@ -351,6 +351,31 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[C] A screen drawn from a preset is named for the app, not the device.** "Screen 2", not
   "Phone" — the size chip already says what shape it is, and a screen's name is what it is called
   in the app.
+- **[C] Free placement is a per-frame mode, and it is the default for a new screen.** The earlier
+  answer — draw anywhere, infer the flex slot — was right about emission and wrong about drawing:
+  someone composing a screen puts a thing somewhere and means it, and a canvas that relocates it
+  into a column is arguing with the gesture. A frame is either a drawing board (`position:
+  relative` with absolute children) or an auto layout (flex); the inspector says which and what it
+  costs, and switching to auto layout drops the coordinates rather than keeping two descriptions.
+- **[C] "Live" means the running page has this build, not that the studio finished posting it.**
+  The dev server reports how many pages heard each write, and the Preview stays "compiling" until
+  one did. A preview that says live while showing the app from before the last edit is the studio
+  telling a small lie at exactly the moment someone is checking their work.
+- **[C] A build nobody heard is said again, never forced through with a reload.** A reload throws
+  away whatever the person has done in the running app — a half-filled form, a message they were
+  reading — which is usually the very thing they were about to look at. The repeat names only the
+  modules that actually changed: naming every emitted file would name `main.tsx`, which nothing
+  can hot-swap, and the page would reload anyway.
+- **[C] The Preview serves nothing while a build is being written.** A page that asks for its
+  modules mid-write can end up holding half of one build and half of another; a few milliseconds
+  of waiting removes the in-between state entirely.
+- **[C] A drag is one undo, not sixty.** Moving and resizing arrive as an op per pointer event, so
+  the first op of a gesture pushes history and the rest replace the snapshot in place. Without it,
+  dragging a box across a screen would take a minute of pressing undo to take back.
+- **[C] Rulers, grid and snapping are the designer's; guides are the project's.** How someone
+  works is remembered per browser. A guide is a decision about a particular composition, so it
+  lives in the document beside its screen — still there tomorrow, and for whoever opens it next.
+  Neither emits anything.
 - **[C] Free placement is an input method, not a storage format.** The canvas lets a designer
   draw anywhere; the gesture is read into a parent, an index along that frame's axis and a size,
   and only that is stored. This is what lets loom feel like a design tool without breaking the

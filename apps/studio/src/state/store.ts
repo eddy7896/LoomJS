@@ -8,6 +8,7 @@ import {
   type Component,
   type FlowPayload,
   type Guard,
+  type Guides,
   type Id,
   type Layout,
   type Op,
@@ -106,6 +107,8 @@ function initialSnapshot(): { snapshot: Snapshot; artboardId: Id } {
   const artboardId = newArtboardId();
   const root = createComponent('Frame', rootId);
   root.name = 'Root';
+  // The first screen is a drawing board like every screen after it (`docs/12-canvas.md`).
+  root.layout = { ...(root.layout ?? DEFAULT_LAYOUT), mode: 'free' };
 
   const withArtboard = applyOp(createEmptyProject('Untitled'), {
     type: 'addArtboard',
@@ -153,7 +156,33 @@ export function getState(): EditorState {
 }
 
 /** Apply an op, pushing the previous snapshot onto the undo stack. */
+/**
+ * The gesture a live edit belongs to, if one is in flight.
+ *
+ * A drag or a resize is *one* thing a person did, and it arrives as sixty ops. Without this,
+ * moving a box across the screen would take sixty presses of undo to take back — so the first op
+ * of a gesture pushes history and the rest replace the snapshot in place.
+ */
+let gesture: string | undefined;
+
+export function dispatchDuring(id: string, op: Op): void {
+  const snapshot = applyOp(state.snapshot, op);
+  set({
+    ...state,
+    snapshot,
+    past: gesture === id ? state.past : [...state.past, state.snapshot].slice(-HISTORY_LIMIT),
+    future: [],
+  });
+  gesture = id;
+}
+
+/** The gesture is over; the next edit is its own undo step again. */
+export function endGesture(): void {
+  gesture = undefined;
+}
+
 export function dispatch(op: Op): void {
+  gesture = undefined;
   const snapshot = applyOp(state.snapshot, op);
   set({
     ...state,
@@ -345,8 +374,29 @@ function insertionParent(snapshot: Snapshot, selection: Selection): Id {
 export function addComponent(type: string): void {
   const component = createComponent(type, newComponentId());
   const parentId = insertionParent(state.snapshot, state.selection);
+  if (type === 'Frame') {
+    component.layout = { ...(component.layout ?? DEFAULT_LAYOUT), mode: 'free' };
+  }
+  // Placed from the palette rather than drawn, so there is no gesture to take a place from.
+  if (isFree(state.snapshot, parentId)) component.position = nextSpot(parentId);
+
   dispatch({ type: 'addComponent', component, parentId });
   selectComponent(component.id);
+}
+
+/**
+ * Where the next thing goes when nobody said.
+ *
+ * A free frame gives every child a coordinate, and "no coordinate" would mean the origin — so
+ * everything added from the palette would pile up in one corner, each one covering the last. This
+ * lays them out the way a column would, leaving a designer something to drag rather than a stack
+ * of invisible things.
+ */
+function nextSpot(parentId: Id): { x: number; y: number } {
+  const parent = state.snapshot.components[parentId];
+  const padding = parent?.layout?.padding ?? 16;
+  const taken = (parent?.children ?? []).length;
+  return { x: padding, y: padding + taken * 56 };
 }
 
 export function setProp(componentId: Id, key: string, value: PropertyValue): void {
@@ -415,7 +465,12 @@ export function placeComponent(
   type: string,
   parentId: Id,
   index: number,
-  options: { variant?: string; size?: { width: number; height: number } } = {},
+  options: {
+    variant?: string;
+    size?: { width: number; height: number };
+    /** Where it was drawn, inside a free parent. Ignored by a parent that stacks its children. */
+    position?: { x: number; y: number };
+  } = {},
 ): Id | undefined {
   const def = defFor(type);
   if (!def) return undefined;
@@ -446,9 +501,88 @@ export function placeComponent(
     };
   }
 
+  // A frame drawn inside another is a drawing board too, unless someone says otherwise.
+  if (type === 'Frame') {
+    component.layout = { ...(component.layout ?? DEFAULT_LAYOUT), mode: 'free' };
+  }
+  if (isFree(state.snapshot, parentId)) {
+    component.position = options.position
+      ? { x: Math.round(options.position.x), y: Math.round(options.position.y) }
+      : nextSpot(parentId);
+  }
+
   dispatch({ type: 'addComponent', component, parentId, index });
   selectComponent(component.id);
   return component.id;
+}
+
+/** Does this frame hold its children where they were put? */
+export function isFree(snapshot: Snapshot, componentId: Id): boolean {
+  return snapshot.components[componentId]?.layout?.mode === 'free';
+}
+
+/** Move something inside a free parent. A whole drag is one undo (`dispatchDuring`). */
+export function moveTo(componentId: Id, position: { x: number; y: number }): void {
+  dispatchDuring(`move:${componentId}`, {
+    type: 'setPosition',
+    componentId,
+    position: { x: Math.round(position.x), y: Math.round(position.y) },
+  });
+}
+
+/**
+ * Resize by dragging a handle: a fixed size, and a new place when the edge that moved was the top
+ * or the left. Live, and one undo for the whole gesture.
+ */
+export function resizeTo(
+  componentId: Id,
+  size: { width: number; height: number },
+  position?: { x: number; y: number },
+): void {
+  const component = state.snapshot.components[componentId];
+  if (!component) return;
+
+  const id = `resize:${componentId}`;
+  dispatchDuring(id, {
+    type: 'setLayout',
+    componentId,
+    layout: {
+      size: {
+        width: { mode: 'fixed', px: Math.max(1, Math.round(size.width)) },
+        height: { mode: 'fixed', px: Math.max(1, Math.round(size.height)) },
+      },
+    },
+  });
+
+  const parent = parentOf(state.snapshot, componentId);
+  if (!position || !parent || !isFree(state.snapshot, parent.id)) return;
+  dispatchDuring(id, {
+    type: 'setPosition',
+    componentId,
+    position: { x: Math.round(position.x), y: Math.round(position.y) },
+  });
+}
+
+/**
+ * Switch a frame between holding its children where they were put and arranging them itself.
+ *
+ * Going to auto layout drops the positions: two layouts described at once is how a document
+ * starts lying about itself. Going to free keeps whatever they had, which is nothing the first
+ * time — so the children land where the flex layout had already put them, and stay there.
+ */
+export function setLayoutMode(componentId: Id, mode: 'stack' | 'free'): void {
+  const component = state.snapshot.components[componentId];
+  if (!component) return;
+
+  const ops: Op[] = [{ type: 'setLayout', componentId, layout: { mode } }];
+  if (mode === 'stack') {
+    for (const child of component.children ?? []) {
+      if (state.snapshot.components[child]?.position) {
+        ops.push({ type: 'setPosition', componentId: child, position: undefined });
+      }
+    }
+  }
+  dispatchAll(ops);
 }
 
 /**
@@ -487,6 +621,10 @@ export function addArtboard(name = 'Screen'): Id {
   const artboardId = newArtboardId();
   const root = createComponent('Frame', newComponentId());
   root.name = 'Root';
+  // A new screen is a **drawing board**: what you put somewhere stays there
+  // (`docs/12-canvas.md`). Auto layout is a click away on any frame, and that is where the
+  // reflowing behaviour comes back — but it is chosen, not imposed on the first gesture.
+  root.layout = { ...(root.layout ?? DEFAULT_LAYOUT), mode: 'free' };
   dispatch({ type: 'addArtboard', artboard: { id: artboardId, name, root: root.id }, root });
   setActiveArtboard(artboardId);
   return artboardId;
@@ -514,6 +652,11 @@ export function setArtboardSize(artboardId: Id, size: ScreenSize): void {
  */
 export function setArtboardGuard(artboardId: Id, guard: Guard | undefined): void {
   dispatch({ type: 'setArtboardGuard', artboardId, guard });
+}
+
+/** The lines this screen is composed against. Editor-facing, and emitted nowhere. */
+export function setArtboardGuides(artboardId: Id, guides: Guides): void {
+  dispatch({ type: 'setArtboardGuides', artboardId, guides });
 }
 
 export function setEntryArtboard(artboardId: Id): void {

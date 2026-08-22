@@ -49,6 +49,9 @@ test('placing a component adds it to the running app', async ({ page }) => {
 
 test('layout edits reach the Preview', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
+  // Direction and gap are auto-layout properties, and a screen starts as a drawing board
+  // (`docs/12-canvas.md`), so this asks the frame to arrange its children first.
+  await page.getByTestId('layout-mode').selectOption('stack');
   await field(page, 'Direction').locator('select').selectOption('row');
   await field(page, 'Gap').locator('input').fill('48');
 

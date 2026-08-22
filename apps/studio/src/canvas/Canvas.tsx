@@ -15,10 +15,12 @@ import {
   select,
   selectComponent,
   setActiveArtboard,
+  setArtboardGuides,
   setArtboardSize,
   type Selection,
 } from '../state/store';
 import { CanvasToolbar } from './CanvasToolbar';
+import { Guides, loadChrome, Ruler, saveChrome, type ChromeState } from './CanvasChrome';
 import { useDrawPlace } from './useDrawPlace';
 import { ComponentView } from './ComponentView';
 import { SelectionOverlay } from './SelectionOverlay';
@@ -44,10 +46,43 @@ export function Canvas() {
   const tool = useEditor((s) => s.tool);
 
   const [scale, setScale] = useState(0.8);
+  // How this person works, not what the project is: rulers and a grid follow the designer
+  // (`docs/12-canvas.md`).
+  const [chrome, setChrome] = useState<ChromeState>(loadChrome);
+  /** The guide being pulled out of a ruler, drawn until it is let go of. */
+  const [draft, setDraft] = useState<{ axis: 'x' | 'y'; at: number } | undefined>();
+  const setChromeState = (patch: Partial<ChromeState>): void => {
+    setChrome((current) => {
+      const next = { ...current, ...patch };
+      saveChrome(next);
+      return next;
+    });
+  };
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panning = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
 
   const layerRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  /**
+   * The canvas's own size, for the rulers to draw against.
+   *
+   * A callback ref that measured inline would be a new function every render, so React would
+   * re-attach it every render and the measurement would set state forever.
+   */
+  const watcher = useRef<ResizeObserver | null>(null);
+  const canvasRef = useCallback((node: HTMLDivElement | null) => {
+    watcher.current?.disconnect();
+    watcher.current = null;
+    if (!node) return;
+
+    setSize({ width: node.clientWidth, height: node.clientHeight });
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(node);
+    watcher.current = observer;
+  }, []);
   const nodes = useRef(new Map<Id, HTMLElement>());
   const artboardRefs = useRef(new Map<Id, HTMLElement>());
 
@@ -79,9 +114,9 @@ export function Canvas() {
   }, [artboards, sizeOf]);
 
   const rootIds = useMemo(() => new Set(artboards.map((a) => a.root)), [artboards]);
-  const dragReorder = useDragReorder(snapshot, rootIds);
+  const dragReorder = useDragReorder(snapshot, rootIds, scale, chrome);
   // With a tool armed, a press draws instead of selecting (`docs/12-canvas.md` C2).
-  const drawPlace = useDrawPlace(snapshot, tool, scale);
+  const drawPlace = useDrawPlace(snapshot, tool, scale, chrome);
 
   const registerNode = useCallback((id: Id, node: HTMLElement | null): void => {
     if (node) nodes.current.set(id, node);
@@ -106,6 +141,21 @@ export function Canvas() {
     });
     return map;
   }, [artboards, snapshot, offsets, sizeOf]);
+
+  /**
+   * Dragged out of a ruler: the guide lands on the screen it was dropped over, in that screen's
+   * own pixels — a guide belongs to a composition, not to the infinite space between screens.
+   */
+  const addGuide = (axis: 'x' | 'y', at: number): void => {
+    const artboard = snapshot.artboards[activeArtboardId];
+    if (!artboard) return;
+    const guides = artboard.guides ?? { x: [], y: [] };
+    const local = axis === 'x' ? at - (offsets.get(artboard.id) ?? 0) : at;
+    setArtboardGuides(artboard.id, {
+      x: axis === 'x' ? [...guides.x, Math.round(local)] : [...guides.x],
+      y: axis === 'y' ? [...guides.y, Math.round(local)] : [...guides.y],
+    });
+  };
 
   const onWheel = (event: WheelEvent<HTMLDivElement>): void => {
     if (event.ctrlKey || event.metaKey) {
@@ -154,7 +204,10 @@ export function Canvas() {
 
   return (
     <div
-      className={`canvas ${tool === 'move' ? '' : 'canvas--drawing'}`}
+      ref={canvasRef}
+      className={`canvas ${tool === 'move' ? '' : 'canvas--drawing'} ${
+        chrome.rulers ? 'has-rulers' : ''
+      }`}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -200,14 +253,28 @@ export function Canvas() {
               ) : null}
             </div>
             <div
-              className="artboard"
+              className={`artboard ${chrome.grid ? 'has-grid' : ''}`}
               ref={(node) => {
                 if (node) artboardRefs.current.set(artboard.id, node);
                 else artboardRefs.current.delete(artboard.id);
               }}
-              style={{ minHeight: sizeOf(artboard).height }}
+              style={{
+                minHeight: sizeOf(artboard).height,
+                ...(chrome.grid
+                  ? ({ '--grid-step': `${chrome.step}px` } as React.CSSProperties)
+                  : {}),
+              }}
               onClick={() => setActiveArtboard(artboard.id)}
             >
+              <Guides
+                artboard={artboard}
+                width={sizeOf(artboard).width}
+                height={Math.max(
+                  artboardRefs.current.get(artboard.id)?.offsetHeight ?? 0,
+                  sizeOf(artboard).height,
+                )}
+                scale={scale}
+              />
               <ComponentView
                 snapshot={snapshot}
                 id={artboard.root}
@@ -267,8 +334,21 @@ export function Canvas() {
           </div>
         ))}
 
+        {draft ? (
+          <div
+            className={`guide guide--draft guide--${draft.axis}`}
+            data-testid="guide-draft"
+            style={
+              draft.axis === 'x'
+                ? { left: draft.at, top: -4000, height: 8000 }
+                : { top: draft.at, left: -4000, width: 8000 }
+            }
+          />
+        ) : null}
+
         {selectedComponent ? (
           <SelectionOverlay
+            resize={{ snapshot, chrome }}
             id={selectedComponent.id}
             target={nodes.current.get(selectedComponent.id)}
             container={layerRef.current}
@@ -313,6 +393,61 @@ export function Canvas() {
           }}
         />
       ) : null}
+
+      {chrome.rulers ? (
+        <>
+          <Ruler
+            axis="x"
+            length={size.width}
+            offset={pan.x}
+            scale={scale}
+            artboards={artboards.map((artboard) => ({
+              id: artboard.id,
+              left: offsets.get(artboard.id) ?? 0,
+              width: sizeOf(artboard).width,
+            }))}
+            onGuide={addGuide}
+            onDrafting={(axis, at) => setDraft(axis ? { axis, at } : undefined)}
+          />
+          <Ruler
+            axis="y"
+            length={size.height}
+            offset={pan.y}
+            scale={scale}
+            artboards={[]}
+            onGuide={addGuide}
+            onDrafting={(axis, at) => setDraft(axis ? { axis, at } : undefined)}
+          />
+          <span className="ruler__corner" />
+        </>
+      ) : null}
+
+      <div className="canvas__chrome">
+        <button
+          className={chrome.rulers ? 'is-active' : ''}
+          data-testid="toggle-rulers"
+          title="Rulers"
+          onClick={() => setChromeState({ rulers: !chrome.rulers })}
+        >
+          Rulers
+        </button>
+        <button
+          className={chrome.grid ? 'is-active' : ''}
+          data-testid="toggle-grid"
+          title={`Grid — ${chrome.step}px`}
+          onClick={() => setChromeState({ grid: !chrome.grid })}
+        >
+          Grid
+        </button>
+        <button
+          className={chrome.snap ? 'is-active' : ''}
+          data-testid="toggle-snap"
+          title="Snap to the grid and to guides"
+          onClick={() => setChromeState({ snap: !chrome.snap })}
+        >
+          Snap
+        </button>
+      </div>
 
       <CanvasToolbar />
 

@@ -41,14 +41,19 @@ function sizeStyle(
 }
 
 export function layoutToStyle(layout: Layout): Record<string, string | number> {
-  const style: Record<string, string | number> = {
-    display: 'flex',
-    flexDirection: layout.direction,
-    gap: layout.gap,
-    padding: layout.padding,
-    alignItems: ALIGN[layout.align],
-    justifyContent: JUSTIFY[layout.justify],
-  };
+  // A free frame is a drawing board: it holds its children where they were put, so it is the
+  // positioning context and nothing else about it is flex (`docs/12-canvas.md`).
+  const style: Record<string, string | number> =
+    layout.mode === 'free'
+      ? { position: 'relative', padding: layout.padding }
+      : {
+          display: 'flex',
+          flexDirection: layout.direction,
+          gap: layout.gap,
+          padding: layout.padding,
+          alignItems: ALIGN[layout.align],
+          justifyContent: JUSTIFY[layout.justify],
+        };
 
   if (layout.size) {
     sizeStyle('width', layout.size.width, style);
@@ -56,4 +61,19 @@ export function layoutToStyle(layout: Layout): Record<string, string | number> {
   }
 
   return style;
+}
+
+/**
+ * Where a component sits inside a **free** parent.
+ *
+ * Absolute, and only here: the child of a stacked frame has no coordinates at all, and a document
+ * that carried them anyway would be describing two layouts at once.
+ */
+export function positionToStyle(
+  component: { position?: { x: number; y: number } },
+  parent: { layout?: Layout } | undefined,
+): Record<string, string | number> {
+  if (parent?.layout?.mode !== 'free') return {};
+  const position = component.position ?? { x: 0, y: 0 };
+  return { position: 'absolute', left: Math.round(position.x), top: Math.round(position.y) };
 }

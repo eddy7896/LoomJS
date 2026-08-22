@@ -25,6 +25,7 @@ import {
   setArtboardParams,
   setArtboardGuard,
   setArtboardSize,
+  setLayoutMode,
   setClickFlow,
   setEntryArtboard,
   setFlowPayload,
@@ -119,21 +120,7 @@ export function Inspector() {
 
       {component.layout ? <AutoBackendSection component={component} /> : null}
 
-      {component.layout ? (
-        <>
-          <section className="field-group">
-            <h3 className="field-group__title">Layout</h3>
-            {LAYOUT_FIELDS.map((field) => (
-              <LayoutField key={field.key} component={component} field={field} />
-            ))}
-          </section>
-          <section className="field-group">
-            <h3 className="field-group__title">Size</h3>
-            <SizeField component={component} axis="width" />
-            <SizeField component={component} axis="height" />
-          </section>
-        </>
-      ) : null}
+      {component.layout ? <LayoutSection component={component} /> : null}
     </aside>
   );
 }
@@ -736,6 +723,50 @@ function normalizeColor(value: string): string {
 }
 
 /**
+ * How a frame arranges what is inside it (`docs/12-canvas.md`).
+ *
+ * **Free** holds each child where it was put — what a designer reaches for while composing, and
+ * what a drawn frame starts as. **Auto layout** hands the arrangement to the frame, which is what
+ * makes a screen reflow at another width; switching to it drops the positions, because a document
+ * describing two layouts at once is one that lies about itself.
+ */
+function LayoutSection({ component }: { component: Component }) {
+  const free = component.layout?.mode === 'free';
+
+  return (
+    <>
+      <section className="field-group">
+        <h3 className="field-group__title">Layout</h3>
+        <Field label="Arrange">
+          <select
+            data-testid="layout-mode"
+            value={free ? 'free' : 'stack'}
+            onChange={(e) => setLayoutMode(component.id, e.target.value === 'free' ? 'free' : 'stack')}
+          >
+            <option value="free">Free — keep where I put things</option>
+            <option value="stack">Auto layout — arrange them for me</option>
+          </select>
+        </Field>
+        {LAYOUT_FIELDS.filter((field) => !free || field.key === 'padding').map((field) => (
+          <LayoutField key={field.key} component={component} field={field} />
+        ))}
+        {free ? (
+          <p className="panel__hint">
+            Placed by hand, so this frame keeps its shape at any width. Auto layout is what makes
+            it reflow.
+          </p>
+        ) : null}
+      </section>
+      <section className="field-group">
+        <h3 className="field-group__title">Size</h3>
+        <SizeField component={component} axis="width" />
+        <SizeField component={component} axis="height" />
+      </section>
+    </>
+  );
+}
+
+/**
  * Who may open this screen (spec 10).
  *
  * The guard is a router-level convenience, and the hint says so: the thing that actually keeps one
@@ -836,16 +867,11 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
 
       <ScreenSizeSection artboardId={artboard.id} />
 
-      {/* The frame half: this screen's own padding, direction and background. */}
+      {/* The frame half: this screen's own arrangement, padding and background. */}
       {root ? (
         <>
           <StyleSection component={root} />
-          <section className="field-group">
-            <h3 className="field-group__title">Layout</h3>
-            {LAYOUT_FIELDS.map((field) => (
-              <LayoutField key={field.key} component={root} field={field} />
-            ))}
-          </section>
+          <LayoutSection component={root} />
         </>
       ) : null}
 
