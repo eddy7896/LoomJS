@@ -334,3 +334,36 @@ test('a top-left handle moves the box as well as sizing it', async ({ page }) =>
   expect(after.width).toBeGreaterThan(before.width + 30);
   expect(after.x).toBeLessThan(before.x - 30);
 });
+
+test('the canvas draws a component the way the app does, not the way the studio does', async ({
+  page,
+}) => {
+  // Design mode renders the app's markup inside the studio's own document, so the studio's
+  // element styles used to land on it: a Text field inherited `width: 100%` from the inspector's
+  // inputs and stretched across the screen. A canvas that lies about what an input looks like is
+  // worse than no canvas (`docs/12-canvas.md`).
+  await page.getByRole('button', { name: '+ Text field', exact: true }).click();
+  await page.locator('.layer--artboard').first().click();
+  await page.getByRole('button', { name: '+ Button', exact: true }).click();
+
+  await expect(page.locator('.preview__state')).toHaveText('live');
+  await previewHas(page, 'input');
+
+  for (const selector of ['input', 'button']) {
+    const onCanvas = await page
+      .locator(`.artboard ${selector}`)
+      .first()
+      .evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.width, style.fontSize, style.borderRadius, style.padding].join(' | ');
+      });
+    const inApp = await preview(page)
+      .locator(selector)
+      .first()
+      .evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.width, style.fontSize, style.borderRadius, style.padding].join(' | ');
+      });
+    expect(onCanvas, selector).toBe(inApp);
+  }
+});

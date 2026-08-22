@@ -204,4 +204,9 @@ primitives prove the emission.
 - **One vocabulary.** A shape is an element. It appears in Layers, takes conditions and bindings,
   and compiles like everything else.
 - **The Preview is the truth.** The canvas draws real React with the project's own tokens; when
-  the two disagree, the canvas is wrong.
+  the two disagree, the canvas is wrong. That is also why the canvas rolls the studio's own
+  element styling back to the browser's inside a screen: the app's markup is being rendered in the
+  studio's document, and without it a Text field wore the inspector's styling instead of its own.
+  What the canvas still shows differently is **editor knowledge, not styling**: a bound value
+  reads `(bound)` because the canvas has no runtime, a conditional component is marked rather than
+  hidden, and a click that runs a sequence carries a badge.

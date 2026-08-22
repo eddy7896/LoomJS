@@ -314,6 +314,33 @@ select {
   flex: 1 1 auto;
 }
 
+/* ---- the canvas is the app's document, not the studio's ----
+   Design mode draws the app's own markup *inside the studio*, so the studio's element styles land
+   on it: a Text field inherited `width: 100%` from the inspector's inputs and stretched across the
+   screen, buttons wore the studio's chrome, and everything sat at the studio's 13px. The canvas
+   was showing loom's design system where it should have been showing the project's.
+
+   So inside a screen, the studio's styling is rolled back to the browser's and the emitted app's
+   own base is applied in its place (`src/index.css` of the generated app). Inline styles — which
+   is where a component's real styling lives — win over all of this, as they do in the app. */
+.artboard {
+  font-family: var(--loom-font-body, Archivo, system-ui, sans-serif);
+  font-size: medium;
+  line-height: 1.5;
+  color: var(--loom-color-ink, #1b1d21);
+}
+
+.artboard input,
+.artboard select,
+.artboard textarea,
+.artboard button,
+.artboard label,
+.artboard a {
+  all: revert;
+  /* The one rule the emitted app does assert over everything. */
+  box-sizing: border-box;
+}
+
 /* Resize handles: on the selection, one per edge and corner (docs/12-canvas.md). */
 .overlay__handle {
   position: absolute;

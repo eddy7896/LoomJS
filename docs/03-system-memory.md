@@ -369,6 +369,11 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[C] The Preview serves nothing while a build is being written.** A page that asks for its
   modules mid-write can end up holding half of one build and half of another; a few milliseconds
   of waiting removes the in-between state entirely.
+- **[C] The canvas is the app's document, not the studio's.** Design mode draws the app's markup
+  inside the studio, so the studio's element styles landed on it — a Text field inherited
+  `width: 100%` from the inspector's inputs and stretched across the screen. Inside a screen the
+  studio's styling is rolled back to the browser's and the emitted app's base is applied instead.
+  A canvas that lies about what an input looks like is worse than no canvas.
 - **[C] A drag is one undo, not sixty.** Moving and resizing arrive as an op per pointer event, so
   the first op of a gesture pushes history and the rest replace the snapshot in place. Without it,
   dragging a box across a screen would take a minute of pressing undo to take back.
