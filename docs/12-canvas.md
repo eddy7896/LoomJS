@@ -115,6 +115,33 @@ primitives prove the emission.
 - **Follows:** "promote this frame to a screen" is now a small, obvious feature — it is the same
   operation the canvas already performs when a gesture lands on nothing.
 
+## C3c — The Preview, as a window ✅
+
+- **Goal:** stop charging the canvas a column for something nobody looks at continuously.
+- **Build:** the Preview floats over the canvas — dragged by its bar, resized from its corner,
+  collapsed to the bar, closed and reopened from the toolbar. Where it was left is remembered.
+- **The app always renders at its real width.** A device preset sizes the frame and the stage
+  **scales** it to fit the window; it is never squeezed into whatever space the window has,
+  because a preview that lies about the viewport is worse than no preview. Two honest modes:
+  - **This screen** (default) — follows the artboard being designed.
+  - **A device** — Phone, Tablet, Laptop, Desktop, drawn inside a mockup that can be turned off.
+  - **Fluid** — the frame *is* the window, so dragging the corner resizes the viewport itself.
+    That is the one that answers "does this hold up at 320 pixels".
+- **Each device is drawn as the thing it is.** A phone with its island, home bar and side buttons;
+  a tablet with a thin uniform bezel and a camera; a laptop as a lid with the deck it closes onto.
+  The proportions are the real ones, because seeing a screen inside the thing it will be held in
+  is how a designer judges whether a header is reachable by a thumb or a footer is buried under a
+  home bar. The hardware is drawn *around* the app, never over it — except the island and the home
+  bar, which occlude exactly as they do on the device.
+- **With no device around it, the app is drawn like a screen on the canvas** — same corner radius,
+  same lift, same ground. It is the same screen, so it should not look like a different one.
+- **The load race, fixed at the root.** A build that lands while the Preview page is still loading
+  reaches nobody: the page has already asked for its modules, and its hot-update channel is not
+  open yet to hear the correction — so the first edit after opening appeared to do nothing until a
+  second edit repaired it. The frame now records which build it went to fetch and loads again if
+  the app moved on while it was in the air. It terminates on its own: a load with no build behind
+  it is the last one.
+
 ## C4 — Direct manipulation _(next)_
 
 - **Goal:** the canvas is where you change things, not just where you see them.

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * M4's gate: connect a Supabase-shaped project, introspect a table, list its rows in the Preview
@@ -112,6 +112,7 @@ test('rows from the database render in the Preview, and a form writes one back',
 
   // Wait for the wiring to reach the running app before using it: the Preview compiles on a
   // debounce, so the button on screen a moment ago has no handler yet.
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await expect(preview(page).getByRole('button', { name: 'Save' })).toBeVisible();
 
@@ -188,6 +189,7 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   await page.locator('.layer', { hasText: 'Row title' }).first().click();
   await field(page, 'Content').locator('select').selectOption('title');
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await expect(preview(page).locator('span', { hasText: 'first note' })).toBeVisible();
 

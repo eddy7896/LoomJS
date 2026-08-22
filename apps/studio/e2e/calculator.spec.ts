@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * The calculator: two number fields, two operation buttons, **one** answer.
@@ -77,6 +77,7 @@ test('two operations answer into one display', async ({ page }) => {
   await expect(page.locator('.react-flow__edge')).toHaveCount(9);
 
   // 4. Run it. One span, two operations.
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   const numbers = preview(page).locator('input[type="number"]');
   await numbers.nth(0).fill('7');

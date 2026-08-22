@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * P3's done-when: a submit button runs a pipeline, clears the form, shows a confirmation, and
@@ -63,6 +63,7 @@ test('a click can do four things, in order', async ({ page }) => {
   await expect(page.getByTestId('action-3-kind')).toContainText('4. Go to screen');
 
   // Run it for real.
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).locator('input[type="text"]').fill('hello');
   await preview(page).getByRole('button', { name: 'Save' }).click();
@@ -83,6 +84,7 @@ test('a step can be reordered, and the order is what runs', async ({ page }) => 
   await page.getByTestId('add-action').selectOption('clearField');
 
   // Set-then-clear leaves the field empty.
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).getByRole('button', { name: 'Go' }).click();
   await expect(preview(page).locator('input[type="text"]')).toHaveValue('');
@@ -90,6 +92,7 @@ test('a step can be reordered, and the order is what runs', async ({ page }) => 
   // Clear-then-set leaves the value. Same two steps, different order, different app.
   await page.getByTestId('action-1-up').click();
   await expect(page.getByTestId('action-0-kind')).toContainText('1. Clear a field');
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).getByRole('button', { name: 'Go' }).click();
   await expect(preview(page).locator('input[type="text"]')).toHaveValue('second');
@@ -106,6 +109,7 @@ test('a step runs only when its condition holds', async ({ page }) => {
   await page.getByTestId('action-0-value').fill('done');
   await page.getByTestId('action-0-when').selectOption({ label: 'Agree is checked' });
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
 
   await preview(page).getByRole('button', { name: 'Go' }).click();

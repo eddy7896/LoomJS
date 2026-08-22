@@ -65,3 +65,21 @@ export async function drag(
 
   await expect(edges).toHaveCount(before + 1);
 }
+
+/**
+ * Open the Preview if it is folded.
+ *
+ * The Preview window folds to its bar in Nodes mode, because a floating window over the graph
+ * eats the drop that finishes a wire. A spec that wants to *use* the running app there opens it
+ * first, exactly as a person would.
+ */
+export async function openPreview(page: Page): Promise<void> {
+  // Ask the window whether it is folded, rather than whether the frame is there yet: an absent
+  // frame also means "the first build has not been written", and folding an already-open window
+  // is a wait for something that will never appear.
+  const window_ = page.getByTestId('preview-window');
+  if (((await window_.getAttribute('class')) ?? '').includes('is-collapsed')) {
+    await page.getByTestId('preview-collapse').click();
+  }
+  await expect(page.locator('iframe.preview__frame')).toBeVisible();
+}

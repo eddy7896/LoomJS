@@ -317,6 +317,29 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P4] A List pages what was fetched, not what exists.** Server-side paging needs an offset the
   caller supplies, and nothing on a screen can hand one over yet. Slicing is honest for the
   hundreds of rows a `limit` already caps and costs no round trip.
+- **[C] The Preview is a window, not a column.** It floats over the canvas, collapses to its bar
+  and remembers where it was left. A docked panel charged the canvas a third of its width whether
+  or not anyone was looking at the running app.
+- **[C] The Preview server reports how many pages heard a build.** The studio cannot see from
+  its own side whether a hot update was delivered, and a guess became a reload loop while typing.
+  The write already knows how many connections it had, so it says — and a build nobody heard is
+  the only thing that reloads the frame, at most once a second.
+- **[C] The tools always win a click.** The floating toolbar sits above the Preview window, and
+  the window opens away from it. A panel that swallows a press on the tools is a trap, whatever
+  the z-order happens to be that day.
+- **[C] A build error is never folded away.** The Preview collapses to keep the canvas clear, and
+  hiding *why nothing works* behind that would make a broken build look like a quiet one.
+- **[C] A mockup is judgement, not decoration.** The device around the app is drawn to real
+  proportions so a designer can see whether a header is reachable by a thumb or a footer is buried
+  under a home bar. With no device chosen, the app is drawn exactly like a screen on the canvas.
+- **[C] A device preview is scaled, never squeezed.** The app renders at the device's real CSS
+  width and the stage scales it to fit the window. A preview that quietly reflows the app to the
+  panel's width is answering a question nobody asked. "Fluid" is the honest opposite: the frame is
+  the window, so resizing it resizes the viewport.
+- **[C] A page cannot be hot-updated into a build that landed while it was loading.** The frame
+  records the build it went to fetch and loads again if the app moved on meanwhile. Earlier
+  attempts to fix this from the dev server — replaying to the next client to connect — did not
+  fire, and the client side is where the information actually is.
 - **[C] A screen is a frame with a route, and the editor now says so.** One row in the tree, one
   panel in the inspector. They were always one object; the seam was in the UI, and it made people
   hunt for padding in the wrong half. The IR keeps `Artboard` separate because a URL, a guard and

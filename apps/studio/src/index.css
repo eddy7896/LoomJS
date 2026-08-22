@@ -117,10 +117,8 @@ select {
   display: grid;
   /* The icon rail, then the one column the reference builds around, then the canvas. */
   grid-template-columns: 44px 232px 1fr 260px;
-}
-
-.workspace--preview {
-  grid-template-columns: 44px 232px 1fr minmax(320px, 30vw) 260px;
+  /* The Preview floats over all of it. */
+  position: relative;
 }
 
 /* ---- panels ---- */
@@ -331,7 +329,8 @@ select {
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: 0 10px 30px rgba(20, 22, 26, 0.16);
-  z-index: 5;
+  /* Above the Preview window: a floating panel that swallows a click on the tools is a trap. */
+  z-index: 30;
 }
 
 .toolbelt__tool {
@@ -462,21 +461,44 @@ select {
   z-index: 4;
 }
 
-/* ---- preview ---- */
+/* ---- preview: a floating window (docs/12-canvas.md) ---- */
 .preview {
   display: flex;
   flex-direction: column;
   min-width: 0;
   background: var(--surface);
-  border-left: 1px solid var(--line);
+}
+
+.preview--window {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(20 22 26 / 18%);
+  overflow: hidden;
+}
+
+.preview--window.is-collapsed {
+  box-shadow: 0 8px 20px rgb(20 22 26 / 14%);
 }
 
 .preview__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--line);
+  /* The whole bar is the handle, so there is nothing to aim at. */
+  cursor: grab;
+  user-select: none;
+}
+
+.preview__bar:active {
+  cursor: grabbing;
+}
+
+.preview__spacer {
+  flex: 1;
 }
 
 .preview__title {
@@ -486,6 +508,11 @@ select {
 .preview__state {
   font-size: 11px;
   color: var(--ink-soft);
+}
+
+.preview__device {
+  font-size: 11px;
+  max-width: 120px;
 }
 
 .dot {
@@ -506,26 +533,199 @@ select {
 .preview__stage {
   flex: 1;
   min-height: 0;
+  display: grid;
+  place-items: center;
   overflow: auto;
-  /* Block, not flex: a centred flex item wider than its container overflows on *both* sides, so
-     half the previewed screen ends up outside the scroll area and unreachable. Block layout with
-     an auto margin centres what fits and overflows only to the right, where scrolling reaches. */
-  display: block;
+  /* Room for the side buttons and the base to sit outside the shell. */
+  padding: 14px;
+  /* The same ground the canvas draws its screens on. */
   background: var(--surface-sunken);
+}
+
+/* The device the app is held in.
+   Proportions are the real ones — bezels a phone actually has, a lid with a base under it —
+   because seeing a screen inside the thing it will be held in is how a designer judges whether a
+   header is reachable by a thumb or a footer is buried under a home bar. */
+.preview__device-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+  /* The buttons live outside the shell, as they do on the thing itself. */
+  overflow: visible;
+}
+
+/* ---- phone ---- */
+.preview__device-frame.is-phone {
+  background: linear-gradient(150deg, #3a3f47, #16181c 42%, #1f2228);
+  border-radius: 46px;
+  padding: 13px;
+  box-shadow:
+    0 0 0 1.5px #4a505a,
+    0 18px 36px rgb(20 22 26 / 28%);
+}
+
+/* ---- tablet ---- */
+.preview__device-frame.is-tablet {
+  background: linear-gradient(150deg, #3a3f47, #191c20 45%, #23262c);
+  border-radius: 26px;
+  padding: 17px;
+  box-shadow:
+    0 0 0 1.5px #4a505a,
+    0 18px 36px rgb(20 22 26 / 24%);
+}
+
+/* ---- laptop: a lid, and the base it closes onto ---- */
+.preview__device-frame.is-desktop {
+  background: linear-gradient(150deg, #cfd3da, #b7bcc4);
+  border-radius: 14px 14px 4px 4px;
+  padding: 11px;
+  align-items: flex-start;
+  box-shadow: 0 14px 30px rgb(20 22 26 / 20%);
+}
+
+.preview__device-frame.is-desktop .preview__viewport {
+  border-radius: 3px;
+  /* The black bezel inside the aluminium. */
+  outline: 6px solid #16181c;
+}
+
+.preview__base {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  /* Wider than the lid, the way the deck of a laptop is — but never wider than the window. */
+  width: 108%;
+  max-width: calc(100% + 28px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: linear-gradient(180deg, #d8dbe1 0 40%, #b3b8c1);
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 6px 14px rgb(20 22 26 / 18%);
+}
+
+/* The lip you open it by. */
+.preview__base i {
+  width: 16%;
+  height: 5px;
+  border-radius: 0 0 6px 6px;
+  background: #9aa0a9;
+}
+
+/* ---- the details that only make sense at a readable size ---- */
+.preview__island {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  border-radius: 999px;
+  z-index: 2;
+}
+
+.preview__camera {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3b4048;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
+  z-index: 2;
+}
+
+.preview__home {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34%;
+  height: 4px;
+  border-radius: 999px;
+  /* Dark, because the app behind it is usually light — the same choice the phone makes. */
+  background: rgb(20 22 26 / 32%);
+  z-index: 2;
+}
+
+/* ---- the buttons down the sides ----
+   Placed as a proportion of the shell by the component, so they hold at any scale. */
+.preview__button {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4a505a, #2b2f36);
+}
+
+/* The app itself. With no hardware around it, it is drawn exactly like a screen on the canvas —
+   same corner radius, same lift — because it is the same screen. */
+.preview__viewport {
+  overflow: hidden;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.preview__viewport.is-bare {
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 12px 32px rgb(20 22 26 / 8%);
+}
+
+.preview__viewport.is-phone {
+  border-radius: 33px;
+}
+
+.preview__viewport.is-tablet {
+  border-radius: 12px;
 }
 
 .preview__frame {
   display: block;
   border: none;
-  height: 100%;
-  margin: 0 auto;
   background: #fff;
 }
 
 .preview__size {
   font-size: 11px;
   color: var(--ink-soft);
-  margin-left: auto;
+}
+
+/* Red is the primary action and the FN category, and nothing else (`docs/05-guardrails.md`), so a
+   toggle in this bar says "on" quietly. */
+.preview__bar button.is-active {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.preview__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    var(--ink-soft) 50% 60%,
+    transparent 60% 70%,
+    var(--ink-soft) 70% 80%,
+    transparent 80%
+  );
+  cursor: nwse-resize;
+}
+
+.preview__booting {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  background: var(--surface-sunken);
 }
 
 .preview__error {

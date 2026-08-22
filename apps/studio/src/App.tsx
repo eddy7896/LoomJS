@@ -8,7 +8,7 @@ import { IconRail } from './panels/IconRail';
 import { DataPanel } from './panels/DataPanel';
 import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
-import { PreviewPanel } from './preview/PreviewPanel';
+import { PreviewWindow } from './preview/PreviewWindow';
 import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
 import { removeNode, removeWire } from './state/graph';
 import { useEditor } from './state/useEditor';
@@ -59,7 +59,7 @@ export default function App({
         autosave={autosave}
         restoreProblem={restoreProblem}
       />
-      <main className={`workspace ${previewOpen ? 'workspace--preview' : ''}`}>
+      <main className="workspace">
         <IconRail />
 
         {/* One column, as the reference does it: what is on the screen, then what can be added,
@@ -77,8 +77,11 @@ export default function App({
           <ProblemsPanel />
         </div>
         {mode === 'design' ? <Canvas /> : <NodesCanvas />}
-        {previewOpen ? <PreviewPanel /> : null}
         <Inspector />
+
+        {/* Floating, over the canvas: the running app is something to hold up against what you
+            are drawing, not a column the canvas pays for permanently (`docs/12-canvas.md`). */}
+        {previewOpen ? <PreviewWindow onClose={() => setPreviewOpen(false)} /> : null}
       </main>
     </div>
   );

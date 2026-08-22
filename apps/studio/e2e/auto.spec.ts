@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * M5's gate: draw a form, ask for a backend, and get a working one — Validate, a POST route, a
@@ -115,6 +115,7 @@ test('a form and a click become a working backend', async ({ page, request }) =>
   );
   await expect(page.locator('.react-flow__edge')).toHaveCount(5);
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await expect(preview(page).getByRole('button', { name: 'Save' })).toBeVisible();
 

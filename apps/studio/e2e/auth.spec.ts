@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * P5's done-when: the app signs someone up, signs them in, shows who they are, and bounces a
@@ -125,6 +125,7 @@ async function openApp(page: Page, context: BrowserContext): Promise<Page> {
 test('a signed-out visitor never lands on a guarded screen', async ({ page }) => {
   await buildApp(page);
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   // The Preview opens at "/" — which is Home, which nobody may open yet, so the sign-in form is
   // what shows. Nothing of the guarded screen renders on the way past.
@@ -134,6 +135,7 @@ test('a signed-out visitor never lands on a guarded screen', async ({ page }) =>
 
 test('signing up and in shows the person their own name', async ({ page, context }) => {
   await buildApp(page);
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
 
   // The Preview's own origin, top-level: see the note at the top of this file.
@@ -149,6 +151,7 @@ test('signing up and in shows the person their own name', async ({ page, context
 
 test('a wrong password says so, and goes nowhere', async ({ page, context }) => {
   await buildApp(page);
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
 
   const app = await openApp(page, context);

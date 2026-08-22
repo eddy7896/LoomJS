@@ -26,25 +26,6 @@ export const PREVIEW_PORT = 5174;
 
 const PREVIEW_DIR = fileURLToPath(new URL('../.loom-preview', import.meta.url));
 
-/**
- * When the studio last wrote the emitted app, and which of those writes a page has already
- * reloaded for.
- *
- * A hot update reaches the pages connected *at that moment*. A Preview still booting — or one
- * reloading because a file was added — is not one of them, and the page it becomes has already
- * fetched the modules from before the write. The result is a Preview quietly showing the app from
- * before the first edit until a second edit repairs it, which is the worst kind of wrong: it
- * looks like the edit did nothing.
- *
- * So a page that connects just after a write is told to reload, once. The stamp is what stops
- * that looping: the page which reloads for a write connects again, sees the same stamp, and stays.
- */
-let lastWriteAt = 0;
-let reloadedForWrite = 0;
-
-/** How long after a write a connecting page might still be holding what came before it. */
-const STALE_WINDOW_MS = 3000;
-
 const NEWLINE = String.fromCharCode(10);
 
 /** `apps/studio/.env.local` — the local stand-in for the platform's env bucket. */
@@ -277,13 +258,6 @@ export function loomPreview(): Plugin {
         })();
       });
 
-      previewServer.ws.on('connection', () => {
-        if (lastWriteAt === reloadedForWrite) return;
-        if (Date.now() - lastWriteAt > STALE_WINDOW_MS) return;
-        reloadedForWrite = lastWriteAt;
-        previewServer?.ws.send({ type: 'full-reload', path: '*' });
-      });
-
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });
@@ -295,12 +269,13 @@ export function loomPreview(): Plugin {
           try {
             const body = JSON.parse(await readBody(req)) as { files?: EmittedFile[] };
             const { written, added, paths } = await writeEmitted(body.files ?? []);
-            if (written > 0) lastWriteAt = Date.now();
-
             // See `writeEmitted`: a module that did not exist a moment ago cannot be hot-swapped
             // into a page that never imported it.
+            //
+            // A build that lands while the Preview page is still loading reaches nobody — that
+            // one is caught on the studio side, which knows when its frame finished loading and
+            // what the app was at the time (`src/preview/PreviewWindow.tsx`).
             if (added > 0) {
-              reloadedForWrite = lastWriteAt;
               previewServer?.ws.send({ type: 'full-reload', path: '*' });
             } else {
               // Say what changed rather than waiting for the file watcher to notice: a watcher
@@ -313,7 +288,10 @@ export function loomPreview(): Plugin {
                 for (const module of modules ?? []) void previewServer?.reloadModule(module);
               }
             }
-            json(res, 200, { ok: true, written });
+            // How many pages heard it. A hot update sent to nobody is a Preview that will keep
+            // showing the app from before this edit until something reloads it, and the studio
+            // cannot see that from its side — so the server says.
+            json(res, 200, { ok: true, written, clients: previewServer?.ws.clients.size ?? 0 });
           } catch (error) {
             json(res, 200, { ok: false, error: (error as Error).message });
           }

@@ -7,6 +7,8 @@ export interface PreviewStatus {
   url: string | undefined;
   /** How many builds have been written since the studio opened. */
   builds: number;
+  /** Builds that were written while no page was listening, and so reached nobody. */
+  missed: number;
   /** Build-tier diagnostic, or undefined when the last compile succeeded. */
   error: string | undefined;
   entityId: string | undefined;
@@ -26,6 +28,7 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
   const [status, setStatus] = useState<PreviewStatus>({
     url: undefined,
     builds: 0,
+    missed: 0,
     error: undefined,
     entityId: undefined,
     syncing: false,
@@ -72,12 +75,15 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ files }),
       })
-        .then((r) => r.json() as Promise<{ ok: boolean; error?: string }>)
+        .then((r) => r.json() as Promise<{ ok: boolean; error?: string; written?: number; clients?: number }>)
         .then((body) =>
           setStatus((s) => ({
             ...s,
             syncing: false,
             builds: s.builds + 1,
+            // Written, but nothing was connected to hear it: the page on screen is now behind,
+            // and only a reload can catch it up.
+            missed: s.missed + ((body.written ?? 0) > 0 && (body.clients ?? 0) === 0 ? 1 : 0),
             error: body.ok ? undefined : (body.error ?? 'Preview write failed'),
             entityId: undefined,
           })),

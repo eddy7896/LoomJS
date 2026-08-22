@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, openPreview } from './canvas';
 
 /**
  * M3's gate: a button in the Preview calls the emitted serverless function and shows the result.
@@ -55,6 +55,7 @@ test('a wired graph calls the emitted function and shows its result', async ({ p
   await expect(page.locator('.react-flow__edge')).toHaveCount(3);
 
   // 4. Run it in the Preview: the emitted server function does the work.
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).locator('input').fill('quiet words');
   await preview(page).getByRole('button', { name: 'Shout' }).click();
@@ -112,6 +113,7 @@ test('a function node outside a route derives a value in the browser', async ({ 
   await drag(page, handle(compute, 'pt_result'), handle(graphNode(page, 'Length'), 'pt_content'));
   await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).locator('input').fill('hello');
 
@@ -146,6 +148,7 @@ test('a trigger holds a derivation until the button is pressed', async ({ page }
   await drag(page, handle(graphNode(page, 'Go'), 'pt_click'), handle(compute, 'pt_run'));
   await expect(page.locator('.react-flow__edge')).toHaveCount(3);
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).locator('input').fill('hello');
 
@@ -178,6 +181,7 @@ test('a field wired straight to a Text shows what the person types', async ({ pa
     handle(graphNode(page, 'Echo'), 'pt_content'),
   );
 
+  await openPreview(page);
   await expect(page.locator('.preview__state')).toHaveText('live');
   await preview(page).locator('input').fill('typed live');
   await expect(preview(page).locator('span', { hasText: 'typed live' })).toBeVisible();
