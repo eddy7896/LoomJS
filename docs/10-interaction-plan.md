@@ -79,7 +79,7 @@ Written before their consumers, per `09`'s rule.
 
 ## Phase plan
 
-### P0 — Persistence _(do first; everything else makes it hurt more)_
+### P0 — Persistence ✅ _(done)_
 
 - **Goal:** a reload stops losing the project.
 - **Build:** serialize the snapshot to local storage on a debounce; open/reset; a schema-version
@@ -90,7 +90,7 @@ Written before their consumers, per `09`'s rule.
 - **Why first:** every phase below adds work a designer would lose. The acceptance test says "a
   designer builds a sample app"; nobody builds a sample app in a tab that forgets.
 
-### P1 — Conditions
+### P1 — Conditions ✅ _(done)_
 
 - **Goal:** things can be shown, hidden, and restyled by state.
 - **Build:** `visibleWhen` on any component, bound to a boolean; conditional **style overrides**
