@@ -113,6 +113,63 @@ export function ComponentView({
     );
   }
 
+  // A shape draws itself, here as in the emitted app (`docs/12-canvas.md`). The paint comes from
+  // the same style block the compiler reads, translated to SVG the same way — a canvas that drew
+  // a plain box where the app draws an ellipse is the disagreement this file exists to prevent.
+  if (component.type === 'Shape') {
+    const kind = textContent(component, 'shape') || 'rectangle';
+    const paint = leafStyle as { background?: string; border?: string; borderRadius?: string };
+    const stroke = paint.border?.split(' ') ?? [];
+    const strokeWidth = Number.parseFloat(stroke[0] ?? '0') || 0;
+    const strokeColor = stroke.slice(2).join(' ') || undefined;
+    const fill = kind === 'line' ? 'none' : (paint.background ?? 'var(--loom-color-brand-tint)');
+    const inset = strokeWidth / 2;
+    const shrink = (percent: number): string =>
+      strokeWidth > 0 ? `calc(${percent}% - ${strokeWidth}px)` : `${percent}%`;
+
+    return (
+      <svg
+        {...shared}
+        ref={(node) => registerNode(id, node as unknown as HTMLElement | null)}
+        style={{ ...style, display: 'block', overflow: 'visible', minHeight: undefined }}
+      >
+        {kind === 'ellipse' ? (
+          <ellipse
+            cx="50%"
+            cy="50%"
+            rx={strokeWidth > 0 ? `calc(50% - ${inset}px)` : '50%'}
+            ry={strokeWidth > 0 ? `calc(50% - ${inset}px)` : '50%'}
+            fill={fill}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth || undefined}
+          />
+        ) : kind === 'line' ? (
+          <line
+            x1="0"
+            y1="0"
+            x2="100%"
+            y2="100%"
+            fill="none"
+            stroke={strokeColor ?? 'var(--loom-color-ink)'}
+            strokeWidth={strokeWidth || 2}
+            strokeLinecap="round"
+          />
+        ) : (
+          <rect
+            x={inset}
+            y={inset}
+            width={shrink(100)}
+            height={shrink(100)}
+            rx={paint.borderRadius}
+            fill={fill}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth || undefined}
+          />
+        )}
+      </svg>
+    );
+  }
+
   if (component.type === 'Checkbox') {
     return (
       <label

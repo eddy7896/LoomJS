@@ -29,12 +29,22 @@ const snapshot = () => getState().snapshot;
 const root = () => rootComponentId(snapshot());
 const children = () => snapshot().components[root()]!.children ?? [];
 
+/**
+ * A project opens blank (`docs/12-canvas.md` C0), so a test that needs something on the screen
+ * puts it there. That is also closer to what a designer does than inheriting a sample.
+ */
+function place(type: string): string {
+  selectComponent(root());
+  addComponent(type);
+  return selectedComponentId()!;
+}
+
 beforeEach(() => __resetStore());
 
 describe('editor store', () => {
-  it('starts with an artboard, a root frame and one text', () => {
+  it('starts with one screen and an empty canvas', () => {
     expect(Object.keys(snapshot().artboards)).toHaveLength(1);
-    expect(children()).toHaveLength(1);
+    expect(children()).toHaveLength(0);
   });
 
   it('adds a component into the selected container', () => {
@@ -49,7 +59,7 @@ describe('editor store', () => {
   });
 
   it('adds beside a leaf when the selection cannot hold children', () => {
-    const textId = children()[0]!;
+    const textId = place('Text');
     selectComponent(textId);
     addComponent('Text');
     expect(children()).toHaveLength(2);
@@ -71,14 +81,15 @@ describe('editor store', () => {
   });
 
   it('reorders siblings', () => {
-    addComponent('Text');
+    place('Text');
+    place('Text');
     const [first, second] = children();
     nudgeOrder(second!, -1);
     expect(children()).toEqual([second, first]);
   });
 
   it('edits props and layout through ops', () => {
-    const textId = children()[0]!;
+    const textId = place('Text');
     setStaticProp(textId, 'content', 'Edited');
     setLayout(root(), { gap: 40, direction: 'row' });
     expect(snapshot().components[textId]!.props.content).toEqual({
@@ -91,7 +102,7 @@ describe('editor store', () => {
 
 describe('editor -> compiler', () => {
   it('compiles whatever the editor currently holds', () => {
-    const textId = children()[0]!;
+    const textId = place('Text');
     setStaticProp(textId, 'content', 'From the editor');
     setLayout(root(), { gap: 32 });
 
@@ -103,7 +114,7 @@ describe('editor -> compiler', () => {
   });
 
   it('surfaces a binding with no pipeline behind it as a Build error', () => {
-    const textId = children()[0]!;
+    const textId = place('Text');
     getState().snapshot.components[textId]!.props.content = {
       kind: 'bound',
       source: { nodeId: 'nd_x', portId: 'pt_result' },

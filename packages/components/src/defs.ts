@@ -52,6 +52,11 @@ export interface ComponentDef {
   /** True when the type renders its template once per row of a bound list. */
   acceptsItems?: boolean;
   defaultLayout?: Layout;
+  /**
+   * A fixed starting size, in px, for a type with no content to size itself from. Drawing the
+   * element replaces it with what was drawn (`docs/12-canvas.md`).
+   */
+  defaultSize?: { width: number; height: number };
 }
 
 export const DEFAULT_LAYOUT: Layout = {
@@ -214,6 +219,36 @@ export const IMAGE_DEF: ComponentDef = {
 };
 
 /**
+ * A shape — rectangle, ellipse or line (`docs/12-canvas.md`).
+ *
+ * The vector primitives, as a **real element**: it sits in the tree, takes layout, conditions and
+ * bindings like everything else, and emits inline SVG with no runtime and no asset pipeline. A
+ * shape is something the app contains, not a decoration the editor invented.
+ *
+ * Fill and stroke name design tokens rather than colours, for the same reason every other styled
+ * property does: restyling the project is a change in one place (`docs/06-glossary.md`).
+ */
+export const SHAPE_KINDS = ['rectangle', 'ellipse', 'line'] as const;
+export type ShapeKind = (typeof SHAPE_KINDS)[number];
+
+export const SHAPE_DEF: ComponentDef = {
+  type: 'Shape',
+  label: 'Shape',
+  category: 'visual',
+  keywords: ['rectangle', 'square', 'ellipse', 'circle', 'oval', 'line', 'vector', 'draw', 'box'],
+  isContainer: false,
+  // Fill, stroke and corner radius are the **style** system every other element already uses:
+  // `background` is the fill, `borderColor` and `borderWidth` are the stroke, `radius` rounds the
+  // corners. A second colour vocabulary here would mean two places to restyle a project.
+  fields: [
+    { key: 'shape', label: 'Shape', control: 'select', options: SHAPE_KINDS, default: 'rectangle' },
+  ],
+  // A shape with nothing drawn is nothing at all, so it arrives with a size. Everything else in
+  // the vocabulary hugs its content; a shape has no content to hug.
+  defaultSize: { width: 160, height: 120 },
+};
+
+/**
  * A real link. `navigate` on a Button is a `<div>` that moves the page: not right-clickable, not
  * middle-clickable, not crawlable, and reachable by keyboard only because the button is. This
  * emits an anchor — `<Link>` when it points at a screen, `<a>` when it points at an address.
@@ -323,6 +358,7 @@ const DEFS: readonly ComponentDef[] = [
   IMAGE_DEF,
   LINK_DEF,
   ICON_DEF,
+  SHAPE_DEF,
   MULTILINE_FIELD_DEF,
   RADIO_GROUP_DEF,
   DATE_FIELD_DEF,
@@ -348,12 +384,22 @@ export function createComponent(type: string, id: string): Component {
     props[field.key] = { kind: 'static', value: field.default };
   }
 
+  const size = def.defaultSize
+    ? {
+        size: {
+          width: { mode: 'fixed' as const, px: def.defaultSize.width },
+          height: { mode: 'fixed' as const, px: def.defaultSize.height },
+        },
+      }
+    : undefined;
+
   return {
     id,
     type: def.type,
     name: def.label,
     props,
     ...(def.isContainer ? { layout: { ...(def.defaultLayout ?? DEFAULT_LAYOUT) }, children: [] } : {}),
+    ...(size && !def.isContainer ? { layout: { ...DEFAULT_LAYOUT, ...size } } : {}),
   };
 }
 

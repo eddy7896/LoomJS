@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { DEFAULT_SCREEN } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { selectComponent } from '../state/store';
@@ -11,6 +12,20 @@ export function PreviewPanel() {
   const snapshot = useEditor((s) => s.snapshot);
   const activeArtboardId = useEditor((s) => s.activeArtboardId);
   const status = usePreviewSync(snapshot, true);
+
+  /**
+   * The frame is remounted once, on the first build after it opened.
+   *
+   * A hot update only reaches a page that was already listening, and the Preview's page loads
+   * while that first build is still being written — so it renders the app from before it and no
+   * update ever arrives to correct it. That reads as "my first edit did nothing", which is the
+   * worst thing a live preview can do. One remount at the start costs nothing and removes the
+   * whole race; every build after it is a hot update, as it should be.
+   */
+  const [boot, setBoot] = useState(0);
+  useEffect(() => {
+    if (status.builds === 1) setBoot(1);
+  }, [status.builds]);
 
   // The Preview runs at the width of the screen being designed, so "does this fit on a phone" is
   // answered by looking rather than guessing. The frame scrolls if the panel is narrower.
@@ -42,6 +57,7 @@ export function PreviewPanel() {
       {status.url ? (
         <div className="preview__stage">
           <iframe
+            key={boot}
             className="preview__frame"
             style={{ width: size.width }}
             src={status.url}

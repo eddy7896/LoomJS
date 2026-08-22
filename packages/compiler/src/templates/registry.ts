@@ -12,6 +12,7 @@ import {
   sliderEmitter,
 } from './inputs2';
 import { iconEmitter, imageEmitter, linkEmitter } from './media';
+import { shapeEmitter } from './shape';
 
 /**
  * The component template registry: each component type owns exactly one code template
@@ -34,6 +35,7 @@ const EMITTERS: ComponentEmitter[] = [
   radioGroupEmitter,
   dateFieldEmitter,
   sliderEmitter,
+  shapeEmitter,
 ];
 
 const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));

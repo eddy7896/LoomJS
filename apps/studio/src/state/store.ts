@@ -18,7 +18,7 @@ import {
   type Snapshot,
   type Style,
 } from '@loom/ir';
-import { createComponent, defFor } from '@loom/components';
+import { createComponent, defFor, DEFAULT_LAYOUT } from '@loom/components';
 import { __resetBuildResult } from './build';
 
 /**
@@ -39,6 +39,25 @@ export type Selection =
 export type Mode = 'design' | 'nodes';
 
 /**
+ * What the pointer does on the canvas (`docs/12-canvas.md`).
+ *
+ * `move` is the arrow: select, drag, reorder. Anything else is a **placement tool** — the next
+ * press on the canvas draws that element, and the tool returns to `move` afterwards, which is the
+ * muscle memory every design tool shares.
+ *
+ * A tool is written as a component type, with a variant after a colon for the types that have
+ * one: `Shape:ellipse`. One string, so a toolbar button, a keyboard shortcut and a test all name
+ * the same thing.
+ */
+export type Tool = 'move' | string;
+
+export const toolPlaces = (tool: Tool): { type: string; variant?: string } | undefined => {
+  if (tool === 'move') return undefined;
+  const [type, variant] = tool.split(':');
+  return type ? { type, ...(variant ? { variant } : {}) } : undefined;
+};
+
+/**
  * Which section of the icon rail is open, and therefore what the left column shows
  * (`docs/11-editor-shell.md`). Design and Nodes also swap the canvas; Data does not — connecting a
  * database should not throw away the canvas you were looking at.
@@ -49,6 +68,7 @@ export interface EditorState {
   snapshot: Snapshot;
   mode: Mode;
   rail: Rail;
+  tool: Tool;
   /**
    * Components hidden **in the editor only** (S2, `docs/11-editor-shell.md`).
    *
@@ -88,18 +108,10 @@ function initialSnapshot(): { snapshot: Snapshot; artboardId: Id } {
     root,
   });
 
-  const heading = createComponent('Text', newComponentId());
-  heading.name = 'Heading';
-  heading.props.content = { kind: 'static', value: 'Hello loomJS' };
-
-  return {
-    snapshot: applyOp(withArtboard, {
-      type: 'addComponent',
-      component: heading,
-      parentId: rootId,
-    }),
-    artboardId,
-  };
+  // A blank canvas, deliberately (`docs/12-canvas.md` C0). The sample heading that used to be
+  // seeded here existed because the first compiler needed something to emit; it became the first
+  // thing every designer deletes.
+  return { snapshot: withArtboard, artboardId };
 }
 
 function freshState(): EditorState {
@@ -108,6 +120,7 @@ function freshState(): EditorState {
     snapshot,
     mode: 'design',
     rail: 'design',
+    tool: 'move',
     hiddenInEditor: new Set<Id>(),
     collapsedLayers: new Set<Id>(),
     selection: undefined,
@@ -220,6 +233,9 @@ function stillExists(snapshot: Snapshot, selection: Selection): Selection {
 }
 
 export function setMode(mode: Mode): void {
+  // Leaving Design puts the pointer back: a half-drawn rectangle has nowhere to land in the node
+  // graph, and coming back to a canvas still armed with a tool is a surprise.
+  if (mode !== 'design' && state.tool !== 'move') state = { ...state, tool: 'move' };
   // The rail follows: revealing a node in Nodes mode while the column still showed the Data panel
   // would leave the two halves of the editor disagreeing about what you are looking at.
   set({ ...state, mode, rail: mode });
@@ -238,6 +254,11 @@ export function isHiddenInEditor(snapshot: Snapshot, hidden: ReadonlySet<Id>, id
     if (hidden.has(cursor)) return true;
   }
   return false;
+}
+
+/** Pick a tool. Switching to Nodes puts the pointer back, since there is nothing to draw there. */
+export function setTool(tool: Tool): void {
+  set({ ...state, tool });
 }
 
 export function setRail(rail: Rail): void {
@@ -376,6 +397,47 @@ export function nudgeOrder(componentId: Id, delta: number): void {
   const target = Math.max(0, Math.min(parent.children.length - 1, index + delta));
   if (target === index) return;
   dispatch({ type: 'moveComponent', componentId, parentId: parent.id, index: target });
+}
+
+/**
+ * Place an element where it was drawn (`docs/12-canvas.md` C2).
+ *
+ * The gesture ends as a **tree edit plus a layout decision** — a parent, an index along that
+ * frame's axis, and a size — never as an x and a y. That is the whole reconciliation between a
+ * canvas that feels free and an app that emits flex.
+ */
+export function placeComponent(
+  type: string,
+  parentId: Id,
+  index: number,
+  options: { variant?: string; size?: { width: number; height: number } } = {},
+): Id | undefined {
+  const def = defFor(type);
+  if (!def) return undefined;
+
+  const component = createComponent(type, newComponentId());
+  if (options.variant) {
+    // The variant is the type's first field — the thing that makes a Shape a rectangle.
+    const key = def.fields[0]?.key;
+    if (key) component.props[key] = { kind: 'static', value: options.variant };
+    component.name = `${options.variant[0]?.toUpperCase() ?? ''}${options.variant.slice(1)}`;
+  }
+
+  if (options.size) {
+    // Drawn at a size means fixed at that size. Nothing else in the vocabulary starts fixed, and
+    // a designer can hand either axis back to the layout from the inspector.
+    component.layout = {
+      ...(component.layout ?? DEFAULT_LAYOUT),
+      size: {
+        width: { mode: 'fixed', px: Math.round(options.size.width) },
+        height: { mode: 'fixed', px: Math.round(options.size.height) },
+      },
+    };
+  }
+
+  dispatch({ type: 'addComponent', component, parentId, index });
+  selectComponent(component.id);
+  return component.id;
 }
 
 /** Reparent / reorder (canvas drag and the layers panel both land here). */
@@ -525,6 +587,7 @@ export function loadSnapshot(snapshot: Snapshot): void {
     snapshot,
     mode: 'design',
     rail: 'design',
+    tool: 'move',
     hiddenInEditor: new Set<Id>(),
     collapsedLayers: new Set<Id>(),
     selection: undefined,

@@ -26,6 +26,25 @@ export const PREVIEW_PORT = 5174;
 
 const PREVIEW_DIR = fileURLToPath(new URL('../.loom-preview', import.meta.url));
 
+/**
+ * When the studio last wrote the emitted app, and which of those writes a page has already
+ * reloaded for.
+ *
+ * A hot update reaches the pages connected *at that moment*. A Preview still booting — or one
+ * reloading because a file was added — is not one of them, and the page it becomes has already
+ * fetched the modules from before the write. The result is a Preview quietly showing the app from
+ * before the first edit until a second edit repairs it, which is the worst kind of wrong: it
+ * looks like the edit did nothing.
+ *
+ * So a page that connects just after a write is told to reload, once. The stamp is what stops
+ * that looping: the page which reloads for a write connects again, sees the same stamp, and stays.
+ */
+let lastWriteAt = 0;
+let reloadedForWrite = 0;
+
+/** How long after a write a connecting page might still be holding what came before it. */
+const STALE_WINDOW_MS = 3000;
+
 const NEWLINE = String.fromCharCode(10);
 
 /** `apps/studio/.env.local` — the local stand-in for the platform's env bucket. */
@@ -99,7 +118,10 @@ const lastWritten = new Map<string, string>();
  * yet and the preview goes blank until someone reloads. A new module means a new module graph, and
  * that needs a full reload.
  */
-async function writeEmitted(files: EmittedFile[]): Promise<{ written: number; added: number }> {
+async function writeEmitted(
+  files: EmittedFile[],
+): Promise<{ written: number; added: number; paths: string[] }> {
+  const paths: string[] = [];
   let written = 0;
   let added = 0;
 
@@ -116,10 +138,11 @@ async function writeEmitted(files: EmittedFile[]): Promise<{ written: number; ad
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, file.content, 'utf8');
     lastWritten.set(file.path, file.content);
+    paths.push(target);
     written += 1;
   }
 
-  return { written, added };
+  return { written, added, paths };
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -254,6 +277,13 @@ export function loomPreview(): Plugin {
         })();
       });
 
+      previewServer.ws.on('connection', () => {
+        if (lastWriteAt === reloadedForWrite) return;
+        if (Date.now() - lastWriteAt > STALE_WINDOW_MS) return;
+        reloadedForWrite = lastWriteAt;
+        previewServer?.ws.send({ type: 'full-reload', path: '*' });
+      });
+
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });
@@ -264,10 +294,25 @@ export function loomPreview(): Plugin {
         void (async () => {
           try {
             const body = JSON.parse(await readBody(req)) as { files?: EmittedFile[] };
-            const { written, added } = await writeEmitted(body.files ?? []);
+            const { written, added, paths } = await writeEmitted(body.files ?? []);
+            if (written > 0) lastWriteAt = Date.now();
+
             // See `writeEmitted`: a module that did not exist a moment ago cannot be hot-swapped
             // into a page that never imported it.
-            if (added > 0) previewServer?.ws.send({ type: 'full-reload', path: '*' });
+            if (added > 0) {
+              reloadedForWrite = lastWriteAt;
+              previewServer?.ws.send({ type: 'full-reload', path: '*' });
+            } else {
+              // Say what changed rather than waiting for the file watcher to notice: a watcher
+              // still settling at start-up misses these writes entirely, and the studio already
+              // knows exactly which files it wrote.
+              for (const path of paths) {
+                const modules = previewServer?.moduleGraph.getModulesByFile(
+                  path.split(sep).join('/'),
+                );
+                for (const module of modules ?? []) void previewServer?.reloadModule(module);
+              }
+            }
             json(res, 200, { ok: true, written });
           } catch (error) {
             json(res, 200, { ok: false, error: (error as Error).message });

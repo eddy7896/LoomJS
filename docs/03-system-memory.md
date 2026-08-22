@@ -317,6 +317,24 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[P4] A List pages what was fetched, not what exists.** Server-side paging needs an offset the
   caller supplies, and nothing on a screen can hand one over yet. Slicing is honest for the
   hundreds of rows a `limit` already caps and costs no round trip.
+- **[C] Free placement is an input method, not a storage format.** The canvas lets a designer
+  draw anywhere; the gesture is read into a parent, an index along that frame's axis and a size,
+  and only that is stored. This is what lets loom feel like a design tool without breaking the
+  flex-first guardrail — Figma arrived at the same place from the other side with auto layout, and
+  in loom there is no mode to switch on because there is nothing else.
+- **[C] A shape is an element, not a decoration the editor invented.** Rectangle, ellipse and line
+  emit inline SVG, take layout and conditions like everything else, and paint from the same style
+  block every other element uses. A second colour vocabulary for shapes would mean two places to
+  restyle a project.
+- **[C] The pen is deferred until a path can be edited after it is drawn.** A point model plus
+  on-canvas handles is the work; three primitives prove the emission first, and a curve nobody can
+  adjust afterwards is worse than no pen.
+- **[C] A new project opens blank.** The seeded sample heading existed because the first compiler
+  needed something to emit, and it had become the first thing every designer deletes.
+- **[C] The Preview remounts once on its first build.** A hot update only reaches a page already
+  listening, and the Preview's page loads while that first build is still being written — so the
+  first edit appeared to do nothing until a second edit repaired it. One remount at the start
+  removes the race; every build after it is a hot update.
 - **[P5] The app's session lives in HttpOnly cookies, not in the browser.** The tutorial answer
   is supabase-js with tokens in `localStorage`, and it means any script reaching the page can take
   the token. In the one feature whose job is keeping a person's data theirs, the weaker option is

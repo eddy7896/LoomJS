@@ -18,6 +18,8 @@ import {
   setArtboardSize,
   type Selection,
 } from '../state/store';
+import { CanvasToolbar } from './CanvasToolbar';
+import { useDrawPlace } from './useDrawPlace';
 import { ComponentView } from './ComponentView';
 import { SelectionOverlay } from './SelectionOverlay';
 import { FlowArrows, type ArtboardBox } from './FlowArrows';
@@ -39,6 +41,7 @@ export function Canvas() {
   const hiddenInEditor = useEditor((s) => s.hiddenInEditor);
   const selection = useEditor((s) => s.selection);
   const activeArtboardId = useEditor((s) => s.activeArtboardId);
+  const tool = useEditor((s) => s.tool);
 
   const [scale, setScale] = useState(0.8);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -77,6 +80,8 @@ export function Canvas() {
 
   const rootIds = useMemo(() => new Set(artboards.map((a) => a.root)), [artboards]);
   const dragReorder = useDragReorder(snapshot, rootIds);
+  // With a tool armed, a press draws instead of selecting (`docs/12-canvas.md` C2).
+  const drawPlace = useDrawPlace(snapshot, tool, scale);
 
   const registerNode = useCallback((id: Id, node: HTMLElement | null): void => {
     if (node) nodes.current.set(id, node);
@@ -111,12 +116,17 @@ export function Canvas() {
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (drawPlace.onPointerDown(event)) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     if (event.button !== 1 && !(event.button === 0 && event.target === event.currentTarget)) return;
     panning.current = { x: pan.x, y: pan.y, startX: event.clientX, startY: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    drawPlace.onPointerMove(event);
     dragReorder.onPointerMove(event);
     const drag = panning.current;
     if (!drag) return;
@@ -124,6 +134,10 @@ export function Canvas() {
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId) && drawPlace.draw) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (drawPlace.onPointerUp()) return;
     const reordered = dragReorder.onPointerUp();
     const drag = panning.current;
     panning.current = null;
@@ -140,7 +154,7 @@ export function Canvas() {
 
   return (
     <div
-      className="canvas"
+      className={`canvas ${tool === 'move' ? '' : 'canvas--drawing'}`}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -286,6 +300,21 @@ export function Canvas() {
           }
         />
       ) : null}
+
+      {drawPlace.draw ? (
+        <div
+          className="draw-band"
+          data-testid="draw-band"
+          style={{
+            left: drawPlace.draw.rect.left,
+            top: drawPlace.draw.rect.top,
+            width: drawPlace.draw.rect.width,
+            height: drawPlace.draw.rect.height,
+          }}
+        />
+      ) : null}
+
+      <CanvasToolbar />
 
       <div className="canvas__zoom">
         <button onClick={() => setScale((s) => Math.max(MIN_SCALE, s - 0.1))}>−</button>

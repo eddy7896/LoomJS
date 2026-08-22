@@ -26,6 +26,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('an edit in the editor shows up in the Preview', async ({ page }) => {
+  // A project opens blank (`docs/12-canvas.md` C0), so the thing being edited is placed first.
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Content').locator('input').fill('Hello loomJS');
   await expect(preview(page).locator('span', { hasText: 'Hello loomJS' })).toBeVisible();
 
   await page.locator('.artboard span', { hasText: 'Hello loomJS' }).click();
@@ -92,6 +95,11 @@ test('an uncompilable edit surfaces as a Build error and keeps the last good bui
   await page.getByRole('button', { name: '+ Param' }).click();
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).click();
+  // Something that compiles, so "the last good build is still on screen" has something to show.
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Content').locator('input').fill('Still here');
+  await expect(preview(page).locator('span', { hasText: 'Still here' })).toBeVisible();
+
   await page.getByRole('button', { name: '+ Button' }).click();
   await page.getByTestId('add-action').selectOption('navigate');
 
@@ -99,5 +107,5 @@ test('an uncompilable edit surfaces as a Build error and keeps the last good bui
   await expect(page.locator('.preview__error')).toBeVisible();
   await expect(page.locator('.preview__state')).toHaveText('build error');
   // The previously compiled app is still on screen.
-  await expect(preview(page).locator('span', { hasText: 'Hello loomJS' })).toBeVisible();
+  await expect(preview(page).locator('span', { hasText: 'Still here' })).toBeVisible();
 });

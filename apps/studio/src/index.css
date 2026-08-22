@@ -303,6 +303,128 @@ select {
   padding: 4px 8px;
 }
 
+/* A screen's root frame fills the screen. On a blank canvas there has to be somewhere to draw,
+   and a frame that claimed only its content height would leave most of the screen belonging to
+   nothing. The artboard becomes the flex parent, so growing the root is one line rather than a
+   fight with the inline min-height the canvas gives an empty container. */
+.artboard {
+  display: flex;
+  flex-direction: column;
+}
+
+.artboard > [data-loom-id] {
+  flex: 1 1 auto;
+}
+
+/* ---- the floating toolbar (docs/12-canvas.md) ----
+   On the canvas, centred at the bottom, because that is where the hand already is. */
+.toolbelt {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(20, 22, 26, 0.16);
+  z-index: 5;
+}
+
+.toolbelt__tool {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.toolbelt__tool:hover {
+  background: var(--surface-sunken);
+}
+
+.toolbelt__tool.is-active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.toolbelt__split {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.toolbelt__popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: 240px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(20, 22, 26, 0.16);
+}
+
+.toolbelt__search {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.toolbelt__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.toolbelt__group-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 4px 2px;
+}
+
+.toolbelt__group button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 5px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.toolbelt__group button:hover {
+  background: var(--surface-sunken);
+}
+
+/* A tool is armed: the pointer says so, and nothing on the canvas invites a click instead. */
+.canvas--drawing,
+.canvas--drawing * {
+  cursor: crosshair;
+}
+
+/* The rubber band. The only thing in the editor that thinks in pixels, and it dies on release. */
+.draw-band {
+  position: fixed;
+  pointer-events: none;
+  border: 1px solid var(--brand);
+  background: rgba(236, 48, 19, 0.08);
+  border-radius: 2px;
+  z-index: 4;
+}
+
 /* ---- preview ---- */
 .preview {
   display: flex;

@@ -1,5 +1,9 @@
 # 11 — The editor shell (S0–S5)
 
+> The left rail answers **what exists**; the floating toolbar on the canvas answers **what am I
+> drawing** (`docs/12-canvas.md`). Both reach the same vocabulary on purpose: crossing the window
+> to a column mid-gesture is what the toolbar removes.
+
 > Plan for the studio's own interface: the left sidebar, the element palette, and the elements
 > tree. Companion to `09` (M0–M6, the compiler) and `10` (P0–P7, the language). Reference imagery
 > is Bubble's builder sidebar.

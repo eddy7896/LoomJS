@@ -55,7 +55,10 @@ Do not propose these. They were considered and ruled out for the reasons given.
 - **"Use plain JS output"** or **"make TypeScript optional."** REJECTED. TS is a hard dependency
   (it *is* the type system + checker).
 - **"Absolute-positioned canvas that emits pixel coordinates."** REJECTED — brittle, non-
-  responsive, unshippable; irreversible trap. Flex-first only.
+  responsive, unshippable; irreversible trap. Flex-first only. Note that **free placement on the
+  canvas is not this**: a designer draws anywhere, and the gesture is read into a parent, an index
+  and a size before it is stored (`docs/12-canvas.md`). Coordinates are an input method, never a
+  storage format — if a gesture cannot be read as flex, it does not ship.
 - **"Build live multiplayer / CRDT sync for V1."** REJECTED — deferred to Git-style async
   branch/merge. Don't add realtime sync infrastructure to V1.
 - **"Store secrets in the graph / snapshot / repo so the app can use them."** SECURITY-FALSE.

@@ -24,7 +24,15 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('.artboard').first()).toBeVisible();
 });
 
+/** The canvas starts blank, so these place the heading they are about to style. */
+async function placeHeading(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '+ Text', exact: true }).click();
+  await field(page, 'Name').locator('input').fill('Heading');
+  await field(page, 'Content').locator('input').fill('Hello loomJS');
+}
+
 test('styling is picked from the system and reaches the running app', async ({ page }) => {
+  await placeHeading(page);
   await page.locator('.layer', { hasText: 'Heading' }).first().click();
 
   await page.getByTestId('style-textColor').selectOption('color.brand');
@@ -41,6 +49,7 @@ test('styling is picked from the system and reaches the running app', async ({ p
 });
 
 test('moving a token moves everything built on it', async ({ page }) => {
+  await placeHeading(page);
   await page.locator('.layer', { hasText: 'Heading' }).first().click();
   await page.getByTestId('style-textColor').selectOption('color.brand');
 

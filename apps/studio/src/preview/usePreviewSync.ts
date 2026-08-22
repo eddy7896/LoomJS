@@ -5,6 +5,8 @@ import { setBuildResult } from '../state/build';
 
 export interface PreviewStatus {
   url: string | undefined;
+  /** How many builds have been written since the studio opened. */
+  builds: number;
   /** Build-tier diagnostic, or undefined when the last compile succeeded. */
   error: string | undefined;
   entityId: string | undefined;
@@ -23,6 +25,7 @@ const DEBOUNCE_MS = 250;
 export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewStatus {
   const [status, setStatus] = useState<PreviewStatus>({
     url: undefined,
+    builds: 0,
     error: undefined,
     entityId: undefined,
     syncing: false,
@@ -74,6 +77,7 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
           setStatus((s) => ({
             ...s,
             syncing: false,
+            builds: s.builds + 1,
             error: body.ok ? undefined : (body.error ?? 'Preview write failed'),
             entityId: undefined,
           })),
