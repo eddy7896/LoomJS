@@ -47,20 +47,27 @@ const children: ReturnType<typeof spawn>[] = [];
  * `npm run dev` starts vite in a shell, so killing the npm process leaves vite holding the port.
  * A stale server serving a previous build is worse than a failure: it answers, and it lies.
  */
-function stop(child: ReturnType<typeof spawn>): void {
+async function stop(child: ReturnType<typeof spawn>): Promise<void> {
   if (child.pid && process.platform === 'win32') {
-    try {
-      spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
-      return;
-    } catch {
-      /* fall through to the portable path */
-    }
+    // And *waited for*: spawning the kill and returning leaves it racing this process's own
+    // exit. A run that ended without it left a vite holding a port, and because these servers
+    // are started with `--strictPort`, the next run's gate on that port failed to start at all —
+    // a green suite turning red for a reason nothing in the failing test could explain.
+    await new Promise<void>((resolve) => {
+      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+      killer.on('close', () => resolve());
+      killer.on('error', () => {
+        child.kill();
+        resolve();
+      });
+    });
+    return;
   }
   child.kill();
 }
 
-afterAll(() => {
-  for (const child of children) stop(child);
+afterAll(async () => {
+  await Promise.all(children.map((child) => stop(child)));
 });
 
 /** A fresh port per run, so a leftover server can never answer for this one. */
