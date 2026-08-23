@@ -10,6 +10,9 @@ import {
 import { useEditor } from '../state/useEditor';
 import { addComponent } from '../state/store';
 import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
+import { startPaletteDrag, type PaletteDrag } from '../canvas/paletteDrag';
+import { SSO_PROVIDERS } from '@loom/connectors';
+import { connection } from '../state/connectors';
 
 /**
  * The element palette (S0/S1, `docs/11-editor-shell.md`).
@@ -26,6 +29,14 @@ interface Entry {
   haystack: string;
   hint?: string;
   onAdd: () => void;
+  /**
+   * What dragging this entry onto the canvas places (`docs/19-sign-in-elements.md`).
+   *
+   * Clicking drops an element wherever the selection happens to be, which is right for the first
+   * element on a screen and wrong for the fourth. Dragging says *where*. An entry with no payload
+   * is one that is not a component — a node, a variable — and stays click-only.
+   */
+  drag?: PaletteDrag;
 }
 
 const COLLAPSED_KEY = 'loom.palette.collapsed';
@@ -57,11 +68,14 @@ function Section({
   entries,
   open,
   onToggle,
+  note,
 }: {
   title: string;
   entries: Entry[];
   open: boolean;
   onToggle: () => void;
+  /** What has to be true before anything in this section works. */
+  note?: string;
 }) {
   if (entries.length === 0) return null;
 
@@ -77,12 +91,21 @@ function Section({
         {title}
       </button>
 
+      {open && note ? <p className="panel__hint">{note}</p> : null}
+
       {open
         ? entries.map((entry) => (
             <button
               key={entry.key}
               className="palette__item"
+              data-testid={`palette-${entry.key}`}
               title={entry.hint}
+              // Click puts it where the selection is; drag says where. Both end in the same
+              // placement (`docs/19-sign-in-elements.md`).
+              draggable={Boolean(entry.drag)}
+              onDragStart={(event) => {
+                if (entry.drag) startPaletteDrag(event, entry.drag);
+              }}
               onClick={entry.onAdd}
             >
               + {entry.label}
@@ -110,7 +133,7 @@ export function ElementsPanel() {
 
   const sections = useMemo(() => {
     if (mode === 'design') {
-      return COMPONENT_CATEGORIES.map((category) => ({
+      const elements = COMPONENT_CATEGORIES.map((category) => ({
         title: category.label,
         entries: componentDefs()
           .filter((def: ComponentDef) => def.category === category.id)
@@ -119,8 +142,46 @@ export function ElementsPanel() {
             label: def.label,
             haystack: haystackOf(def.label, def.keywords),
             onAdd: () => addComponent(def.type),
+            drag: { type: def.type },
           })),
       }));
+
+      /**
+       * Signing in (`docs/19-sign-in-elements.md`).
+       *
+       * A button per provider, arriving with its label and its action already set, because "a
+       * button that signs in with Google" is the thing being asked for — placing a blank Button
+       * and wiring it afterwards is the same thing in four steps.
+       *
+       * They are ordinary Buttons. Nothing here is a new component type, and everything about one
+       * can be edited afterwards like any other.
+       */
+      return [
+        ...elements,
+        {
+          title: 'Sign in',
+          // Signing people in needs a connection, and finding that out from Problems after
+          // placing three buttons is finding out late.
+          note: connection(snapshot)
+            ? undefined
+            : 'These need a Supabase connection — connect one in Data.',
+          entries: SSO_PROVIDERS.map((provider) => ({
+            key: `signin-${provider.id}`,
+            label: provider.label,
+            haystack: haystackOf(provider.label, [
+              'sign in',
+              'log in',
+              'oauth',
+              'sso',
+              'auth',
+              provider.id,
+            ]),
+            hint: provider.note ?? `A button that signs in with ${provider.label}`,
+            onAdd: () => addComponent('Button', { signInWith: provider.id }),
+            drag: { type: 'Button', signInWith: provider.id },
+          })),
+        },
+      ];
     }
 
     const grouped = NODE_GROUPS.map((group) => ({
@@ -192,6 +253,7 @@ export function ElementsPanel() {
           key={section.title}
           title={section.title}
           entries={section.entries}
+          note={'note' in section ? (section.note as string | undefined) : undefined}
           // A search that left sections shut would hide its own results.
           open={Boolean(needle) || !collapsed[section.title]}
           onToggle={() =>

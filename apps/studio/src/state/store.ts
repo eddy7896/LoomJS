@@ -26,6 +26,7 @@ import {
   screenPreset,
 } from '@loom/components';
 import { __resetBuildResult } from './build';
+import { ssoLabel } from '@loom/connectors';
 
 /**
  * The editor's document state. Every mutation is an **atomic op** applied to an immutable
@@ -410,7 +411,11 @@ function insertionParent(snapshot: Snapshot, selection: Selection): Id {
   return parentOf(snapshot, selection.id)?.id ?? root;
 }
 
-export function addComponent(type: string): void {
+export function addComponent(
+  type: string,
+  /** What the element arrives already saying, when it is one that says something. */
+  options: { signInWith?: string } = {},
+): void {
   const parentId = insertionParent(state.snapshot, state.selection);
   // Nowhere to put it: a project with no screens has nothing to place into, and the canvas says
   // so rather than the studio throwing.
@@ -422,6 +427,18 @@ export function addComponent(type: string): void {
   }
   // Placed from the palette rather than drawn, so there is no gesture to take a place from.
   if (isFree(state.snapshot, parentId)) component.position = nextSpot(parentId);
+
+  if (options.signInWith) {
+    component.name = ssoLabel(options.signInWith);
+    component.props.label = { kind: 'static', value: ssoLabel(options.signInWith) };
+    component.props.onClick = {
+      kind: 'event',
+      handler: {
+        kind: 'actions',
+        actions: [{ kind: 'signInWith', provider: options.signInWith }],
+      },
+    };
+  }
 
   dispatch({ type: 'addComponent', component, parentId });
   selectComponent(component.id);
@@ -513,6 +530,14 @@ export function placeComponent(
     size?: { width: number; height: number };
     /** Where it was drawn, inside a free parent. Ignored by a parent that stacks its children. */
     position?: { x: number; y: number };
+    /**
+     * The provider this button signs in with (`docs/19-sign-in-elements.md`).
+     *
+     * It arrives already saying what it does — a label and the action — because "a button that
+     * signs in with Google" is the thing a designer wanted, and placing a blank Button and then
+     * wiring it is the same thing done in four steps.
+     */
+    signInWith?: string;
   } = {},
 ): Id | undefined {
   const def = defFor(type);
@@ -540,6 +565,20 @@ export function placeComponent(
       size: {
         width: { mode: 'fixed', px: Math.round(size.width) },
         height: { mode: 'fixed', px: Math.round(size.height) },
+      },
+    };
+  }
+
+  // A sign-in button carries the provider's name and the action that uses it. Nothing about it
+  // is a special kind of component: it is a Button, editable like any other.
+  if (options.signInWith) {
+    component.name = ssoLabel(options.signInWith);
+    component.props.label = { kind: 'static', value: ssoLabel(options.signInWith) };
+    component.props.onClick = {
+      kind: 'event',
+      handler: {
+        kind: 'actions',
+        actions: [{ kind: 'signInWith', provider: options.signInWith }],
       },
     };
   }

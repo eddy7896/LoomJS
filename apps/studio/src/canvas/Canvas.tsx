@@ -11,6 +11,7 @@ import { DEFAULT_SCREEN, presetForSize } from '@loom/components';
 import { themeStyle } from '@loom/ui';
 import { useEditor } from '../state/useEditor';
 import {
+  isFree,
   entryArtboardId,
   select,
   selectComponent,
@@ -22,6 +23,8 @@ import {
 import { CanvasToolbar } from './CanvasToolbar';
 import { Guides, loadChrome, Ruler, saveChrome, type ChromeState } from './CanvasChrome';
 import { useDrawPlace } from './useDrawPlace';
+import { dropFromPalette, isPaletteDrag, paletteDropTarget } from './paletteDrag';
+import type { DropTarget } from './dropTarget';
 import { ComponentView } from './ComponentView';
 import { SelectionOverlay } from './SelectionOverlay';
 import { FlowArrows, type ArtboardBox } from './FlowArrows';
@@ -118,6 +121,8 @@ export function Canvas() {
   const dragReorder = useDragReorder(snapshot, rootIds, scale, chrome);
   // With a tool armed, a press draws instead of selecting (`docs/12-canvas.md` C2).
   const drawPlace = useDrawPlace(snapshot, tool, scale, chrome);
+  // Where a palette drag would land, so the same insertion line a reorder draws is drawn here.
+  const [paletteTarget, setPaletteTarget] = useState<DropTarget | undefined>();
 
   /**
    * The DOM node behind each component, for the selection chrome to measure.
@@ -220,6 +225,23 @@ export function Canvas() {
         chrome.rulers ? 'has-rulers' : ''
       }`}
       onWheel={onWheel}
+      // Dropping an element from the palette (`docs/19-sign-in-elements.md`). Only ours: a file
+      // or a selection dragged in from elsewhere is left to the browser.
+      onDragOver={(event) => {
+        if (!isPaletteDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setPaletteTarget(paletteDropTarget(snapshot, event));
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setPaletteTarget(undefined);
+      }}
+      onDrop={(event) => {
+        if (!isPaletteDrag(event)) return;
+        event.preventDefault();
+        setPaletteTarget(undefined);
+        dropFromPalette(snapshot, event, scale, (parentId) => isFree(snapshot, parentId));
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -372,21 +394,23 @@ export function Canvas() {
         ) : null}
       </div>
 
-      {dragReorder.target ? (
+      {/* One insertion line, drawn for whichever gesture is in flight: reordering a layer, or
+          dragging something new out of the palette. */}
+      {(dragReorder.target ?? paletteTarget) ? (
         <div
           className="drop-marker"
           style={
-            dragReorder.target.marker.vertical
+            (dragReorder.target ?? paletteTarget)!.marker.vertical
               ? {
-                  left: dragReorder.target.marker.left,
-                  top: dragReorder.target.marker.top,
+                  left: (dragReorder.target ?? paletteTarget)!.marker.left,
+                  top: (dragReorder.target ?? paletteTarget)!.marker.top,
                   width: 2,
-                  height: dragReorder.target.marker.length,
+                  height: (dragReorder.target ?? paletteTarget)!.marker.length,
                 }
               : {
-                  left: dragReorder.target.marker.left,
-                  top: dragReorder.target.marker.top,
-                  width: dragReorder.target.marker.length,
+                  left: (dragReorder.target ?? paletteTarget)!.marker.left,
+                  top: (dragReorder.target ?? paletteTarget)!.marker.top,
+                  width: (dragReorder.target ?? paletteTarget)!.marker.length,
                   height: 2,
                 }
           }
