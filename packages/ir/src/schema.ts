@@ -145,6 +145,18 @@ export const ActionSchema = z.discriminatedUnion('kind', [
     password: ValueSourceSchema,
     ...withCondition,
   }),
+  /**
+   * Sign in through a provider (A2). It carries a **name**, never a credential: the client id and
+   * secret live in the Supabase project, configured by whoever owns it.
+   *
+   * Unlike the other two this one *leaves the page* — OAuth is a redirect — so nothing can follow
+   * it in a sequence, and the compiler says so rather than emitting steps that never run.
+   */
+  z.object({
+    kind: z.literal('signInWith'),
+    provider: z.string(),
+    ...withCondition,
+  }),
   z.object({ kind: z.literal('signOut'), ...withCondition }),
 ]);
 export type Action = z.infer<typeof ActionSchema>;

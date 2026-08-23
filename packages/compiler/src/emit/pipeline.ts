@@ -1,3 +1,4 @@
+import { actionsOf } from '@loom/ir';
 import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, TypeRef, Wire } from '@loom/ir';
 import { canConnect, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
@@ -159,13 +160,28 @@ export function planPipelines(
       }
     }
 
-    // Trigger: a UI mirror's trigger port wired into this node's run port.
+    /**
+     * Trigger: a UI mirror's trigger port wired into this node's run port — *and* an action on
+     * that component that actually fires it.
+     *
+     * A wire and its `trigger` action are one fact in two views (spec 7), but they can come
+     * apart: deleting the action in the inspector leaves the wire behind. The wire alone used to
+     * count, which emitted a `run_…` function nothing called — and the emitted app builds with
+     * `noUnusedLocals`, so that was a build failure a designer could reach by editing a button.
+     */
     let trigger: PipelinePlan['trigger'];
     for (const wire of wiresInto(snapshot, node.id, 'pt_run')) {
       const source = snapshot.nodes[wire.from.nodeId];
       const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
       if (!component) continue;
-      trigger = { componentId: component.id, event: 'onClick' };
+
+      const onClick = component.props.onClick;
+      const fires =
+        onClick?.kind === 'event' &&
+        actionsOf(onClick.handler).some(
+          (action) => action.kind === 'trigger' && action.target.nodeId === node.id,
+        );
+      if (fires) trigger = { componentId: component.id, event: 'onClick' };
     }
 
     // Inputs: every UI mirror data port wired into one of this node's data inputs. The route's
@@ -217,8 +233,15 @@ export function planPipelines(
 
     const bound = binds.result || binds.pending || binds.error;
 
-    // A pipeline this artboard neither fires nor reads belongs to another screen.
-    if (!trigger && inputs.length === 0 && !bound && states.length === 0) continue;
+    /**
+     * A pipeline this artboard neither fires nor reads belongs to another screen.
+     *
+     * Inputs alone are not a reason to run: a route with fields wired into it and no button and
+     * nothing reading its result is one nothing can start. Emitting it anyway produced a `run_…`
+     * function no one called, which the emitted app's own `noUnusedLocals` rejects — a build
+     * failure a designer could reach by deleting a button's trigger.
+     */
+    if (!trigger && !bound && states.length === 0) continue;
 
     const ident = jsIdent(node.id);
     plans.push({

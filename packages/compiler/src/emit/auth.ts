@@ -27,7 +27,7 @@ export function isCurrentUser(node: { category: string; kind: string }): boolean
 }
 
 /** Every action that needs the auth module. Their failure stops a sequence, like `trigger`. */
-const AUTH_ACTIONS = new Set(['signIn', 'signUp', 'signOut']);
+const AUTH_ACTIONS = new Set(['signIn', 'signUp', 'signOut', 'signInWith']);
 
 /**
  * Does this project have users at all?
@@ -270,4 +270,26 @@ export function RequireSignIn({
   return <>{children}</>;
 }
 `;
+}
+
+/**
+ * Every sign-in provider this project's buttons ask for (A2).
+ *
+ * Demand-driven, like auth itself: a project whose only sign-in is a password form emits no
+ * redirect routes, and one that offers three providers names exactly those three in the route
+ * that checks them.
+ */
+export function ssoProvidersUsed(snapshot: Snapshot): string[] {
+  const providers = new Set<string>();
+
+  for (const component of Object.values(snapshot.components)) {
+    for (const value of Object.values(component.props)) {
+      if (value.kind !== 'event') continue;
+      for (const action of actionsOf(value.handler)) {
+        if (action.kind === 'signInWith') providers.add(String(action.provider));
+      }
+    }
+  }
+
+  return [...providers].sort();
 }

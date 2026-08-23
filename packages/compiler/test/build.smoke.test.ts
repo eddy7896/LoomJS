@@ -19,6 +19,7 @@ import {
   inferredSnapshot,
   pipelineSnapshot,
   postgresOperationsSnapshot,
+  ssoSnapshot,
   postgresSnapshot,
   submitSequenceSnapshot,
   supabaseSnapshot,
@@ -242,6 +243,20 @@ describe('emitted app builds for real', () => {
     expect(await readFile(join(dir, 'api', 'countnotes.ts'), 'utf8')).toContain('SELECT COUNT(*)');
     expect(await readFile(join(dir, 'api', 'upsertnotes.ts'), 'utf8')).toContain('ON CONFLICT');
     expect(await readFile(join(dir, 'api', 'aggregatenotes.ts'), 'utf8')).toContain('SUM(');
+  });
+
+  it('type-checks an app that signs in through a provider', async () => {
+    // The redirect routes use node:crypto, the URL API and the cookie helpers — none of which a
+    // string match in a unit test would have checked.
+    const dir = await emitProject(ssoSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const start = await readFile(join(dir, 'api', 'auth', 'start.ts'), 'utf8');
+    expect(start).toContain("createHash('sha256')");
+    expect(start).toContain('/auth/v1/authorize');
+
+    const callback = await readFile(join(dir, 'api', 'auth', 'callback.ts'), 'utf8');
+    expect(callback).toContain('grant_type=pkce');
   });
 
   it('type-checks an app whose data lives in a document store', async () => {

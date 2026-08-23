@@ -11,6 +11,7 @@ import { dialectOf, isDocumentStore } from '@loom/connectors';
 import { migrationFile } from './emit/migrations';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
+  ssoProvidersUsed,
   AUTH_MODULE_PATH,
   emitAuthModule,
   guardedElement,
@@ -93,7 +94,7 @@ export function compile(snapshot: Snapshot): CompileResult {
 
   if (auth) {
     files.push({ path: AUTH_MODULE_PATH, content: emitAuthModule() });
-    files.push(...emitAuthFunctions());
+    files.push(...emitAuthFunctions(ssoProvidersUsed(snapshot)));
   }
 
   if (globals.length > 0) {

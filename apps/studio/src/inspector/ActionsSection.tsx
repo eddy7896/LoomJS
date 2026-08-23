@@ -20,6 +20,7 @@ import {
   type Choice,
 } from '../state/actions';
 import { conditionFromKey, conditionKey, conditionSources } from '../state/conditions';
+import { SSO_PROVIDERS, ssoProvider } from '@loom/connectors';
 
 /**
  * The action sequence, edited inline (P3, `docs/specs/actions.md`).
@@ -309,6 +310,34 @@ export function ActionsSection({ component }: { component: Component }) {
                 onChange={(event) => patch(index, { ...action, url: event.target.value })}
               />
             </Field>
+          ) : null}
+
+          {action.kind === 'signInWith' ? (
+            <>
+              <Field label="Provider">
+                <select
+                  data-testid={`action-${index}-provider`}
+                  value={action.provider}
+                  onChange={(event) =>
+                    patch(index, { kind: 'signInWith', provider: event.target.value })
+                  }
+                >
+                  {SSO_PROVIDERS.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {/* What has to be true before the button works, said here rather than found out
+                  when someone clicks it. The client id and secret live in the Supabase project;
+                  loom never holds them (docs/17-sso.md). */}
+              <p className="panel__hint">
+                {ssoProvider(action.provider)?.note ??
+                  'Turn this provider on in your Supabase project, where its client id and secret ' +
+                    'live. loom only sends its name.'}
+              </p>
+            </>
           ) : null}
 
           {action.kind === 'signIn' || action.kind === 'signUp' ? (

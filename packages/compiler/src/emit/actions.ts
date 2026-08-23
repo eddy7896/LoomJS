@@ -1,4 +1,5 @@
 import { actionsOf, type Action, type Component, type Id, type ValueSource } from '@loom/ir';
+import { ssoProvider } from '@loom/connectors';
 import { CompileError, type EmitContext } from '../types';
 import { indent } from './text';
 import { stateNameForComponent } from './pipeline';
@@ -163,6 +164,38 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
       return hasFollowing
         ? { lines: [`if (!(await ${call})) return;`], async: true }
         : { lines: [`void ${call};`], async: false };
+    }
+
+    /**
+     * Sign in through a provider (A2).
+     *
+     * This *leaves the page*: OAuth is a redirect, so the browser goes to the app's own start
+     * route, which sends it on to the provider. Nothing can follow it in a sequence — a step
+     * after a navigation away is a step that never runs — so a sequence that tries is refused
+     * rather than emitted with dead code in it.
+     */
+    case 'signInWith': {
+      ctx.requireAuth();
+      const provider = String(action.provider ?? '');
+      if (!ssoProvider(provider)) {
+        throw new CompileError(
+          `"${provider}" is not a provider this app can sign in with.`,
+          id,
+        );
+      }
+      if (hasFollowing) {
+        throw new CompileError(
+          'Signing in with a provider leaves the page, so nothing can follow it. Put the steps ' +
+            'that come after on the screen it returns to.',
+          id,
+        );
+      }
+      return {
+        lines: [
+          `window.location.assign("/api/auth/start?provider=" + ${JSON.stringify(provider)});`,
+        ],
+        async: false,
+      };
     }
 
     case 'signOut': {

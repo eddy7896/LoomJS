@@ -11,6 +11,7 @@ import {
 import { hasFieldState, isVariable, nodeTitle } from '@loom/components';
 import { ensureMirror, mirrorNodeFor } from './graph';
 import { artboardOf, dispatch, getState, rootComponentId } from './store';
+import { SSO_PROVIDERS } from '@loom/connectors';
 
 /**
  * Action sequences in the editor (P3, `docs/specs/actions.md`).
@@ -30,6 +31,7 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   openUrl: 'Open a link',
   copy: 'Copy to clipboard',
   signIn: 'Sign in',
+  signInWith: 'Sign in with…',
   signUp: 'Sign up',
   signOut: 'Sign out',
 };
@@ -45,6 +47,7 @@ export const ACTION_ORDER: ActionKind[] = [
   'openUrl',
   'copy',
   'signIn',
+  'signInWith',
   'signUp',
   'signOut',
 ];
@@ -262,6 +265,9 @@ function defaultAction(snapshot: Snapshot, componentId: Id, kind: ActionKind): A
       const password = fields[1] ? fieldValue(fields[1].value) : blankValue();
       return { kind, email, password };
     }
+    case 'signInWith':
+      // Google first because it is the one most people have, not because it is favoured.
+      return { kind, provider: SSO_PROVIDERS[0]!.id };
     case 'signOut':
       return { kind };
     case 'openUrl':

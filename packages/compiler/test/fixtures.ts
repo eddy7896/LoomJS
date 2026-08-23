@@ -1606,3 +1606,27 @@ export function firestoreOperationsSnapshot(): Snapshot {
 
   return applyOps(base, ops);
 }
+
+/**
+ * The auth fixture, with a "Continue with GitHub" button on it (A2).
+ *
+ * The emitted app gains two redirect routes, and those are the ones worth putting through a real
+ * `tsc`: they use node:crypto, the URL API and the cookie helpers, none of which a string match
+ * would check.
+ */
+export function ssoSnapshot(provider = 'github'): Snapshot {
+  const base = authSnapshot();
+  const button = Object.values(base.components).find((component) => component.type === 'Button')!;
+
+  return applyOps(base, [
+    {
+      type: 'setProp',
+      componentId: button.id,
+      key: 'onClick',
+      value: {
+        kind: 'event',
+        handler: { kind: 'actions', actions: [{ kind: 'signInWith', provider }] },
+      },
+    },
+  ]);
+}
