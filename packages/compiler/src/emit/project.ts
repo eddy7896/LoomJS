@@ -32,8 +32,10 @@ export function npmName(input: string): string {
 }
 
 export interface ScaffoldOptions {
-  /** Adds the Supabase client, which only a project with database nodes needs. */
+  /** Adds the Supabase REST client, which only a project reaching Supabase needs. */
   usesDatabase?: boolean;
+  /** Adds the Postgres driver, for a project that talks to a database directly. */
+  usesSql?: boolean;
   /** The project's token overrides, emitted into its stylesheet. */
   theme?: ThemeOverrides;
 }
@@ -44,6 +46,7 @@ export function scaffoldFiles(
   options: ScaffoldOptions = {},
 ): EmittedFile[] {
   const theme = options.theme ?? {};
+  const sqlTypes = options.usesSql ? { '@types/pg': '^8.11.10' } : {};
   const pkg = {
     name: npmName(projectName),
     private: true,
@@ -57,8 +60,11 @@ export function scaffoldFiles(
     dependencies: {
       ...TARGET_DEPS,
       ...(options.usesDatabase ? { '@supabase/postgrest-js': '^2.112.3' } : {}),
+      // Only what this project actually reaches for: a Supabase app never installs a driver it
+      // does not open, and a Postgres app never carries a REST client it does not call.
+      ...(options.usesSql ? { pg: '^8.13.1' } : {}),
     },
-    devDependencies: { ...TARGET_DEV_DEPS },
+    devDependencies: { ...TARGET_DEV_DEPS, ...sqlTypes },
   };
 
   const tsconfig = {

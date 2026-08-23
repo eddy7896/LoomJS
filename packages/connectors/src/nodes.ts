@@ -160,6 +160,59 @@ const OPERATION_LABELS: Record<DbOperation, string> = {
   delete: 'Delete',
 };
 
+/**
+ * A statement the designer wrote themselves (`docs/13-inspector.md`).
+ *
+ * The escape hatch for data, and the same bargain the Code node makes for logic: the vocabulary
+ * stays small because there is a way out of it. A query names its inputs with `:name`, and every
+ * one of them travels as a **parameter** — a builder that pasted a typed value into SQL would be
+ * shipping an injection to everyone who used it.
+ *
+ * Only SQL connectors offer it. Supabase is reached over HTTP through PostgREST, which has no
+ * statement to run, and pretending otherwise would be a node that compiles for one connection and
+ * refuses for another with no way to see why in advance.
+ */
+export interface QueryNodeConfig {
+  connectorId: string;
+  sql: string;
+  /** Whether the step yields the rows or the first of them. */
+  returns?: 'many' | 'one';
+}
+
+/** The `:names` a statement asks for, in the order they first appear. */
+export function queryParamNames(sql: string): string[] {
+  const names: string[] = [];
+  for (const match of sql.matchAll(/:([A-Za-z_][A-Za-z0-9_]*)/g)) {
+    if (!names.includes(match[1]!)) names.push(match[1]!);
+  }
+  return names;
+}
+
+/** A query's ports: one input per name it asks for, and the rows it answers with. */
+export function queryNodePorts(sql: string): Port[] {
+  return [
+    ...queryParamNames(sql).map((name) => port(`pt_p_${name}`, name, 'in', { kind: 'any' })),
+    port('pt_result', 'rows', 'out', { kind: 'list', of: { kind: 'record' } }),
+  ];
+}
+
+export function createQueryNode(
+  id: string,
+  position: { x: number; y: number },
+  connectorId: string,
+): Node {
+  const config: QueryNodeConfig = { connectorId, sql: 'SELECT * FROM ', returns: 'many' };
+  return {
+    id,
+    category: 'db',
+    kind: 'query',
+    name: 'Query',
+    ports: queryNodePorts(config.sql),
+    position,
+    config,
+  };
+}
+
 export function createDbNode(
   id: string,
   position: { x: number; y: number },

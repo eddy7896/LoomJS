@@ -17,6 +17,7 @@ import {
   triggeredMathSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
+  postgresSnapshot,
   submitSequenceSnapshot,
   supabaseSnapshot,
   trivialSnapshot,
@@ -202,6 +203,25 @@ describe('emitted app builds for real', () => {
     // serverless function and the generated pipeline code.
     await run(npm, ['run', 'build'], { cwd: dir, shell: true });
     expect(await readFile(join(dir, 'api', 'shout.ts'), 'utf8')).toContain('toUpperCase');
+  });
+
+  it('type-checks an app that reaches a database by SQL rather than by HTTP', async () => {
+    // A statement is built as a *string in the emitted file*, so a quoted identifier has to
+    // survive being written into one. Nothing but a real `tsc` proves that it did: an emitted
+    // `"SELECT * FROM "notes""` reads fine in a diff and does not compile.
+    const dir = await emitProject(postgresSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const api = await readFile(join(dir, 'api', 'notes.ts'), 'utf8');
+    expect(api).toContain("import { Pool } from 'pg'");
+    expect(api).toContain('SELECT * FROM');
+
+    // The driver is installed, and the credential is asked for by name only.
+    const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies.pg).toBeDefined();
+    expect(await readFile(join(dir, '.env.example'), 'utf8')).toBe('DATABASE_URL=\n');
   });
 });
 

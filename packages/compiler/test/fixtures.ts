@@ -1442,3 +1442,20 @@ function withPageSize(snapshot: Snapshot, pageSize: number): Snapshot {
     { type: 'setProp', componentId: 'cp_list', key: 'pageSize', value: { kind: 'static', value: pageSize } },
   ]);
 }
+
+/**
+ * The Supabase fixture, reaching the same tables over a direct connection instead.
+ *
+ * The graph is untouched: only the connector's module changes, which is the claim the Postgres
+ * tests exist to check — a database node says the same thing whichever connection is under it.
+ */
+export function postgresSnapshot(): Snapshot {
+  const base = supabaseSnapshot();
+  return {
+    ...base,
+    connectors: {
+      ...base.connectors,
+      cn_supabase: { ...base.connectors.cn_supabase!, moduleId: 'postgres' },
+    },
+  };
+}

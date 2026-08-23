@@ -7,7 +7,9 @@ import {
 } from '@loom/components';
 import { FILTER_OPS, type DbFilter, type DbNodeConfig, type FilterOp } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
+import { dialectOf, moduleFor } from '@loom/connectors';
 import { CompileError, type EmittedFile } from '../types';
+import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
 
 /**
@@ -70,17 +72,41 @@ function emitFilters(node: Node, filters: readonly DbFilter[]): string {
     .join('\n');
 }
 
-function emitDbStep(node: Node, snapshot: Snapshot): string {
+/** The connector a database node runs against, and the dialect it speaks. */
+function connectorFor(node: Node, snapshot: Snapshot): { moduleId: string } {
   const config = (node.config ?? {}) as Partial<DbNodeConfig>;
-  const table = String(config.table ?? '');
-  if (!table) throw new CompileError('Database node has no table selected.', node.id);
-
   const connector = config.connectorId ? snapshot.connectors[config.connectorId] : undefined;
   if (!connector) {
     throw new CompileError('Database node is not attached to a connection.', node.id);
   }
-  if (connector.moduleId !== 'supabase') {
+  if (!moduleFor(connector.moduleId)) {
     throw new CompileError(`Unsupported connector "${connector.moduleId}".`, node.id);
+  }
+  return connector;
+}
+
+function emitDbStep(node: Node, snapshot: Snapshot): string {
+  const config = (node.config ?? {}) as Partial<DbNodeConfig>;
+  const connector = connectorFor(node, snapshot);
+
+  // A statement, or a request — the node says the same thing either way.
+  const dialect = dialectOf(connector.moduleId);
+  if (node.kind === 'query') {
+    if (!dialect) {
+      throw new CompileError(
+        `A query is written in SQL, and "${connector.moduleId}" is reached over HTTP rather than ` +
+          `by SQL. Use the read, insert, update and delete nodes with that connection.`,
+        node.id,
+      );
+    }
+    return queryStep(node, dialect);
+  }
+
+  const table = String(config.table ?? '');
+  if (!table) throw new CompileError('Database node has no table selected.', node.id);
+
+  if (dialect) {
+    return sqlStep(node, dialect, table, primaryKeyName(node, snapshot, table));
   }
 
   const name = JSON.stringify(table);
@@ -462,6 +488,9 @@ export function emitApiFunction(
   const steps = plan.body.map((node) => emitStep(node, snapshot));
   const routeName = plan.routePath.replace('/api/', '');
   const usesDb = plan.body.some((node) => node.category === 'db');
+  const sqlNode = plan.body.find(
+    (node) => node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId),
+  );
 
   // A serverless route talks REST, so it takes Supabase's REST client rather than the full
   // supabase-js: the umbrella package builds a realtime client on import, which needs Node 22's
@@ -472,8 +501,60 @@ export function emitApiFunction(
   // row-level security decides what comes back — the service-role key is not used here at all,
   // because it bypasses exactly the rules that keep one person's rows theirs
   // (`docs/specs/app-auth.md`).
+  /**
+   * A SQL connector opens a real connection, so it takes a **pool held at module scope** — the
+   * function is reused between requests and a fresh connection per invocation is how a database's
+   * connection limit gets exhausted. `max: 1` because each instance serves one request at a time;
+   * the pooling that matters happens in front of the database (Supavisor, PgBouncer, Neon), which
+   * is why the credential asks for the pooled connection string.
+   */
+  const sqlPrelude = ((): string => {
+    // The emitted app builds with `noUnusedLocals`, so a helper this route never calls is a
+    // compile error rather than dead weight. Each one is written only if a step reached for it.
+    const body = steps.join('\n');
+    const wantsOne = body.includes('one(');
+    const parts = [
+      `import { Pool } from 'pg';
+
+// The connection string is read by NAME from the environment; the value never enters the
+// document, the snapshot, or this file (docs/05-guardrails.md #1).
+const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? '', max: 1 });
+`,
+    ];
+
+    if (body.includes('slot(')) {
+      parts.push(`/** \`$1, $2, …\` — every value travels as a parameter, never inside the statement. */
+const slot = (index: number): string => '$' + index;
+`);
+    }
+    if (body.includes('quote(')) {
+      // Column names come from the row a form sent, so they are quoted the way Postgres quotes
+      // an identifier — doubling any quote inside rather than trusting the name.
+      parts.push(`const quote = (name: string): string => '"' + name.replace(/"/g, '""') + '"';
+`);
+    }
+    if (wantsOne || body.includes('many(')) {
+      parts.push(`async function many(statement: string, values: unknown[]): Promise<unknown[]> {
+  const result = await pool.query(statement, values);
+  return result.rows;
+}
+`);
+    }
+    if (wantsOne) {
+      parts.push(`async function one(statement: string, values: unknown[]): Promise<unknown> {
+  const rows = await many(statement, values);
+  if (rows.length === 0) throw new Error('That row was not found.');
+  return rows[0];
+}
+`);
+    }
+    return parts.join('\n');
+  })();
+
   const dbPrelude = !usesDb
     ? ''
+    : sqlNode
+    ? sqlPrelude
     : auth
       ? `import { PostgrestClient } from '@supabase/postgrest-js';
 import { accessTokenFor } from '../src/server/auth';

@@ -7,6 +7,7 @@ import { emitApiFunction } from './emit/server';
 import { scaffoldFiles } from './emit/project';
 import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
+import { dialectOf } from '@loom/connectors';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
   AUTH_MODULE_PATH,
@@ -47,9 +48,19 @@ export function compile(snapshot: Snapshot): CompileResult {
   // and the screen that writes it is rarely the screen that reads it (`emit/state.ts`).
   const globals = planGlobals(snapshot);
 
-  const usesDatabase = Object.values(snapshot.nodes).some((node) => node.category === 'db');
+  const dbNodes = Object.values(snapshot.nodes).filter((node) => node.category === 'db');
+  const modules = new Set(
+    dbNodes
+      .map((node) => (node.config as { connectorId?: string } | undefined)?.connectorId)
+      .map((id) => (id ? snapshot.connectors[id]?.moduleId : undefined))
+      .filter((id): id is string => Boolean(id)),
+  );
+  const usesSql = [...modules].some((id) => dialectOf(id));
+  const usesDatabase = dbNodes.length > 0 && !usesSql;
+
   const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, {
     usesDatabase,
+    usesSql,
     theme: snapshot.theme,
   });
 
@@ -90,7 +101,11 @@ export function compile(snapshot: Snapshot): CompileResult {
     files.push({ path: MESSAGES_MODULE_PATH, content: emitMessagesModule() });
   }
 
-  if (usesDatabase || auth) {
+  if (usesSql) {
+    // One name, and it carries the password in the middle of it — which is exactly why it is a
+    // name here and a value only in the deployment (`docs/specs/connector-credentials.md`).
+    files.push({ path: '.env.example', content: `DATABASE_URL=${NEWLINE}` });
+  } else if (usesDatabase || auth) {
     // Names only. The values live in the env bucket and are injected at deploy
     // (docs/specs/connector-credentials.md).
     //
