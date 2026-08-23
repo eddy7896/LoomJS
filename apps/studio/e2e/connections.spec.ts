@@ -232,7 +232,16 @@ let schema = [
     column_default: null,
     is_primary: false,
   },
-  // `connect` above waits for both tables, so the schema this stub reports carries both.
+  // `connect` above waits for both tables, so the schema this stub reports carries both — and
+  // authors has a key, which is what makes it something another column can point at.
+  {
+    table_name: 'authors',
+    column_name: 'id',
+    data_type: 'uuid',
+    is_nullable: 'NO',
+    column_default: 'gen_random_uuid()',
+    is_primary: true,
+  },
   {
     table_name: 'authors',
     column_name: 'name',
@@ -308,4 +317,39 @@ test('dropping a column asks for its name to be typed', async ({ page }) => {
   await page.getByTestId('confirm-drop-go').click();
 
   await expect.poll(() => applied).toEqual(['alter table "notes" drop column "title"']);
+});
+
+test('a column is linked to another table, and the link is shown on the schema', async ({
+  page,
+}) => {
+  const applied = await stubSchema(page);
+  await connect(page);
+
+  await page.getByTestId('table-notes').click();
+  // `authors` has a key, so it is a table a column can point at.
+  await page.getByTestId('column-title-link').selectOption('authors');
+
+  await expect
+    .poll(() => applied)
+    .toEqual([
+      'alter table "notes" add constraint "notes_title_fkey" foreign key ("title") ' +
+        'references "authors" ("id") on delete restrict',
+    ]);
+});
+
+test('an unindexed filter says so while the column is being chosen', async ({ page }) => {
+  await stubSchema(page);
+  await connect(page);
+
+  await page.getByRole('button', { name: 'Nodes' }).click();
+  await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByRole('button', { name: '+ Read rows' }).click();
+  await page.getByTestId('add-filter').click();
+
+  // The key is indexed by definition, so nothing is said about filtering on it.
+  await expect(page.getByTestId('filter-0-unindexed')).toHaveCount(0);
+
+  // The palette's step stands on the first table, so this is that table's own column.
+  await page.getByTestId('filter-0-column').selectOption('name');
+  await expect(page.getByTestId('filter-0-unindexed')).toContainText('reads every row');
 });

@@ -2,15 +2,19 @@ import { useState } from 'react';
 import {
   COLUMN_TYPES,
   KEY_STYLES,
+  ON_DELETE,
   blankTable,
+  checkRelation,
   type ColumnSchema,
   type ColumnSpec,
   type ColumnType,
   type KeyStyle,
+  type OnDelete,
   type SchemaChange,
   type TableSchema,
 } from '@loom/connectors';
-import { applySchemaChange } from '../state/connectors';
+import { useEditor } from '../state/useEditor';
+import { applySchemaChange, connectedTables } from '../state/connectors';
 
 /**
  * Making the data structure (`docs/15-schema.md`).
@@ -196,6 +200,97 @@ export function NewTable({ shape, onDone }: { shape: boolean; onDone: () => void
   );
 }
 
+/**
+ * What a column points at, and whether the database has an index on it (D6).
+ *
+ * A relation is the fact that makes a picker possible instead of asking someone to paste a uuid,
+ * and an index is the difference between a search and a table scan — so both are edited where the
+ * column is, rather than in a diagram somewhere else.
+ */
+function ColumnLinks({
+  table,
+  column,
+  onApply,
+  busy,
+}: {
+  table: string;
+  column: ColumnSchema;
+  onApply: (change: SchemaChange) => void;
+  busy: boolean;
+}) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const [onDelete, setOnDelete] = useState<OnDelete>('restrict');
+
+  // Only a column that identifies one row can be pointed at, so only those tables are offered.
+  const targets = connectedTables(snapshot)
+    .filter((candidate) => candidate.name !== table)
+    .map((candidate) => ({
+      table: candidate,
+      key: candidate.columns.find((entry) => entry.primaryKey),
+    }))
+    .filter((entry): entry is { table: TableSchema; key: ColumnSchema } => Boolean(entry.key));
+
+  if (column.references) {
+    return (
+      <span className="schema-edit__link">
+        → {column.references.table}.{column.references.column}
+        <button
+          data-testid={`column-${column.name}-unlink`}
+          disabled={busy}
+          title="Remove the link"
+          onClick={() => onApply({ kind: 'dropRelation', table, column: column.name })}
+        >
+          ×
+        </button>
+      </span>
+    );
+  }
+
+  if (targets.length === 0) return null;
+
+  return (
+    <span className="schema-edit__link">
+      <select
+        data-testid={`column-${column.name}-link`}
+        value=""
+        disabled={busy}
+        onChange={(event) => {
+          const target = targets.find((entry) => entry.table.name === event.target.value);
+          if (!target) return;
+          onApply({
+            kind: 'addRelation',
+            table,
+            column: column.name,
+            target: target.table.name,
+            targetColumn: target.key.name,
+            onDelete,
+          });
+        }}
+      >
+        <option value="">Links to…</option>
+        {targets.map((entry) => (
+          <option key={entry.table.name} value={entry.table.name}>
+            {entry.table.name}
+          </option>
+        ))}
+      </select>
+      <select
+        data-testid={`column-${column.name}-ondelete`}
+        value={onDelete}
+        disabled={busy}
+        title="When the row it points at is deleted"
+        onChange={(event) => setOnDelete(event.target.value as OnDelete)}
+      >
+        {Object.entries(ON_DELETE).map(([key, entry]) => (
+          <option key={key} value={key}>
+            {entry.label}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
 /** Everything that can be done to a table that already exists. */
 export function TableEditor({ table, shape }: { table: TableSchema; shape: boolean }) {
   const { apply, busy, error, setError } = useApply();
@@ -343,6 +438,8 @@ function ColumnControls({
 }) {
   const { apply, busy, error } = useApply();
   const [name, setName] = useState(column.name);
+  const [linkError, setLinkError] = useState<string | undefined>();
+  const tables = connectedTables(useEditor((s) => s.snapshot));
 
   return (
     <div className="schema-edit__row" data-testid={`column-${column.name}`}>
@@ -404,11 +501,58 @@ function ColumnControls({
         </>
       )}
 
+      {shape ? null : (
+        <>
+          <label className="schema-edit__check">
+            <input
+              type="checkbox"
+              data-testid={`column-${column.name}-indexed`}
+              checked={Boolean(column.indexed)}
+              disabled={busy}
+              onChange={(event) => {
+                void apply({
+                  kind: event.target.checked ? 'addIndex' : 'dropIndex',
+                  table,
+                  column: column.name,
+                });
+              }}
+            />
+            Indexed
+          </label>
+
+          <ColumnLinks
+            table={table}
+            column={column}
+            busy={busy}
+            onApply={(change) => {
+              // The database's refusal is about operator classes; this one is in words.
+              if (change.kind === 'addRelation') {
+                const target = tables
+                  .find((candidate) => candidate.name === change.target)
+                  ?.columns.find((entry) => entry.name === change.targetColumn);
+                if (target) {
+                  try {
+                    checkRelation(column, target);
+                  } catch (problem) {
+                    setLinkError((problem as Error).message);
+                    return;
+                  }
+                }
+              }
+              setLinkError(undefined);
+              void apply(change);
+            }}
+          />
+        </>
+      )}
+
       <button data-testid={`column-${column.name}-drop`} onClick={onDrop} title="Drop column">
         ×
       </button>
 
-      {error ? <p className="connect-form__error">{error}</p> : null}
+      {error || linkError ? (
+        <p className="connect-form__error">{error ?? linkError}</p>
+      ) : null}
     </div>
   );
 }

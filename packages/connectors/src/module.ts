@@ -38,6 +38,18 @@ export interface ColumnSchema {
   primaryKey: boolean;
   /** True when the database fills it in (identity, default) — never asked for on insert. */
   generated: boolean;
+  /**
+   * The row this one points at (D6).
+   *
+   * A relation is a fact about the data, not a decoration: it says a value in this column is the
+   * key of a row over there, which is what lets a form offer a picker instead of asking someone
+   * to paste a uuid.
+   */
+  references?: { table: string; column: string };
+  /** True when the database has an index that starts with this column. */
+  indexed?: boolean;
+  /** True when no two rows may share the value. */
+  unique?: boolean;
 }
 
 export interface TableSchema {

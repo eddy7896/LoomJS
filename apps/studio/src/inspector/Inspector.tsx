@@ -1082,6 +1082,19 @@ function FiltersSection({ nodeId }: { nodeId: string }) {
             </select>
           </Field>
 
+          {/* An index is the difference between a search and reading every row, and the moment
+              to know that is while choosing the column — not when the table has grown (D6). */}
+          {(() => {
+            const chosen = columns.find((column) => column.name === filter.column);
+            if (!chosen || chosen.primaryKey || chosen.indexed || chosen.unique) return null;
+            return (
+              <p className="panel__hint" data-testid={`filter-${index}-unindexed`}>
+                No index on “{chosen.name}”, so this reads every row. Add one from the Data panel
+                if the table will grow.
+              </p>
+            );
+          })()}
+
           <Field label="Comparison">
             <select
               data-testid={`filter-${index}-operator`}

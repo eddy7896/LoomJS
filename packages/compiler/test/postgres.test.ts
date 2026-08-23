@@ -214,3 +214,43 @@ describe('the same graph, either way round', () => {
     expect(NOTES_TABLE.columns.map((column) => column.name)).toContain('title');
   });
 });
+
+describe('what a schema read learns beyond the columns', () => {
+  it('gathers what points where, and what is indexed', () => {
+    const tables = parseColumnRows(
+      [
+        { table_name: 'posts', column_name: 'id', data_type: 'uuid', is_nullable: 'NO', column_default: 'gen_random_uuid()', is_primary: true },
+        { table_name: 'posts', column_name: 'author_id', data_type: 'uuid', is_nullable: 'YES' },
+        { table_name: 'posts', column_name: 'slug', data_type: 'text', is_nullable: 'YES' },
+        { table_name: 'authors', column_name: 'id', data_type: 'uuid', is_nullable: 'NO', column_default: 'gen_random_uuid()', is_primary: true },
+      ],
+      [
+        { table_name: 'posts', column_name: 'author_id', target_table: 'authors', target_column: 'id' },
+      ],
+      [
+        { table_name: 'posts', column_name: 'slug', is_unique: true },
+        { table_name: 'posts', column_name: 'author_id', is_unique: false },
+      ],
+    );
+
+    const posts = tables.find((table) => table.name === 'posts')!;
+    expect(posts.columns.find((column) => column.name === 'author_id')?.references).toEqual({
+      table: 'authors',
+      column: 'id',
+    });
+    // An index is reported so a filter can say whether it is a search or a scan.
+    expect(posts.columns.find((column) => column.name === 'author_id')?.indexed).toBe(true);
+    expect(posts.columns.find((column) => column.name === 'slug')?.unique).toBe(true);
+    // The key's own index is not worth flagging: every table has one.
+    expect(posts.columns.find((column) => column.name === 'id')?.unique).toBeUndefined();
+  });
+
+  it('says nothing about a column no relation or index mentions', () => {
+    const [table] = parseColumnRows([
+      { table_name: 'notes', column_name: 'title', data_type: 'text', is_nullable: 'YES' },
+    ]);
+    const column = table!.columns[0]!;
+    expect(column.references).toBeUndefined();
+    expect(column.indexed).toBeUndefined();
+  });
+});

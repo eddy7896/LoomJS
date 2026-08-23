@@ -183,7 +183,33 @@ export type SchemaChange =
   | { kind: 'setUnique'; table: string; column: string; unique: boolean }
   | { kind: 'renameTable'; from: string; to: string }
   | { kind: 'dropColumn'; table: string; column: string }
-  | { kind: 'dropTable'; table: string };
+  | { kind: 'dropTable'; table: string }
+  | {
+      kind: 'addRelation';
+      table: string;
+      column: string;
+      target: string;
+      targetColumn: string;
+      onDelete: OnDelete;
+    }
+  | { kind: 'dropRelation'; table: string; column: string }
+  | { kind: 'addIndex'; table: string; column: string }
+  | { kind: 'dropIndex'; table: string; column: string };
+
+/**
+ * What happens to this row when the row it points at is deleted.
+ *
+ * There is no safe default, so the choice is made explicitly and in words: `restrict` refuses the
+ * delete while anything still points at it, `cascade` deletes this row too, and `setNull` leaves
+ * the row and forgets what it pointed at.
+ */
+export const ON_DELETE = {
+  restrict: { label: "Don't allow it", sql: 'restrict' },
+  cascade: { label: 'Delete this row too', sql: 'cascade' },
+  setNull: { label: 'Leave it, and forget the link', sql: 'set null' },
+} as const;
+
+export type OnDelete = keyof typeof ON_DELETE;
 
 /** True when applying this change destroys data that is already there. */
 export function isDestructive(change: SchemaChange): boolean {
@@ -197,9 +223,20 @@ export function confirmationFor(change: SchemaChange): string | undefined {
   return undefined;
 }
 
-/** The name of the constraint that keeps a column unique — Postgres's own convention. */
+/**
+ * Constraint and index names, following Postgres's own conventions.
+ *
+ * Built rather than looked up, so dropping one finds the same name that creating it used. A
+ * relation or index made by hand under a different name is not one this panel can remove — which
+ * is why the error a drop returns is the database's own, rather than a claim that it worked.
+ */
 const uniqueConstraint = (table: string, column: string): string =>
   identifier(`${table}_${column}_key`);
+
+const foreignKeyConstraint = (table: string, column: string): string =>
+  identifier(`${table}_${column}_fkey`);
+
+const indexName = (table: string, column: string): string => identifier(`${table}_${column}_idx`);
 
 /**
  * The statements one change becomes.
@@ -273,6 +310,32 @@ export function planChange(change: SchemaChange): string[] {
       // No `cascade`: a table something else depends on should fail loudly rather than take the
       // dependent thing with it.
       return [`drop table ${identifier(change.table)}`];
+
+    case 'addRelation': {
+      const rule = ON_DELETE[change.onDelete];
+      if (!rule) throw new ConnectorError('A relation needs to say what a delete does.');
+      return [
+        `alter table ${identifier(change.table)} add constraint ` +
+          `${foreignKeyConstraint(change.table, change.column)} foreign key (${identifier(change.column)}) ` +
+          `references ${identifier(change.target)} (${identifier(change.targetColumn)}) ` +
+          `on delete ${rule.sql}`,
+      ];
+    }
+
+    case 'dropRelation':
+      return [
+        `alter table ${identifier(change.table)} drop constraint ` +
+          `${foreignKeyConstraint(change.table, change.column)}`,
+      ];
+
+    case 'addIndex':
+      return [
+        `create index ${indexName(change.table, change.column)} ` +
+          `on ${identifier(change.table)} (${identifier(change.column)})`,
+      ];
+
+    case 'dropIndex':
+      return [`drop index ${indexName(change.table, change.column)}`];
   }
 }
 
@@ -316,6 +379,27 @@ export function typeOfColumn(type: ColumnType): TypeRef {
 /** An empty table, as the panel starts it. */
 export function blankTable(name = ''): TableSpec {
   return { name, key: 'uuid', columns: [] };
+}
+
+/**
+ * Whether these two columns can be linked at all.
+ *
+ * The database refuses a foreign key between mismatched types, and its message is about operator
+ * classes. This is the same refusal in words a designer can act on, made before anything is sent.
+ */
+export function checkRelation(from: ColumnSchema, to: ColumnSchema): void {
+  if (!to.primaryKey && !to.unique) {
+    throw new ConnectorError(
+      `A link has to point at a column that identifies one row. "${to.name}" is not the key of ` +
+        `its table and is not unique, so more than one row could match.`,
+    );
+  }
+  if (from.type.kind !== to.type.kind) {
+    throw new ConnectorError(
+      `"${from.name}" holds ${from.type.kind} and "${to.name}" holds ${to.type.kind}. A link has ` +
+        `to hold the same kind of value as the key it points at.`,
+    );
+  }
 }
 
 /** True when this table already has a column by that name — the check the panel makes first. */

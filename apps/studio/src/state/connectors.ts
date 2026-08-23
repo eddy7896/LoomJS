@@ -15,6 +15,8 @@ import {
   supabaseConnector,
   type ColumnRow,
   type ColumnSpec,
+  type IndexRow,
+  type RelationRow,
   type SampledDoc,
   type SchemaChange,
   type DbFilter,
@@ -260,9 +262,15 @@ export async function connectPostgres(input: PostgresInput): Promise<ConnectResu
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ connectionString, schema }),
     });
-    const payload = (await response.json()) as { ok?: boolean; rows?: ColumnRow[]; error?: string };
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      rows?: ColumnRow[];
+      relations?: RelationRow[];
+      indexes?: IndexRow[];
+      error?: string;
+    };
     if (!payload.ok) return { ok: false, error: payload.error ?? 'Could not read the schema.' };
-    tables = parseColumnRows(payload.rows ?? []);
+    tables = parseColumnRows(payload.rows ?? [], payload.relations ?? [], payload.indexes ?? []);
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }

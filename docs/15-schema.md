@@ -78,7 +78,7 @@ normal edit.
 | Phase  | What it is                                                            | State |
 | ------ | --------------------------------------------------------------------- | ----- |
 | **D5** | Tables and columns: create, add, rename, retype, default, required, drop | now   |
-| **D6** | Relations, unique constraints and indexes                              | next  |
+| **D6** | Relations, unique constraints and indexes                              | done  |
 | **D7** | Migrations emitted into the repo, and seeding a table with rows        | next  |
 | **D8** | The elements: a Table that renders rows, a Form built from columns     | next  |
 
@@ -88,3 +88,26 @@ A schema change makes the cached introspection wrong, so applying one **re-reads
 retypes every database node standing on that table, and every route holding one. A column that no
 longer exists must not survive as a port that emits code referencing it — that is a compile error
 at best and a silent write to nowhere at worst.
+
+## Relations and indexes
+
+A **relation** is a fact about the data rather than a decoration: it says a value in this column is
+the key of a row over there. That is what makes a picker possible instead of asking someone to
+paste a uuid, so it is edited beside the column it belongs to rather than in a diagram elsewhere.
+
+Only a column that identifies **one** row can be pointed at — a key, or something unique — and the
+two columns have to hold the same kind of value. Both are checked before anything is sent, because
+the database's own refusal is about operator classes and says nothing a designer can act on.
+
+Every link says what happens when the row it points at is deleted, because there is no safe
+default: refuse the delete, delete this row too, or keep it and forget the link.
+
+An **index** is the difference between a search and reading every row, and the moment to know that
+is while the column is being chosen. So a filter on a column with no index says so, in the
+inspector, before the table has grown enough for anyone to notice.
+
+Introspection reads all of this back in **three statements rather than one join**: a column that is
+a foreign key and sits in two indexes would come back three times from a single query, and a
+schema that reports a column three times is worse than one that costs two more round trips. Only
+the **first** column of an index is reported — an index on (a, b) does not help a query filtering
+on b alone, and saying otherwise would tell a designer their search is fast when it is not.

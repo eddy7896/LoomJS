@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  checkRelation,
   checkStatement,
   confirmationFor,
   identifier,
@@ -210,5 +211,79 @@ describe('what the dev server agrees to run', () => {
     expect(() => checkStatement('drop table "notes"; drop table "users"')).toThrow(
       /is one statement/,
     );
+  });
+});
+
+describe('relations and indexes', () => {
+  it('links a column to the key of another table, saying what a delete does', () => {
+    expect(
+      only({
+        kind: 'addRelation',
+        table: 'posts',
+        column: 'author_id',
+        target: 'authors',
+        targetColumn: 'id',
+        onDelete: 'restrict',
+      }),
+    ).toBe(
+      'alter table "posts" add constraint "posts_author_id_fkey" foreign key ("author_id") ' +
+        'references "authors" ("id") on delete restrict',
+    );
+  });
+
+  it('names the constraint the way Postgres does, so dropping it finds it', () => {
+    expect(only({ kind: 'dropRelation', table: 'posts', column: 'author_id' })).toContain(
+      'drop constraint "posts_author_id_fkey"',
+    );
+  });
+
+  it('offers the three answers to "and then what happens to this row"', () => {
+    for (const onDelete of ['restrict', 'cascade', 'setNull'] as const) {
+      const statement = only({
+        kind: 'addRelation',
+        table: 'posts',
+        column: 'author_id',
+        target: 'authors',
+        targetColumn: 'id',
+        onDelete,
+      });
+      expect(statement).toMatch(/on delete (restrict|cascade|set null)$/);
+    }
+  });
+
+  it('adds and drops an index by the same name', () => {
+    expect(only({ kind: 'addIndex', table: 'notes', column: 'title' })).toBe(
+      'create index "notes_title_idx" on "notes" ("title")',
+    );
+    expect(only({ kind: 'dropIndex', table: 'notes', column: 'title' })).toBe(
+      'drop index "notes_title_idx"',
+    );
+  });
+
+  it('refuses a link the database would refuse, in words a designer can act on', () => {
+    const text = { name: 'author_id', type: { kind: 'text' as const }, required: false, primaryKey: false, generated: false };
+    const number = { name: 'id', type: { kind: 'number' as const }, required: false, primaryKey: true, generated: true };
+    const loose = { name: 'name', type: { kind: 'text' as const }, required: false, primaryKey: false, generated: false };
+
+    expect(() => checkRelation(text, number)).toThrow(/same kind of value/);
+    // Pointing at something that is not one row is the other way to get a link that cannot work.
+    expect(() => checkRelation(text, loose)).toThrow(/identifies one row/);
+    expect(() => checkRelation(text, { ...loose, unique: true })).not.toThrow();
+  });
+
+  it('builds statements the dev server will agree to run', () => {
+    const changes: SchemaChange[] = [
+      {
+        kind: 'addRelation',
+        table: 'posts',
+        column: 'author_id',
+        target: 'authors',
+        targetColumn: 'id',
+        onDelete: 'cascade',
+      },
+      { kind: 'addIndex', table: 'notes', column: 'title' },
+      { kind: 'dropIndex', table: 'notes', column: 'title' },
+    ];
+    for (const change of changes) expect(() => checkStatement(only(change))).not.toThrow();
   });
 });

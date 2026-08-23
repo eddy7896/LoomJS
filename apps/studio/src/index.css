@@ -2131,3 +2131,17 @@ input[type='color'] {
   font-size: 11px;
   color: var(--ink-soft);
 }
+
+/* D6: what a column points at, kept beside the column rather than in a diagram elsewhere. */
+.schema-edit__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.schema__flag--link {
+  background: color-mix(in srgb, #2f7de1 14%, transparent);
+  color: #2f7de1;
+}

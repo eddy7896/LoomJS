@@ -44,6 +44,25 @@ export function SchemaTable({ table }: { table: TableSchema }) {
                   req
                 </span>
               ) : null}
+              {column.unique && !column.primaryKey ? (
+                <span className="schema__flag" title="No two rows share this">
+                  uniq
+                </span>
+              ) : null}
+              {/* An index is what makes a filter on this column a search rather than a scan. */}
+              {column.indexed && !column.primaryKey ? (
+                <span className="schema__flag" title="Indexed">
+                  idx
+                </span>
+              ) : null}
+              {column.references ? (
+                <span
+                  className="schema__flag schema__flag--link"
+                  title={`Points at ${column.references.table}.${column.references.column}`}
+                >
+                  → {column.references.table}
+                </span>
+              ) : null}
             </td>
           </tr>
         ))}

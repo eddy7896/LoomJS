@@ -21,6 +21,28 @@ import { createServer, type Plugin, type ViteDevServer } from 'vite';
  * it is hosting them for the Preview, not using them itself.
  */
 
+/** Kept in step with `INTROSPECT_RELATIONS` in `packages/connectors/src/sql.ts`. */
+const INTROSPECT_RELATIONS = `
+  SELECT tc.table_name, kcu.column_name,
+         ccu.table_name AS target_table, ccu.column_name AS target_column
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+  JOIN information_schema.constraint_column_usage ccu
+    ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+  WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
+`;
+
+/** Kept in step with `INTROSPECT_INDEXES` in `packages/connectors/src/sql.ts`. */
+const INTROSPECT_INDEXES = `
+  SELECT t.relname AS table_name, a.attname AS column_name, ix.indisunique AS is_unique
+  FROM pg_class t
+  JOIN pg_namespace n ON n.oid = t.relnamespace
+  JOIN pg_index ix ON t.oid = ix.indrelid
+  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ix.indkey[0]
+  WHERE n.nspname = $1 AND t.relkind = 'r'
+`;
+
 /** Kept in step with `DDL_VERBS` in `packages/connectors/src/ddl.ts`. */
 const DDL_VERBS = ['create table', 'alter table', 'drop table', 'create index', 'drop index'];
 
@@ -390,8 +412,18 @@ export function loomPreview(): Plugin {
               Pool: new (config: Record<string, unknown>) => NonNullable<typeof pool>;
             };
             pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 10_000 });
+            // Three reads rather than one join: a column that is a foreign key *and* sits in two
+            // indexes would come back three times from a single query, and a schema that reports
+            // a column three times is worse than one that costs two more round trips.
             const result = await pool.query(INTROSPECT_POSTGRES, [schema]);
-            json(res, 200, { ok: true, rows: result.rows });
+            const relations = await pool.query(INTROSPECT_RELATIONS, [schema]);
+            const indexes = await pool.query(INTROSPECT_INDEXES, [schema]);
+            json(res, 200, {
+              ok: true,
+              rows: result.rows,
+              relations: relations.rows,
+              indexes: indexes.rows,
+            });
           } catch (error) {
             json(res, 200, { ok: false, error: scrub((error as Error).message, connectionString) });
           } finally {
