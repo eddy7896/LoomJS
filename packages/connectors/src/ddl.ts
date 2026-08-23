@@ -406,3 +406,114 @@ export function checkRelation(from: ColumnSchema, to: ColumnSchema): void {
 export function hasColumn(table: TableSchema | undefined, name: string): boolean {
   return Boolean(table?.columns.some((column) => column.name === name.trim()));
 }
+
+/**
+ * What a change did, in the words the panel used.
+ *
+ * It becomes the migration's description and its filename, so someone reading the repo six months
+ * later sees "add column body to notes" rather than a hash — and so a diff of the migrations
+ * folder reads as a history of the design rather than of the database.
+ */
+export function describeChange(change: SchemaChange): string {
+  switch (change.kind) {
+    case 'createTable':
+      return `create table ${change.table.name}`;
+    case 'addColumn':
+      return `add column ${change.column.name} to ${change.table}`;
+    case 'renameColumn':
+      return `rename ${change.table}.${change.from} to ${change.to}`;
+    case 'retypeColumn':
+      return `change ${change.table}.${change.column} to ${COLUMN_TYPES[change.to].label}`;
+    case 'setRequired':
+      return `${change.required ? 'require' : 'stop requiring'} ${change.table}.${change.column}`;
+    case 'setDefault':
+      return change.value
+        ? `default ${change.table}.${change.column} to ${change.value}`
+        : `remove the default on ${change.table}.${change.column}`;
+    case 'setUnique':
+      return `${change.unique ? 'require' : 'stop requiring'} unique ${change.table}.${change.column}`;
+    case 'renameTable':
+      return `rename table ${change.from} to ${change.to}`;
+    case 'dropColumn':
+      return `drop column ${change.column} from ${change.table}`;
+    case 'dropTable':
+      return `drop table ${change.table}`;
+    case 'addRelation':
+      return `link ${change.table}.${change.column} to ${change.target}`;
+    case 'dropRelation':
+      return `unlink ${change.table}.${change.column}`;
+    case 'addIndex':
+      return `index ${change.table}.${change.column}`;
+    case 'dropIndex':
+      return `remove the index on ${change.table}.${change.column}`;
+  }
+}
+
+/**
+ * Rows to put in a table so a screen has something to render (D7).
+ *
+ * A blank table makes every screen look broken while it is being designed, and typing five rows
+ * by hand to find that out is worse. These are **parameterised** like every other value loom
+ * sends: the statement carries placeholders, the values travel beside it.
+ */
+export function seedStatement(
+  table: string,
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): { text: string; values: unknown[] } {
+  if (columns.length === 0) throw new ConnectorError('There is nothing to fill in.');
+  if (rows.length === 0) throw new ConnectorError('There are no rows to add.');
+
+  const values: unknown[] = [];
+  const tuples = rows.map((row) => {
+    const slots = columns.map((column) => {
+      values.push(row[column] ?? null);
+      return `$${values.length}`;
+    });
+    return `(${slots.join(', ')})`;
+  });
+
+  return {
+    text:
+      `insert into ${identifier(table)} (${columns.map(identifier).join(', ')}) ` +
+      `values ${tuples.join(', ')}`,
+    values,
+  };
+}
+
+/**
+ * A plausible row, from what the columns say they hold.
+ *
+ * Plausible rather than random: "Sample text 1" tells a designer which row they are looking at on
+ * screen, where "x7fk2" tells them nothing. A generated column is skipped — the database is
+ * already filling it in.
+ */
+export function sampleRow(columns: readonly ColumnSchema[], index: number): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+
+  for (const column of columns) {
+    if (column.primaryKey || column.generated) continue;
+    // A column pointing at another table needs a real key from it, which this cannot invent.
+    if (column.references) continue;
+
+    switch (column.type.kind) {
+      case 'number':
+        row[column.name] = index;
+        break;
+      case 'boolean':
+        row[column.name] = index % 2 === 0;
+        break;
+      case 'date':
+        row[column.name] = new Date().toISOString();
+        break;
+      case 'record':
+      case 'list':
+        row[column.name] = column.type.kind === 'list' ? [] : {};
+        break;
+      default:
+        row[column.name] = `${column.name} ${index}`;
+    }
+  }
+
+  return row;
+}

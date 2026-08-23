@@ -7,6 +7,7 @@ import {
   connectPostgres,
   connectedTables,
   schemaEditing,
+  seedTable,
 } from '../src/state/connectors';
 import { addGraphNode } from '../src/state/graph';
 
@@ -232,5 +233,99 @@ describe('a shape loom keeps itself', () => {
     const tasks = connectedTables(getState().snapshot).find((table) => table.name === 'tasks')!;
     expect(tasks.columns.map((column) => column.name)).toEqual(['id', 'label']);
     expect(tasks.columns[0]!.primaryKey).toBe(true);
+  });
+});
+
+describe('what the repo carries away', () => {
+  it('records what ran, in order, once the database has accepted it', async () => {
+    await connected();
+
+    await applySchemaChange({
+      kind: 'createTable',
+      table: { name: 'tasks', key: 'uuid', columns: [] },
+    });
+    await applySchemaChange({
+      kind: 'addColumn',
+      table: 'notes',
+      column: { name: 'body', type: 'text' },
+    });
+
+    const migrations = getState().snapshot.migrations ?? [];
+    expect(migrations.map((migration) => [migration.index, migration.description])).toEqual([
+      [1, 'create table tasks'],
+      [2, 'add column body to notes'],
+    ]);
+    expect(migrations[0]!.statements[0]).toContain('create table "tasks"');
+    expect(Date.parse(migrations[0]!.appliedAt)).not.toBeNaN();
+  });
+
+  it('records nothing when the change was refused', async () => {
+    await connected();
+    vi.stubGlobal('fetch', async (input: RequestInfo) =>
+      String(input).includes('apply-schema')
+        ? new Response(JSON.stringify({ ok: false, error: 'permission denied for schema public' }))
+        : new Response(JSON.stringify({ ok: true, rows })),
+    );
+
+    const result = await applySchemaChange({
+      kind: 'addColumn',
+      table: 'notes',
+      column: { name: 'body', type: 'text' },
+    });
+    expect(result.ok).toBe(false);
+    // A migration says what was applied. Writing one for a statement the database rejected would
+    // describe a schema nobody has.
+    expect(getState().snapshot.migrations ?? []).toEqual([]);
+  });
+
+  it('keeps a shape change out of the migrations, because nothing ran', async () => {
+    __resetStore();
+    vi.stubGlobal('fetch', async (input: RequestInfo) =>
+      String(input).includes('introspect-firestore')
+        ? new Response(
+            JSON.stringify({
+              ok: true,
+              projectId: 'demo',
+              docs: [{ collection: 'notes', id: 'a', fields: { title: 'One' } }],
+            }),
+          )
+        : new Response(JSON.stringify({ ok: true })),
+    );
+    await connectFirestore({
+      serviceAccount: JSON.stringify({ project_id: 'demo', private_key: 'k' }),
+    });
+
+    await applySchemaChange({
+      kind: 'addColumn',
+      table: 'notes',
+      column: { name: 'body', type: 'text' },
+    });
+    expect(getState().snapshot.migrations ?? []).toEqual([]);
+  });
+});
+
+describe('filling a table so a screen has something to render', () => {
+  it('sends the values as parameters, never as part of the statement', async () => {
+    const calls = await connected();
+    const result = await seedTable('notes', 3);
+    expect(result.ok).toBe(true);
+
+    const seed = JSON.parse(calls.find((call) => call.url.includes('seed'))!.body) as {
+      text: string;
+      values: unknown[];
+    };
+    expect(seed.text).toBe('insert into "notes" ("title") values ($1), ($2), ($3)');
+    expect(seed.values).toEqual(['title 1', 'title 2', 'title 3']);
+  });
+
+  it('says so when there is nothing it could make up', async () => {
+    __resetStore();
+    rows = [ROW('events', 'id', 'uuid', true)];
+    record();
+    await connectPostgres({ connectionString: 'postgresql://app:pw@db:5432/app' });
+
+    const result = await seedTable('events');
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/nothing for loom to make up/);
   });
 });

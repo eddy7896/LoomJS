@@ -77,9 +77,9 @@ normal edit.
 
 | Phase  | What it is                                                            | State |
 | ------ | --------------------------------------------------------------------- | ----- |
-| **D5** | Tables and columns: create, add, rename, retype, default, required, drop | now   |
+| **D5** | Tables and columns: create, add, rename, retype, default, required, drop | done  |
 | **D6** | Relations, unique constraints and indexes                              | done  |
-| **D7** | Migrations emitted into the repo, and seeding a table with rows        | next  |
+| **D7** | Migrations emitted into the repo, and seeding a table with rows        | done  |
 | **D8** | The elements: a Table that renders rows, a Form built from columns     | next  |
 
 ## What happens after a change
@@ -111,3 +111,26 @@ a foreign key and sits in two indexes would come back three times from a single 
 schema that reports a column three times is worse than one that costs two more round trips. Only
 the **first** column of an index is reported — an index on (a, b) does not help a query filtering
 on b alone, and saying otherwise would tell a designer their search is fast when it is not.
+
+## Migrations, and rows to design against
+
+The studio makes schema changes against a **live database**. That is fine while one person is
+designing and useless the moment there is a second environment: staging has never seen them, and a
+colleague cloning the repo gets an app whose queries reference columns that are not there.
+
+So every applied change is also recorded in the document and emitted as a numbered file —
+`migrations/0002_add_column_body_to_notes.sql` — carrying the same statements in the same order.
+They are **plain SQL with no runner**: a migration tool is a choice a team makes, and often has
+already made, so what loom emits works with psql, with Supabase's CLI, and with anything that
+reads a directory of numbered files.
+
+A migration records what **was applied**, so it is written only once the database has accepted the
+change. One written for a statement that was refused would describe a schema nobody has.
+
+**Sample rows.** A blank table makes every screen look broken while it is being designed, and
+typing five rows by hand to find that out is worse. So a table can be filled with plausible rows —
+"title 1", "title 2" — which are readable on screen in a way random strings are not. The values
+travel as **parameters**, like every other value loom sends a database; the rows are made up, but
+nothing about them becomes SQL text. Columns the database fills in are skipped, and so are columns
+pointing at another table: inventing a key that matches nothing there is not sample data, it is a
+broken row.

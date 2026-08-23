@@ -8,6 +8,7 @@ import { scaffoldFiles } from './emit/project';
 import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
 import { dialectOf, isDocumentStore } from '@loom/connectors';
+import { migrationFile } from './emit/migrations';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
   AUTH_MODULE_PATH,
@@ -101,6 +102,12 @@ export function compile(snapshot: Snapshot): CompileResult {
 
   if (messages) {
     files.push({ path: MESSAGES_MODULE_PATH, content: emitMessagesModule() });
+  }
+
+  // Every schema change this project made, as numbered SQL the user owns. The studio applied
+  // them against one database; a second environment gets them from here (`docs/15-schema.md`).
+  for (const migration of snapshot.migrations ?? []) {
+    files.push(migrationFile(migration));
   }
 
   if (usesFirestore) {

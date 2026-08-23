@@ -1,4 +1,4 @@
-import { newConnectorId, newNodeId, type Id, type Snapshot } from '@loom/ir';
+import { newConnectorId, newMigrationId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
   checkConnectionString,
   checkServiceAccount,
@@ -6,11 +6,14 @@ import {
   createDbNode,
   createQueryNode,
   dbNodePorts,
+  describeChange,
   isDocumentStore,
   parseColumnRows,
   parseSampledDocs,
   planChange,
   queryNodePorts,
+  sampleRow,
+  seedStatement,
   speaksSql,
   supabaseConnector,
   type ColumnRow,
@@ -607,7 +610,78 @@ export async function applySchemaChange(change: SchemaChange): Promise<{ ok: boo
     return { ok: false, error: (error as Error).message };
   }
 
+  // What ran, recorded so the repo can carry it. A migration describes what *was* applied, so
+  // it is written only once the database has accepted it (`docs/15-schema.md`).
+  const existing = getState().snapshot.migrations ?? [];
+  dispatch({
+    type: 'recordMigration',
+    migration: {
+      id: newMigrationId(),
+      index: existing.length + 1,
+      description: describeChange(change),
+      appliedAt: new Date().toISOString(),
+      statements,
+    },
+  });
+
   await refreshSchema();
+  return { ok: true };
+}
+
+/**
+ * Put some rows in a table, so a screen has something to render (D7).
+ *
+ * A blank table makes every screen look broken while it is being designed, and typing five rows
+ * by hand to find that out is worse. The values are parameters, like every other value loom sends
+ * to a database — the rows are generated here, but nothing about them becomes SQL text.
+ */
+export async function seedTable(
+  tableName: string,
+  count = 5,
+): Promise<{ ok: boolean; error?: string }> {
+  const snapshot = getState().snapshot;
+  const connector = connection(snapshot);
+  if (!connector) return { ok: false, error: 'No connection to fill.' };
+  if (isDocumentStore(connector.moduleId)) {
+    return {
+      ok: false,
+      error: 'Sample rows are written by the database connection, and Firestore has none here yet.',
+    };
+  }
+
+  const table = connectedTables(snapshot).find((candidate) => candidate.name === tableName);
+  if (!table) return { ok: false, error: `There is no table called ${tableName}.` };
+
+  const rows = Array.from({ length: count }, (_, index) => sampleRow(table.columns, index + 1));
+  const columns = Object.keys(rows[0] ?? {});
+  if (columns.length === 0) {
+    return {
+      ok: false,
+      error:
+        'Every column here is filled in by the database or points at another table, so there is ' +
+        'nothing for loom to make up.',
+    };
+  }
+
+  let statement: { text: string; values: unknown[] };
+  try {
+    statement = seedStatement(tableName, columns, rows);
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  try {
+    const response = await fetch('/__loom/seed', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(statement),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+    if (!payload.ok) return { ok: false, error: payload.error ?? 'The rows were not added.' };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
   return { ok: true };
 }
 

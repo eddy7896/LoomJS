@@ -499,6 +499,34 @@ export const ConnectorInstanceSchema = z.object({
 export type ConnectorInstance = z.infer<typeof ConnectorInstanceSchema>;
 
 // ---------------------------------------------------------------------------
+// Migrations
+// ---------------------------------------------------------------------------
+
+/**
+ * One schema change that was applied, kept so the repo can carry it (`docs/15-schema.md`).
+ *
+ * The studio makes schema changes against a live database, which is fine while one person is
+ * designing and useless the moment there is a second environment. So every change is *also*
+ * recorded here and emitted as a numbered `.sql` file the user owns — the same statements, in the
+ * same order, runnable against a database that has never seen this project.
+ *
+ * It records what *was run*, not what should be: a migration whose statements were edited
+ * afterwards would describe a schema nobody has.
+ */
+export const MigrationSchema = z.object({
+  id: IdSchema,
+  /** Sequence number, from 1, in the order they were applied. */
+  index: z.number().int().positive(),
+  /** What it did, in the words the panel used — becomes the filename and the comment. */
+  description: z.string(),
+  /** ISO 8601, so an ordering survives a merge between two people's work. */
+  appliedAt: z.string(),
+  /** Exactly what ran, in order. */
+  statements: z.array(z.string()),
+});
+export type Migration = z.infer<typeof MigrationSchema>;
+
+// ---------------------------------------------------------------------------
 // The snapshot root
 // ---------------------------------------------------------------------------
 
@@ -518,6 +546,11 @@ export const SnapshotSchema = z.object({
   wires: z.record(z.string(), WireSchema),
   flows: z.record(z.string(), FlowSchema),
   connectors: z.record(z.string(), ConnectorInstanceSchema),
+  /**
+   * Schema changes this project has made, oldest first. Absent in a project that has never
+   * changed a schema, which is most of them.
+   */
+  migrations: z.array(MigrationSchema).optional(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 

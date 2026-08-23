@@ -9,6 +9,7 @@ import type {
   Condition,
   ConditionalStyle,
   Layout,
+  Migration,
   Param,
   ScreenSize,
   Style,
@@ -59,6 +60,7 @@ export type Op =
   | { type: 'removeArtboard'; artboardId: string }
   | { type: 'addConnector'; connector: ConnectorInstance }
   | { type: 'setConnectorConfig'; connectorId: string; config: unknown }
+  | { type: 'recordMigration'; migration: Migration }
   | { type: 'removeConnector'; connectorId: string }
   | { type: 'acceptAuto'; group: string }
   | { type: 'detachAuto'; group: string }
@@ -326,6 +328,12 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         throw new Error(`setEntryArtboard: unknown artboard ${op.artboardId}`);
       }
       next.entryArtboard = op.artboardId;
+      return next;
+    }
+
+    case 'recordMigration': {
+      // Appended, never rewritten: a migration is a record of what ran.
+      next.migrations = [...(next.migrations ?? []), op.migration];
       return next;
     }
 

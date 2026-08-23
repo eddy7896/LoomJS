@@ -14,7 +14,7 @@ import {
   type TableSchema,
 } from '@loom/connectors';
 import { useEditor } from '../state/useEditor';
-import { applySchemaChange, connectedTables } from '../state/connectors';
+import { applySchemaChange, connectedTables, seedTable } from '../state/connectors';
 
 /**
  * Making the data structure (`docs/15-schema.md`).
@@ -298,6 +298,7 @@ export function TableEditor({ table, shape }: { table: TableSchema; shape: boole
   const [renaming, setRenaming] = useState<string | undefined>();
   const [dropping, setDropping] = useState<{ column?: string } | undefined>();
   const [typed, setTyped] = useState('');
+  const [seeding, setSeeding] = useState(false);
 
   const target = dropping?.column ?? table.name;
   const change: SchemaChange | undefined = dropping
@@ -399,6 +400,23 @@ export function TableEditor({ table, shape }: { table: TableSchema; shape: boole
         <button data-testid="add-column" onClick={() => setAdding(blankColumn())}>
           + Column
         </button>
+        {/* A blank table makes every screen look broken while it is being designed (D7). */}
+        {shape ? null : (
+          <button
+            data-testid="seed-table"
+            disabled={busy}
+            title="Add five rows to design against"
+            onClick={() => {
+              setSeeding(true);
+              void seedTable(table.name).then((result) => {
+                setSeeding(false);
+                if (!result.ok) setError(result.error);
+              });
+            }}
+          >
+            {seeding ? 'Filling…' : '+ Sample rows'}
+          </button>
+        )}
         <button data-testid="rename-table" onClick={() => setRenaming(table.name)}>
           Rename
         </button>

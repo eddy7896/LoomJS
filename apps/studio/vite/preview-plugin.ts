@@ -589,6 +589,51 @@ export function loomPreview(): Plugin {
         })();
       });
 
+      /**
+       * Rows put into a table so a screen has something to render.
+       *
+       * The statement is built in the browser with placeholders and the values travel beside it,
+       * so this is an ordinary parameterised insert — the same rule every query in loom follows.
+       * The check here is that it *is* one: an insert, one statement, values passed separately.
+       */
+      server.middlewares.use('/__loom/seed', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
+
+        void (async () => {
+          const body = JSON.parse(await readBody(req)) as { text?: string; values?: unknown[] };
+          const text = String(body.text ?? '').trim();
+          const values = body.values ?? [];
+          const connectionString = process.env.DATABASE_URL || '';
+
+          if (!text.toLowerCase().startsWith('insert into')) {
+            return json(res, 200, { ok: false, error: 'That is not a row to add.' });
+          }
+          if (text.replace(/'(?:[^']|'')*'/g, "''").includes(';')) {
+            return json(res, 200, { ok: false, error: 'Adding rows is one statement.' });
+          }
+          if (!connectionString) {
+            return json(res, 200, { ok: false, error: 'No DATABASE_URL on the dev server.' });
+          }
+
+          let pool:
+            | { query: (text: string, values?: unknown[]) => Promise<unknown>; end: () => Promise<void> }
+            | undefined;
+          try {
+            const { Pool } = (await import('pg')) as unknown as {
+              Pool: new (config: Record<string, unknown>) => NonNullable<typeof pool>;
+            };
+            pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 10_000 });
+            await pool.query(text, values);
+            json(res, 200, { ok: true });
+          } catch (error) {
+            json(res, 200, { ok: false, error: scrub((error as Error).message, connectionString) });
+          } finally {
+            await pool?.end().catch(() => undefined);
+          }
+        })();
+      });
+
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });
