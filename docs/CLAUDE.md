@@ -43,6 +43,8 @@ Core promise: *a designer should never feel they left the canvas.*
   palette and the elements tree, plus the bar an element must clear to enter the vocabulary.
 - `docs/12-canvas.md` — the design canvas: free placement, drawing tools, shapes, rulers, guides.
 - `docs/13-inspector.md` — the inspector as a design panel, and what it deliberately does not copy.
+- `docs/14-data.md` — the connectors (Supabase, Postgres, Firestore), the node vocabulary they
+  share, and what each one is refused from pretending to do.
 
 ## Current phase
 

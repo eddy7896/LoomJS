@@ -474,6 +474,48 @@ Recorded here because they constrain everything downstream. Each was taken at th
   still emits the write. The emitted app builds with `noUnusedLocals`, so each screen destructures
   only the halves it uses: the value where it displays, the setter where it writes.
 
+- **[D1] A connector is a way of reaching data, not a second vocabulary.** The same graph emits a
+  PostgREST request against Supabase and a statement against Postgres; a database node's ports,
+  and the screen bound to it, do not change when the connection under it is swapped. That is what
+  lets the connector list grow without the node list growing with it.
+- **[D1] A connection string is a whole credential.** It carries the password in the middle of it,
+  so it goes straight to the dev server and is never written to the studio's env bucket in
+  `localStorage` — the studio may learn that the server holds one, never what it is. The document
+  keeps the schema name and the cached schema; neither is secret.
+- **[D1] Every value is a parameter, and every identifier comes from introspection.** Table,
+  column and sort names are checked against `/^[A-Za-z_][A-Za-z0-9_]*$/` before they are quoted; a
+  filter's text becomes `$1`. A designer typing `'; DROP TABLE notes; --` into a filter gets no
+  rows, not a dropped table.
+- **[D1] A quoted identifier has to survive being written into a file.** `"notes"` pasted into a
+  double-quoted emitted string closes it early, and the file does not compile. Statement fragments
+  are built with `JSON.stringify`, and the smoke gate that runs the emitted project's own `tsc` is
+  what catches this class at all.
+- **[D1] Emit only the helpers a route calls.** The emitted app builds with `noUnusedLocals`, so
+  an unused `quote` or `one` is a build failure. The pool prelude is assembled per route from what
+  its steps actually reach for.
+- **[D2] The query node is the escape hatch for data, and keeps the one rule.** Past a join or a
+  group-by the four table nodes stop, and growing them further would end in SQL with dropdowns. So
+  the node *is* SQL — but a `:name` is a parameter and becomes an input port, so the value arrives
+  from the request rather than as text in the statement. Offered only where a statement can be
+  run; refused with what to do instead everywhere else.
+- **[D3] Count and Total are reads for invalidation.** Filed under writes, a screen that counted
+  itself would re-read itself each time — a loop with a network call in it.
+- **[D3] A total answers with nothing rather than zero over no rows.** `min` of an empty set has
+  no answer, and 0 on a screen means something else. The aggregate's output port is optional for
+  exactly this reason.
+- **[D3] The aggregate function name is the one config value that becomes SQL text.** A function
+  name cannot be a placeholder, so it is matched against a closed set of four and anything else is
+  a compile error.
+- **[D4] Firestore is mapped, and what the mapping cannot cover is refused.** Collection to table,
+  document to row, document id to primary key, columns learnt by sampling. A connector may be a
+  different shape underneath; it may not quietly do something other than what the node says. So
+  `contains` (no substring match in a Firestore query) and `min`/`max` (its aggregates are count,
+  sum and average) are compile errors, and are also taken out of the menus — offering a choice
+  that compiles to a refusal is a dead end a designer cannot see coming.
+- **[D4] Sampling is admitted, not hidden.** A document store has no schema to read, so the panel
+  says how many documents were looked at; a field none of them carried is a column loom does not
+  know about, and nothing is marked required because there is no such rule to enforce.
+
 ## The next specs to write (highest-leverage, in dependency order)
 
 1. **Snapshot schema** — canonical project JSON (artboards, components, graph, wires, bindings,
