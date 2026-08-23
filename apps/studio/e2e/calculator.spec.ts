@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * The calculator: two number fields, two operation buttons, **one** answer.
@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 async function place(page: Page, button: string, name: string, label?: string): Promise<void> {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: button, exact: true }).click();
-  await field(page, 'Name').locator('input').fill(name);
+  await nameInput(page).fill(name);
   if (label !== undefined) await field(page, 'Label').locator('input').fill(label);
 }
 
@@ -46,7 +46,7 @@ test('two operations answer into one display', async ({ page }) => {
   // 2. The bucket both answers land in. Naming it is what tells the two Math nodes apart on the
   //    canvas from the thing they both feed.
   await page.getByRole('button', { name: '+ Variable' }).click();
-  await field(page, 'Name').locator('input').fill('total');
+  await nameInput(page).fill('total');
   const bucket = graphNode(page, 'total');
 
   // 3. One Math per operation. A configured node names itself after its operation, so these two

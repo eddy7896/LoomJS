@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M3's gate: a button in the Preview calls the emitted serverless function and shows the result.
@@ -30,16 +30,16 @@ test.beforeEach(async ({ page }) => {
 test('a wired graph calls the emitted function and shows its result', async ({ page }) => {
   // 1. The UI: an input, a button, and somewhere to put the answer.
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Input');
+  await nameInput(page).fill('Input');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Shout');
+  await nameInput(page).fill('Shout');
   await field(page, 'Label').locator('input').fill('Shout');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Result');
+  await nameInput(page).fill('Result');
 
   // 2. The graph: an API route with an uppercase step inside its body.
   await page.getByRole('button', { name: 'Nodes' }).click();
@@ -66,7 +66,7 @@ test('a wired graph calls the emitted function and shows its result', async ({ p
 test('an illegal wire is refused at the gesture (Problems tier)', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Go');
+  await nameInput(page).fill('Go');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
@@ -97,11 +97,11 @@ test('a function node outside a route derives a value in the browser', async ({ 
   // The graph a designer draws first: a field, a Compute, a Text. No API route anywhere, so all
   // of it runs in the browser — no request, no server, no state.
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Input');
+  await nameInput(page).fill('Input');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Length');
+  await nameInput(page).fill('Length');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ Compute' }).click();
@@ -127,16 +127,16 @@ test('a trigger holds a derivation until the button is pressed', async ({ page }
   // Same graph as above, plus a button wired into the Compute's run port. The value should now
   // stay put while typing and only catch up on a click.
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Input');
+  await nameInput(page).fill('Input');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Go');
+  await nameInput(page).fill('Go');
   await field(page, 'Label').locator('input').fill('Go');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Length');
+  await nameInput(page).fill('Length');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ Compute' }).click();
@@ -168,11 +168,11 @@ test('a trigger holds a derivation until the button is pressed', async ({ page }
 test('a field wired straight to a Text shows what the person types', async ({ page }) => {
   // The simplest wire on the canvas, and the first one anyone draws.
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Input');
+  await nameInput(page).fill('Input');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Echo');
+  await nameInput(page).fill('Echo');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await drag(

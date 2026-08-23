@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * The design-system loop: style a component from the token scale, watch it land in the running
@@ -27,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 /** The canvas starts blank, so these place the heading they are about to style. */
 async function placeHeading(page: Page): Promise<void> {
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Heading');
+  await nameInput(page).fill('Heading');
   await field(page, 'Content').locator('input').fill('Hello loomJS');
 }
 

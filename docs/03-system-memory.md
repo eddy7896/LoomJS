@@ -369,6 +369,19 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[C] The Preview serves nothing while a build is being written.** A page that asks for its
   modules mid-write can end up holding half of one build and half of another; a few milliseconds
   of waiting removes the in-between state entirely.
+- **[C] The inspector takes Figma's shape, not its palette.** Titled collapsible sections, dense
+  paired controls with a mark in front of each number, the name in the header — the densest
+  arrangement of object properties that stays readable, and one every designer already knows. The
+  colours stay loom's: light-mode only, red reserved for the primary action (`docs/13-inspector.md`).
+- **[C] No hex field on a fill.** Figma edits colour per object; loom edits it once, in the system.
+  A fill names a token and the swatch shows what it resolves to. A hex box would quietly turn the
+  design system back into a styling panel.
+- **[C] Opacity, rotation and clipping are per-object, not tokens.** No scale stands behind "37%"
+  or "15 degrees". They emit plain CSS, and rotation is painted rather than laid out, so the box a
+  thing occupies never moves.
+- **[C] A control is only offered where it means something.** A rectangle is not asked how it
+  stacks children it cannot have; a child of an auto-layout frame is not offered coordinates it
+  does not own.
 - **[C] The canvas is the app's document, not the studio's.** Design mode draws the app's markup
   inside the studio, so the studio's element styles landed on it — a Text field inherited
   `width: 100%` from the inspector's inputs and stretched across the screen. Inside a screen the

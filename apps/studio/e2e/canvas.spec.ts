@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * The canvas as a design tool (`docs/12-canvas.md`).
@@ -110,13 +111,13 @@ test('keyboard shortcuts arm the tools, and Escape puts the pointer back', async
 test('a shape drawn between two components lands between them', async ({ page }) => {
   // Slots only exist where a frame arranges its children, so this is one that does.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
-  await page.getByTestId('layout-mode').selectOption('stack');
+  await page.getByTestId('flow-column').click();
 
   // Two texts, so there is a slot to drop into rather than an empty frame.
   for (const name of ['first', 'second']) {
     await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
     await page.getByRole('button', { name: '+ Text', exact: true }).click();
-    await field(page, 'Name').locator('input').fill(name);
+    await nameInput(page).fill(name);
     await field(page, 'Content').locator('input').fill(name);
   }
 
@@ -159,7 +160,7 @@ test('a screen and its frame are one row, and one panel', async ({ page }) => {
 
   // One inspector: what the screen is, and what its frame does.
   await expect(page.getByTestId('guard-mode')).toBeVisible();
-  await expect(field(page, 'Padding').locator('input')).toBeVisible();
+  await expect(page.getByTestId('layout-padding')).toBeVisible();
 });
 
 test('a frame drawn on the open canvas is a new screen', async ({ page }) => {
@@ -238,10 +239,11 @@ test('a component can be dragged to another place on the canvas', async ({ page 
 
 test('a frame can be handed back to auto layout', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
-  await expect(page.getByTestId('layout-mode')).toHaveValue('free');
+  await expect(page.getByTestId('flow-free')).toHaveAttribute('aria-pressed', 'true');
 
-  await page.getByTestId('layout-mode').selectOption('stack');
-  await expect(field(page, 'Direction').locator('select')).toBeVisible();
+  await page.getByTestId('flow-column').click();
+  await expect(page.getByTestId('flow-column')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('layout-gap')).toBeVisible();
 
   // And what it holds is arranged from then on.
   await page.getByRole('button', { name: '+ Text', exact: true }).click();

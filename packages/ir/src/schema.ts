@@ -269,6 +269,20 @@ export const StyleSchema = z.object({
   /** Plain px. A border is one, two or none — a scale would be ceremony. */
   borderWidth: z.number().optional(),
   align: z.enum(['start', 'center', 'end']).optional(),
+
+  /**
+   * The properties a designer expects to reach for on any object, which are *not* design-system
+   * decisions: how see-through a thing is, which way round it faces, and whether it crops what it
+   * holds. A token scale for "37% opacity" would be ceremony — these are per-object choices, and
+   * they emit plain CSS a developer would recognise.
+   */
+  opacity: z.number().min(0).max(100).optional(),
+  /** Degrees, clockwise. Emitted as a transform, so it never disturbs the layout around it. */
+  rotation: z.number().optional(),
+  flipX: z.boolean().optional(),
+  flipY: z.boolean().optional(),
+  /** A frame that crops what overflows it. */
+  clip: z.boolean().optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
 

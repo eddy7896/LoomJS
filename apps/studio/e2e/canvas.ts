@@ -83,3 +83,20 @@ export async function openPreview(page: Page): Promise<void> {
   }
   await expect(page.locator('iframe.preview__frame')).toBeVisible();
 }
+
+/**
+ * The name of whatever is selected.
+ *
+ * A component is named in the inspector's header, the way a design tool does it; a screen still
+ * has a labelled field beside its route and size. One locator covers both so a spec can say "name
+ * this" without knowing which it has.
+ */
+export function nameInput(page: Page): Locator {
+  return page
+    .locator(
+      // A component names itself in the header; a screen and a node still have a labelled field,
+      // and a node's "Name" is one of its config fields rather than a property of the object.
+      '[data-testid="component-name"], [data-testid="screen-name"], .field:has(> .field__label:text-is("Name")) input',
+    )
+    .first();
+}

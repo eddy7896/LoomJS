@@ -61,6 +61,22 @@ export function styleToCss(component: Component): Record<string, string | number
     css.border = `${width}px solid ${color}`;
   }
 
+  // Per-object properties, straight through: no token scale stands behind "37%".
+  if (style.opacity !== undefined && style.opacity < 100) css.opacity = style.opacity / 100;
+  if (style.clip) css.overflow = 'hidden';
+
+  // One transform for all of them, because they are one CSS property. Rotation and flipping are
+  // painted rather than laid out — the box a thing occupies does not move, which is what makes
+  // them safe in a frame that arranges its children.
+  const transform = [
+    style.rotation ? `rotate(${style.rotation}deg)` : '',
+    style.flipX ? 'scaleX(-1)' : '',
+    style.flipY ? 'scaleY(-1)' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (transform) css.transform = transform;
+
   if (style.align) {
     css.textAlign = style.align;
     // A frame aligns its children; a leaf aligns its text. Emitting both is what makes the one

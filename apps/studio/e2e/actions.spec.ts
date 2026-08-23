@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * P3's done-when: a submit button runs a pipeline, clears the form, shows a confirmation, and
@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 async function place(page: Page, button: string, name: string, label?: string): Promise<void> {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: button, exact: true }).click();
-  await field(page, 'Name').locator('input').fill(name);
+  await nameInput(page).fill(name);
   if (label !== undefined) await field(page, 'Label').locator('input').fill(label);
 }
 

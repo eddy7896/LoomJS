@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * The loop these specs protect: an edit in the editor must reach the Preview, and the Preview
@@ -51,9 +52,8 @@ test('layout edits reach the Preview', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   // Direction and gap are auto-layout properties, and a screen starts as a drawing board
   // (`docs/12-canvas.md`), so this asks the frame to arrange its children first.
-  await page.getByTestId('layout-mode').selectOption('stack');
-  await field(page, 'Direction').locator('select').selectOption('row');
-  await field(page, 'Gap').locator('input').fill('48');
+  await page.getByTestId('flow-row').click();
+  await page.getByTestId('layout-gap').fill('48');
 
   const root = preview(page).locator('#root > div');
   await expect(root).toHaveCSS('flex-direction', 'row');
@@ -63,7 +63,7 @@ test('layout edits reach the Preview', async ({ page }) => {
 test('a flow arrow becomes a route you can click through (M2)', async ({ page }) => {
   // Second screen, with a route param.
   await page.getByRole('button', { name: '+ Screen' }).click();
-  await field(page, 'Name').locator('input').fill('Item Detail');
+  await nameInput(page).fill('Item Detail');
   await page.getByRole('button', { name: '+ Param' }).click();
 
   // A Text on the detail screen that reads the param is M3-adjacent; instead assert the route

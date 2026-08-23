@@ -4,7 +4,7 @@ import { CompileError, type ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { layoutToStyle } from '../emit/layout';
 import { styleExpr } from '../emit/text';
-import { styleValueCss } from '../emit/style';
+import { styleToCss, styleValueCss } from '../emit/style';
 import { staticString } from '../emit/props';
 
 /**
@@ -77,10 +77,15 @@ export const shapeEmitter: ComponentEmitter = {
     // `overflow: visible` keeps a stroke sitting on the edge from being clipped by the SVG
     // viewport, which is hidden by default.
     const layout = component.layout ? layoutToStyle(component.layout) : {};
+    const own = styleToCss(component);
     const box: Record<string, string | number> = {
       display: 'block',
       overflow: 'visible',
       ...ctx.positionStyle(component),
+      // Paint became SVG attributes above, but how see-through it is and which way round it faces
+      // are properties of the box like any other element's.
+      ...(own.opacity !== undefined ? { opacity: own.opacity } : {}),
+      ...(own.transform !== undefined ? { transform: own.transform } : {}),
     };
     for (const key of ['width', 'height', 'flexGrow', 'flexShrink'] as const) {
       if (layout[key] !== undefined) box[key] = layout[key]!;

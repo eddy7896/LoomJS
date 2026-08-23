@@ -646,6 +646,206 @@ select {
   z-index: 4;
 }
 
+/* ---- the inspector, as a design panel (docs/13-inspector.md) ----
+   Figma's shape — titled sections, dense paired controls, a mark in front of each number — in
+   loom's own light surface. The palette is not copied: red stays reserved for the primary action
+   and the FN category, and the studio is light-mode only (docs/05-guardrails.md 19-24). */
+.inspector__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: -10px;
+  background: var(--surface);
+  z-index: 2;
+}
+
+.inspector__name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  font-weight: 600;
+  padding: 3px 6px;
+}
+
+.inspector__name:hover,
+.inspector__name:focus {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.ins {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 10px 10px;
+}
+
+.ins__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ins__title {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ins.is-closed .ins__title {
+  color: var(--ink-soft);
+}
+
+.ins__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ins__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.ins__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A control with its mark in front: `X 0`, `W 382`. The mark is a label, not decoration — it is
+   what makes a row of numbers readable without a column of words beside it. */
+.ins__cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.ins__cell:focus-within {
+  border-color: var(--ink-soft);
+}
+
+.ins__mark {
+  color: var(--ink-soft);
+  font-size: 11px;
+  min-width: 10px;
+  text-align: center;
+}
+
+.ins__cell input,
+.ins__cell select {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.ins__cell select {
+  color: var(--ink-soft);
+  font-size: 10px;
+  width: auto;
+  max-width: 46px;
+  flex: 0 0 auto;
+  padding-left: 2px;
+}
+
+.ins__cell input {
+  flex: 1;
+  min-width: 30px;
+}
+
+.ins__grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.ins__choice {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ins__choice:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.ins__choice.is-active {
+  background: var(--surface-sunken);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.ins__swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+  /* A transparent swatch has to read as *nothing*, not as white. */
+  background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line) 25%, transparent 25%);
+  background-size: 8px 8px;
+}
+
+.ins__icon {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.ins__icon:hover {
+  color: var(--ink);
+}
+
+.ins__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.ins__check input {
+  width: auto;
+}
+
+/* Sections hold the older field blocks unchanged, so nothing inside them has to be rewritten. */
+.ins .field-group {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* The section header already names it; a second title inside would say it twice. */
+.ins .field-group__title {
+  display: none;
+}
+
 /* ---- preview: a floating window (docs/12-canvas.md) ---- */
 .preview {
   display: flex;

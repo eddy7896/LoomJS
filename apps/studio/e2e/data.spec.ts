@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M4's gate: connect a Supabase-shaped project, introspect a table, list its rows in the Preview
@@ -67,17 +67,17 @@ test('rows from the database render in the Preview, and a form writes one back',
 
   // A List to render the rows, with a Text inside it reading a column.
   await page.getByRole('button', { name: '+ List' }).click();
-  await field(page, 'Name').locator('input').fill('Notes');
+  await nameInput(page).fill('Notes');
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Row title');
+  await nameInput(page).fill('Row title');
 
   // A form: a field and a button.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Title');
+  await nameInput(page).fill('Title');
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Save');
+  await nameInput(page).fill('Save');
   await field(page, 'Label').locator('input').fill('Save');
 
   // The read route: an API route whose body reads the table. Nothing triggers it, so it is
@@ -140,9 +140,9 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   // The list, and a Text in it reading each row's title.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ List', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Notes');
+  await nameInput(page).fill('Notes');
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Row title');
+  await nameInput(page).fill('Row title');
 
   // A field for the new title, and two buttons.
   for (const [button, name] of [
@@ -153,7 +153,7 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   ] as const) {
     await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
     await page.getByRole('button', { name: button, exact: true }).click();
-    await field(page, 'Name').locator('input').fill(name);
+    await nameInput(page).fill(name);
     if (button === '+ Button') await field(page, 'Label').locator('input').fill(name);
   }
 

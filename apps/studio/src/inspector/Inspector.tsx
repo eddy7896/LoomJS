@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
-import type { Component, Layout, SizeMode, Snapshot, Style } from '@loom/ir';
+import type { Component, Snapshot, Style } from '@loom/ir';
 import {
-  LAYOUT_FIELDS,
   MATH_BODY_FIELDS,
   MATH_CANVAS_FIELDS,
   DEFAULT_SCREEN,
@@ -15,25 +14,29 @@ import {
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { ActionsSection } from './ActionsSection';
+import { Section } from './Section';
+import { PositionSection } from './PositionSection';
+import { LayoutSection } from './LayoutSection';
 import {
-  artboardOf,
-  flowFor,
+  AppearanceSection,
+  EffectsSection,
+  FillSection,
+  StrokeSection,
+  TypeSection,
+} from './AppearanceSection';
+import {
   removeArtboard,
   removeFlow,
+  parentOf,
   rename,
   renameArtboard,
   setArtboardParams,
   setArtboardGuard,
   setArtboardSize,
-  setLayoutMode,
-  setClickFlow,
   setEntryArtboard,
   setFlowPayload,
-  setLayout,
   setProp,
-  setSize,
   setStaticProp,
-  setStyle,
   setThemeToken,
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
@@ -86,41 +89,54 @@ export function Inspector() {
 
   const def = defFor(component.type);
 
+  const parent = parentOf(snapshot, component.id);
+  // Text styling only where there is text to style; a rectangle has no weight.
+  const carriesText = ['Text', 'Button', 'Link', 'Checkbox'].includes(component.type);
+
   return (
     <aside className="panel inspector">
-      <h2 className="panel__title">Inspector</h2>
+      <header className="inspector__head">
+        <span className="badge">{component.type}</span>
+        <input
+          className="inspector__name"
+          data-testid="component-name"
+          value={component.name ?? ''}
+          placeholder={component.type}
+          onChange={(e) => rename(component.id, e.target.value)}
+        />
+      </header>
 
-      <section className="field-group">
-        <div className="field-group__head">
-          <span className="badge">{component.type}</span>
-          <code className="mono id">{component.id}</code>
-        </div>
-        <Field label="Name">
-          <input
-            value={component.name ?? ''}
-            onChange={(e) => rename(component.id, e.target.value)}
-          />
-        </Field>
-      </section>
+      <PositionSection component={component} parent={parent} />
+      <LayoutSection component={component} />
+      <AppearanceSection component={component} />
+      <FillSection component={component} />
+      <StrokeSection component={component} />
+      <EffectsSection component={component} />
+      {carriesText ? <TypeSection component={component} /> : null}
 
       {def && def.fields.length > 0 ? (
-        <section className="field-group">
-          <h3 className="field-group__title">Properties</h3>
+        <Section name="Properties">
           {def.fields.map((field) => (
             <PropField key={field.key} component={component} field={field} />
           ))}
-        </section>
+        </Section>
       ) : null}
 
-      {def?.acceptsClickFlow ? <ActionsSection component={component} /> : null}
+      {def?.acceptsClickFlow ? (
+        <Section name="On click">
+          <ActionsSection component={component} />
+        </Section>
+      ) : null}
 
-      <StyleSection component={component} />
+      <Section name="Conditions">
+        <ConditionsSection component={component} />
+      </Section>
 
-      <ConditionsSection component={component} />
-
-      {component.layout ? <AutoBackendSection component={component} /> : null}
-
-      {component.layout ? <LayoutSection component={component} /> : null}
+      {def?.isContainer ? (
+        <Section name="Backend">
+          <AutoBackendSection component={component} />
+        </Section>
+      ) : null}
     </aside>
   );
 }
@@ -235,74 +251,7 @@ function PropField({ component, field }: { component: Component; field: FieldDef
   );
 }
 
-function LayoutField({ component, field }: { component: Component; field: FieldDef }) {
-  const layout = component.layout!;
-  const key = field.key as keyof Layout;
-  const current = layout[key];
 
-  if (field.control === 'number') {
-    return (
-      <Field label={field.label}>
-        <input
-          type="number"
-          min={0}
-          value={Number(current)}
-          onChange={(e) =>
-            setLayout(component.id, { [key]: Number(e.target.value) } as Partial<Layout>)
-          }
-        />
-      </Field>
-    );
-  }
-
-  return (
-    <Field label={field.label}>
-      <select
-        value={String(current)}
-        onChange={(e) => setLayout(component.id, { [key]: e.target.value } as Partial<Layout>)}
-      >
-        {(field.options ?? []).map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </Field>
-  );
-}
-
-/** hug / fill / fixed per axis (`docs/specs/layout-model.md`). */
-function SizeField({ component, axis }: { component: Component; axis: 'width' | 'height' }) {
-  const size: SizeMode = component.layout?.size?.[axis] ?? { mode: 'hug' };
-
-  return (
-    <Field label={axis === 'width' ? 'Width' : 'Height'}>
-      <div className="field__row">
-        <select
-          value={size.mode}
-          onChange={(e) => {
-            const mode = e.target.value as SizeMode['mode'];
-            setSize(component.id, axis, mode === 'fixed' ? { mode, px: 200 } : { mode });
-          }}
-        >
-          <option value="hug">hug</option>
-          <option value="fill">fill</option>
-          <option value="fixed">fixed</option>
-        </select>
-        {size.mode === 'fixed' ? (
-          <input
-            type="number"
-            min={0}
-            value={size.px}
-            onChange={(e) => setSize(component.id, axis, { mode: 'fixed', px: Number(e.target.value) })}
-          />
-        ) : null}
-      </div>
-    </Field>
-  );
-}
-
-/** "On click, go to <artboard>" — the editor-side face of a flow arrow. */
 /**
  * Auto-backend inference (M5). A frame holding inputs and one button is a form, and a form whose
  * fields name real columns is a backend loom can write. The offer explains itself either way —
@@ -336,7 +285,6 @@ function AutoBackendSection({ component }: { component: Component }) {
     </section>
   );
 }
-
 
 /**
  * The frame a screen is drawn at. A preset is a **canvas size, not a breakpoint** — V1 emits one
@@ -437,7 +385,6 @@ function AutoSection({ group, state }: { group: string; state: 'proposed' | 'acc
     </section>
   );
 }
-
 
 /** The styled properties a component owns, picked from the design system rather than typed. */
 const STYLE_FIELDS = [
@@ -638,51 +585,6 @@ function cleaned(style: Style): Style {
   return next as Style;
 }
 
-function StyleSection({ component }: { component: Component }) {
-  const style = component.style ?? {};
-
-  return (
-    <section className="field-group" data-testid="style-section">
-      <h3 className="field-group__title">Style</h3>
-
-      <StyleFields
-        style={style}
-        testPrefix="style-"
-        onChange={(patch) => setStyle(component.id, patch)}
-      />
-
-      <Field label="Border w">
-        <input
-          type="number"
-          min={0}
-          value={style.borderWidth ?? 0}
-          onChange={(event) =>
-            setStyle(component.id, {
-              borderWidth: Number(event.target.value) || undefined,
-            })
-          }
-        />
-      </Field>
-
-      <Field label="Align">
-        <select
-          value={style.align ?? ''}
-          onChange={(event) =>
-            setStyle(component.id, {
-              align: (event.target.value || undefined) as Style['align'],
-            })
-          }
-        >
-          <option value="">—</option>
-          <option value="start">Start</option>
-          <option value="center">Center</option>
-          <option value="end">End</option>
-        </select>
-      </Field>
-    </section>
-  );
-}
-
 /**
  * The project's own tokens. One change here restyles everything built on that token, which is the
  * difference between a system and a habit.
@@ -720,50 +622,6 @@ function ThemeSection() {
 /** `<input type="color">` only accepts `#rrggbb`; anything else would silently show black. */
 function normalizeColor(value: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000';
-}
-
-/**
- * How a frame arranges what is inside it (`docs/12-canvas.md`).
- *
- * **Free** holds each child where it was put — what a designer reaches for while composing, and
- * what a drawn frame starts as. **Auto layout** hands the arrangement to the frame, which is what
- * makes a screen reflow at another width; switching to it drops the positions, because a document
- * describing two layouts at once is one that lies about itself.
- */
-function LayoutSection({ component }: { component: Component }) {
-  const free = component.layout?.mode === 'free';
-
-  return (
-    <>
-      <section className="field-group">
-        <h3 className="field-group__title">Layout</h3>
-        <Field label="Arrange">
-          <select
-            data-testid="layout-mode"
-            value={free ? 'free' : 'stack'}
-            onChange={(e) => setLayoutMode(component.id, e.target.value === 'free' ? 'free' : 'stack')}
-          >
-            <option value="free">Free — keep where I put things</option>
-            <option value="stack">Auto layout — arrange them for me</option>
-          </select>
-        </Field>
-        {LAYOUT_FIELDS.filter((field) => !free || field.key === 'padding').map((field) => (
-          <LayoutField key={field.key} component={component} field={field} />
-        ))}
-        {free ? (
-          <p className="panel__hint">
-            Placed by hand, so this frame keeps its shape at any width. Auto layout is what makes
-            it reflow.
-          </p>
-        ) : null}
-      </section>
-      <section className="field-group">
-        <h3 className="field-group__title">Size</h3>
-        <SizeField component={component} axis="width" />
-        <SizeField component={component} axis="height" />
-      </section>
-    </>
-  );
 }
 
 /**
@@ -856,7 +714,11 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
           <code className="mono id">{artboard.id}</code>
         </div>
         <Field label="Name">
-          <input value={artboard.name} onChange={(e) => renameArtboard(artboard.id, e.target.value)} />
+          <input
+            data-testid="screen-name"
+            value={artboard.name}
+            onChange={(e) => renameArtboard(artboard.id, e.target.value)}
+          />
         </Field>
         <Field label="Entry">
           <button disabled={isEntry} onClick={() => setEntryArtboard(artboard.id)}>
@@ -867,11 +729,14 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
 
       <ScreenSizeSection artboardId={artboard.id} />
 
-      {/* The frame half: this screen's own arrangement, padding and background. */}
+      {/* The frame half: this screen's own arrangement, padding and fill. */}
       {root ? (
         <>
-          <StyleSection component={root} />
           <LayoutSection component={root} />
+          <AppearanceSection component={root} />
+          <FillSection component={root} />
+          <StrokeSection component={root} />
+          <EffectsSection component={root} />
         </>
       ) : null}
 

@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * P5's done-when: the app signs someone up, signs them in, shows who they are, and bounces a
@@ -53,7 +53,7 @@ async function screen(page: Page, name: string): Promise<void> {
 
 async function place(page: Page, button: string, name: string, label?: string): Promise<void> {
   await page.getByRole('button', { name: button, exact: true }).click();
-  await field(page, 'Name').locator('input').fill(name);
+  await nameInput(page).fill(name);
   if (label !== undefined) await field(page, 'Label').locator('input').fill(label);
 }
 
@@ -67,7 +67,7 @@ async function buildApp(page: Page): Promise<void> {
 
   await page.getByRole('button', { name: '+ Screen' }).click();
   await page.locator('.layer--artboard', { hasText: 'Screen 2' }).first().click();
-  await field(page, 'Name').locator('input').fill('Sign in');
+  await nameInput(page).fill('Sign in');
 
   await screen(page, 'Sign in');
   await place(page, '+ Text field', 'Email');

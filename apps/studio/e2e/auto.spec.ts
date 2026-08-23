@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, openPreview } from './canvas';
+import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M5's gate: draw a form, ask for a backend, and get a working one — Validate, a POST route, a
@@ -35,18 +35,18 @@ const rows = async (request: { get: (url: string) => Promise<{ json: () => Promi
 async function drawForm(page: Page): Promise<void> {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Frame' }).click();
-  await field(page, 'Name').locator('input').fill('New note');
+  await nameInput(page).fill('New note');
 
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Title');
+  await nameInput(page).fill('Title');
 
   await page.locator('.layer', { hasText: 'New note' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Body');
+  await nameInput(page).fill('Body');
 
   await page.locator('.layer', { hasText: 'New note' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Save');
+  await nameInput(page).fill('Save');
   await field(page, 'Label').locator('input').fill('Save');
 }
 
@@ -70,7 +70,7 @@ test('the inspector explains what it would build, and why it cannot', async ({ p
   await expect(page.getByTestId('auto-backend')).toContainText('no input fields');
 
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Title');
+  await nameInput(page).fill('Title');
   await page.locator('.layer', { hasText: 'Frame' }).first().click();
   await expect(page.getByTestId('auto-backend')).toContainText('Add a button to submit');
 
@@ -86,7 +86,7 @@ test('a form and a click become a working backend', async ({ page, request }) =>
   // Somewhere to show what came back, so the screen bucket is visibly read.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Saved');
+  await nameInput(page).fill('Saved');
 
   await page.locator('.layer', { hasText: 'New note' }).first().click();
   await expect(page.getByTestId('auto-backend')).toContainText('notes');

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * P1's gate: something on the screen appears, disappears and restyles because of state. The
@@ -26,12 +27,12 @@ test.beforeEach(async ({ page }) => {
 async function drawCheckboxAndText(page: Page): Promise<void> {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Checkbox' }).click();
-  await field(page, 'Name').locator('input').fill('Agree');
+  await nameInput(page).fill('Agree');
   await field(page, 'Label').locator('input').fill('Agree');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Secret');
+  await nameInput(page).fill('Secret');
   await field(page, 'Content').locator('input').fill('only when agreed');
 }
 

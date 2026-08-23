@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * P0's gate: a reload stops losing the project. Everything here goes through the real editor and
@@ -26,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 test('work survives a reload', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text field' }).click();
-  await field(page, 'Name').locator('input').fill('Survivor');
+  await nameInput(page).fill('Survivor');
   await field(page, 'Placeholder').locator('input').fill('still here');
 
   // Styling and screen size are part of the document too, so they have to come back as well.
@@ -68,7 +69,7 @@ test('undo does not walk back into the previous session', async ({ page }) => {
 test('New starts over, and the reload agrees', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Gone soon');
+  await nameInput(page).fill('Gone soon');
   await expect(page.getByTestId('save-status')).toHaveText('saved');
 
   page.once('dialog', (dialog) => void dialog.accept());

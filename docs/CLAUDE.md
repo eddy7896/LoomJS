@@ -41,6 +41,8 @@ Core promise: *a designer should never feel they left the canvas.*
   M6's acceptance test, not follow-ons.
 - `docs/11-editor-shell.md` — execution plan for S0–S5: the studio's own sidebar, the element
   palette and the elements tree, plus the bar an element must clear to enter the vocabulary.
+- `docs/12-canvas.md` — the design canvas: free placement, drawing tools, shapes, rulers, guides.
+- `docs/13-inspector.md` — the inspector as a design panel, and what it deliberately does not copy.
 
 ## Current phase
 

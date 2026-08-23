@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle } from './canvas';
+import { drag, graphNode, handle, nameInput } from './canvas';
 
 /**
  * P2's gate: three distinct problems appear in the panel, and clicking one selects the offending
@@ -34,11 +34,11 @@ test('three distinct problems appear, and clicking one selects the offender', as
   // A number field and a Text, so there is something real to wire.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Number field', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Left');
+  await nameInput(page).fill('Left');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Display');
+  await nameInput(page).fill('Display');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
 
@@ -76,7 +76,7 @@ test('three distinct problems appear, and clicking one selects the offender', as
 test('a problem stops being listed the moment it is fixed', async ({ page }) => {
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Text', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Display');
+  await nameInput(page).fill('Display');
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ Variable' }).click();
@@ -96,11 +96,11 @@ test('clicking a component row switches to Design mode and selects it', async ({
   // points at the button rather than the node.
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Number field', exact: true }).click();
-  await field(page, 'Name').locator('input').fill('Left');
+  await nameInput(page).fill('Left');
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await page.getByRole('button', { name: '+ Button' }).click();
-  await field(page, 'Name').locator('input').fill('Go');
+  await nameInput(page).fill('Go');
   await field(page, 'Label').locator('input').fill('Go');
 
   await page.getByRole('button', { name: 'Nodes' }).click();

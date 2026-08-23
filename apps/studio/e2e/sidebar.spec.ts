@@ -1,12 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * S0/S1's gate: one left column holding the tree and the palette, an icon rail beside it, and no
  * components left in the top toolbar (`docs/11-editor-shell.md`).
  */
 
-const field = (page: Page, label: string) =>
-  page.locator('.field', { has: page.locator('.field__label', { hasText: label }) });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -37,7 +36,7 @@ test('every element is placeable from the sidebar, in its category', async ({ pa
 
   await page.locator('.layer--artboard', { hasText: 'Home' }).first().click();
   await palette.getByRole('button', { name: '+ Checkbox' }).click();
-  await field(page, 'Name').locator('input').fill('Agree');
+  await nameInput(page).fill('Agree');
 
   await expect(page.locator('.layer', { hasText: 'Agree' })).toHaveCount(1);
 });

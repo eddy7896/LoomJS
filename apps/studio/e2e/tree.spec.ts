@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { nameInput } from './canvas';
 
 /**
  * S2's gate: a component can be dragged into a different Frame from the tree alone, in one undo
@@ -26,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 
 async function place(page: Page, button: string, name: string): Promise<void> {
   await page.getByTestId('elements-panel').getByRole('button', { name: button, exact: true }).click();
-  await field(page, 'Name').locator('input').fill(name);
+  await nameInput(page).fill(name);
 }
 
 /**
