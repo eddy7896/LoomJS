@@ -1,5 +1,8 @@
 import { newConnectorId, newMigrationId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
+  managementFields,
+  parseAuthSettings,
+  projectRef,
   checkConnectionString,
   checkServiceAccount,
   columnFromSpec,
@@ -840,4 +843,103 @@ export function schemaEditing(snapshot: Snapshot, serverNames: readonly string[]
   if (isDocumentStore(connector.moduleId)) return 'shape';
   if (connector.moduleId === 'postgres') return 'sql';
   return serverNames.includes('DATABASE_URL') ? 'sql' : 'needs-connection-string';
+}
+
+/**
+ * Setting a sign-in provider up (A3, `docs/20-provider-setup.md`).
+ *
+ * A button that signs in with Google needs a client id and a secret somewhere. Which "somewhere"
+ * depends on how this project's auth is run, and loom does not pretend the three cases are one.
+ */
+
+/** Which providers the connected project actually has turned on, as it reports them. */
+export async function readAuthProviders(): Promise<Record<string, boolean>> {
+  const snapshot = getState().snapshot;
+  const connector = Object.values(snapshot.connectors).find(
+    (candidate) => candidate.moduleId === 'supabase',
+  );
+  const url = ((connector?.config ?? {}) as { url?: string }).url ?? '';
+  if (!url) return {};
+
+  try {
+    const response = await fetch('/__loom/auth-settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; settings?: unknown };
+    return payload.ok ? parseAuthSettings(payload.settings) : {};
+  } catch {
+    // A project that cannot be reached is not a project with no providers, so the panel says
+    // "could not check" rather than drawing every one of them as off.
+    return {};
+  }
+}
+
+/**
+ * Turn a provider on in the connected Supabase project.
+ *
+ * The id and secret go browser → dev server → Supabase and are stored nowhere along the way. They
+ * are never put in the env bucket, because they are not this app's credentials: they belong to the
+ * auth server, and loom is only the messenger.
+ */
+export async function enableProvider(input: {
+  provider: string;
+  clientId: string;
+  secret: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const snapshot = getState().snapshot;
+  const connector = Object.values(snapshot.connectors).find(
+    (candidate) => candidate.moduleId === 'supabase',
+  );
+  const url = ((connector?.config ?? {}) as { url?: string }).url ?? '';
+  const ref = projectRef(url);
+  if (!ref) {
+    return {
+      ok: false,
+      error: 'This is not a hosted Supabase project, so there is no project setting to change.',
+    };
+  }
+
+  const fields = managementFields(input.provider);
+  try {
+    const response = await fetch('/__loom/auth-provider', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ref,
+        fields: {
+          [fields.enabled]: true,
+          [fields.clientId]: input.clientId.trim(),
+          [fields.secret]: input.secret.trim(),
+        },
+      }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+    return payload.ok ? { ok: true } : { ok: false, error: payload.error ?? 'It was not accepted.' };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+/** Whether this project runs its own auth server, which changes where the secrets belong. */
+export function selfHostedAuth(snapshot: Snapshot): boolean {
+  const connector = Object.values(snapshot.connectors).find(
+    (candidate) => candidate.moduleId === 'supabase',
+  );
+  return Boolean(((connector?.config ?? {}) as { selfHostedAuth?: boolean }).selfHostedAuth);
+}
+
+export function setSelfHostedAuth(value: boolean): void {
+  const snapshot = getState().snapshot;
+  const connector = Object.values(snapshot.connectors).find(
+    (candidate) => candidate.moduleId === 'supabase',
+  );
+  if (!connector) return;
+
+  dispatch({
+    type: 'setConnectorConfig',
+    connectorId: connector.id,
+    config: { ...(connector.config as Record<string, unknown>), selfHostedAuth: value },
+  });
 }

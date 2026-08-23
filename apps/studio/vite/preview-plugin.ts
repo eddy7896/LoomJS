@@ -634,6 +634,105 @@ export function loomPreview(): Plugin {
         })();
       });
 
+      /**
+       * Which sign-in providers this project actually has turned on (A3).
+       *
+       * `GET /auth/v1/settings` answers with `external: { google: true, … }` and takes the anon
+       * key, which is client-scoped. Relayed through here rather than called from the browser for
+       * the same reason the Supabase schema read is: the dev server may hold a key the studio
+       * does not, and one path is easier to reason about than two.
+       */
+      server.middlewares.use('/__loom/auth-settings', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
+
+        void (async () => {
+          try {
+            const body = JSON.parse(await readBody(req)) as { url?: string; key?: string };
+            const base = String(body.url ?? process.env.SUPABASE_URL ?? '').replace(/\/+$/, '');
+            const key = body.key || process.env.SUPABASE_ANON_KEY || '';
+            if (!base) return json(res, 200, { ok: false, error: 'No project URL.' });
+
+            const response = await fetch(`${base}/auth/v1/settings`, {
+              headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json' },
+            });
+            const payload = (await response.json()) as unknown;
+            json(res, 200, { ok: response.ok, settings: payload });
+          } catch (error) {
+            json(res, 200, { ok: false, error: (error as Error).message });
+          }
+        })();
+      });
+
+      /**
+       * Turning a provider on, through the Supabase Management API (A3).
+       *
+       * The client id and secret pass through this process **once** and are kept nowhere: not in
+       * a file, not in `process.env`, not in the document. What is held is the account token, and
+       * that is held the way every other credential is — by name, on the server, from .env.local
+       * (`docs/specs/connector-credentials.md`).
+       */
+      server.middlewares.use('/__loom/auth-provider', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
+
+        void (async () => {
+          try {
+            const body = JSON.parse(await readBody(req)) as {
+              ref?: string;
+              fields?: Record<string, unknown>;
+            };
+            const ref = String(body.ref ?? '');
+            const fields = body.fields ?? {};
+            const token = process.env.SUPABASE_ACCESS_TOKEN || '';
+
+            if (!/^[a-z0-9]+$/i.test(ref)) {
+              return json(res, 200, { ok: false, error: 'That is not a project reference.' });
+            }
+            if (!token) {
+              return json(res, 200, {
+                ok: false,
+                error:
+                  'No SUPABASE_ACCESS_TOKEN on the dev server. Add a personal access token to ' +
+                  '.env.local to let loom change the project settings, or set the provider up in ' +
+                  'the Supabase dashboard instead.',
+              });
+            }
+            // Only the fields this endpoint is for. A body that arrived with anything else in it
+            // is not forwarded: this is a provider form, not a way to rewrite a project's auth.
+            const allowed = Object.fromEntries(
+              Object.entries(fields).filter(([name]) => /^external_[a-z0-9_]+$/.test(name)),
+            );
+            if (Object.keys(allowed).length === 0) {
+              return json(res, 200, { ok: false, error: 'Nothing to set.' });
+            }
+
+            const response = await fetch(
+              `https://api.supabase.com/v1/projects/${ref}/config/auth`,
+              {
+                method: 'PATCH',
+                headers: {
+                  authorization: `Bearer ${token}`,
+                  'content-type': 'application/json',
+                },
+                body: JSON.stringify(allowed),
+              },
+            );
+
+            if (!response.ok) {
+              const text = await response.text();
+              return json(res, 200, {
+                ok: false,
+                error: scrub(text.slice(0, 400) || `Supabase answered ${response.status}.`, token),
+              });
+            }
+            json(res, 200, { ok: true });
+          } catch (error) {
+            json(res, 200, { ok: false, error: (error as Error).message });
+          }
+        })();
+      });
+
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });

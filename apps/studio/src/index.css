@@ -2200,3 +2200,73 @@ input[type='color'] {
   left: 50%;
   transform: translateX(-50%);
 }
+
+/* A3: what a sign-in provider needs, and whether it has it. */
+.provider {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.provider__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 5px 0;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.provider__name {
+  flex: 1;
+  text-align: left;
+}
+
+.provider__state {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.dot--off {
+  background: transparent;
+  border: 1px solid var(--ink-soft);
+}
+
+.provider__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 10px;
+}
+
+.provider__copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.provider__copy code {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider__env {
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.provider__link {
+  font-size: 11px;
+  color: var(--accent);
+}

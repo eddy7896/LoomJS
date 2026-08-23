@@ -90,10 +90,18 @@ export function compile(snapshot: Snapshot): CompileResult {
   // Somewhere to run it that is not a platform (`docs/18-containers.md`). The route table is
   // written out from what was actually emitted, so a route that fails to load is a compile error
   // rather than a 404 nobody can explain.
+  // Provider secrets belong to whoever runs the auth server. On hosted Supabase that is Supabase,
+  // and naming the variables here would be telling someone to set something nothing reads; a
+  // project that runs its own gets them by name (`docs/20-provider-setup.md`).
+  const ownAuthServer = Object.values(snapshot.connectors).some(
+    (connector) => ((connector.config ?? {}) as { selfHostedAuth?: boolean }).selfHostedAuth,
+  );
+
   files.push(
     ...emitContainerFiles({
       routes: files.filter((file) => file.path.startsWith('api/')).map((file) => file.path),
       usesSql,
+      gotrueProviders: ownAuthServer ? ssoProvidersUsed(snapshot) : [],
       credentials: [
         ...(usesSql ? ['DATABASE_URL'] : []),
         ...(usesFirestore ? ['FIREBASE_SERVICE_ACCOUNT'] : []),

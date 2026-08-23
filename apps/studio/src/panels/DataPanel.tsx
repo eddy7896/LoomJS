@@ -23,6 +23,7 @@ import {
 import { SchemaList } from './SchemaTable';
 import { NewTable } from './SchemaEditor';
 import { DataWorkPanel } from './DataWorkPanel';
+import { ProvidersPanel } from './ProvidersPanel';
 
 /**
  * Connections live here. The panel can write credentials and prove they work; it can never read
@@ -162,6 +163,9 @@ export function DataPanel() {
           <DataWorkPanel />
         </>
       ) : null}
+
+      {/* Signing in is a connection too: what a provider needs, and whether it is on (A3). */}
+      <ProvidersPanel />
 
       {open && !attached ? (
         <div className="connect-form">

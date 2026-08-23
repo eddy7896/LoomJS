@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from '@loom/ir';
 import { compile } from '../src/index';
-import { postgresSnapshot, supabaseSnapshot, trivialSnapshot } from './fixtures';
+import { postgresSnapshot, ssoSnapshot, supabaseSnapshot, trivialSnapshot } from './fixtures';
 
 /**
  * Running the emitted app in a container (C1, `docs/18-containers.md`).
@@ -87,5 +87,42 @@ describe('compose', () => {
     const yaml = fileAt(supabaseSnapshot(), 'docker-compose.yml');
     expect(yaml).not.toContain('postgres:16-alpine');
     expect(yaml).not.toContain('volumes:');
+  });
+});
+
+describe('a project that runs its own auth server', () => {
+  const selfHosted = (): Snapshot => {
+    const base = ssoSnapshot('google');
+    return {
+      ...base,
+      connectors: {
+        ...base.connectors,
+        cn_supabase: {
+          ...base.connectors.cn_supabase!,
+          config: { ...(base.connectors.cn_supabase!.config as object), selfHostedAuth: true },
+        },
+      },
+    };
+  };
+
+  it('names the variables its auth server reads, and no values', () => {
+    const yaml = fileAt(selfHosted(), 'docker-compose.yml');
+    expect(yaml).toContain('image: supabase/gotrue');
+    expect(yaml).toContain('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID}');
+    expect(yaml).toContain('GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOTRUE_EXTERNAL_GOOGLE_SECRET}');
+    // This file is committed, so nothing that looks like a secret may be in it.
+    expect(yaml).not.toMatch(/GOTRUE_EXTERNAL_GOOGLE_SECRET:\s*[A-Za-z0-9]/);
+  });
+
+  it('brings a database with it, because the auth server needs one', () => {
+    expect(fileAt(selfHosted(), 'docker-compose.yml')).toContain('postgres:16-alpine');
+  });
+
+  it('says nothing about those variables for a project on hosted Supabase', () => {
+    // There they are read by nothing, and naming them would be telling someone to set something
+    // that has no effect.
+    const yaml = fileAt(ssoSnapshot('google'), 'docker-compose.yml');
+    expect(yaml).not.toContain('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID');
+    expect(yaml).not.toContain('supabase/gotrue');
   });
 });
