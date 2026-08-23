@@ -346,6 +346,30 @@ export const SLIDER_DEF: ComponentDef = {
   ],
 };
 
+/**
+ * A Table renders rows *as a table* (D8, `docs/15-schema.md`).
+ *
+ * A List with a Frame inside it can be made to look like one, and every project ended up doing
+ * that — badly, because columns that line up across rows are exactly what a List cannot promise.
+ * This is the one arrangement of data worth its own element: the columns are named once, the
+ * header comes from them, and every row lines up because they are the same cells.
+ */
+export const TABLE_DEF: ComponentDef = {
+  type: 'Table',
+  label: 'Table',
+  category: 'container',
+  keywords: ['grid', 'rows', 'columns', 'data table', 'spreadsheet'],
+  isContainer: false,
+  fields: [
+    // Which columns, in what order. Naming them beats showing whatever the first row happened to
+    // carry: a row missing a field would silently reorder every column after it.
+    { key: 'columns', label: 'Columns', control: 'text', default: '' },
+    { key: 'empty', label: 'Empty text', control: 'text', default: 'Nothing yet' },
+  ],
+  acceptsItems: true,
+  defaultSize: { width: 420, height: 200 },
+};
+
 const DEFS: readonly ComponentDef[] = [
   FRAME_DEF,
   TEXT_DEF,
@@ -355,6 +379,7 @@ const DEFS: readonly ComponentDef[] = [
   CHECKBOX_DEF,
   SELECT_DEF,
   LIST_DEF,
+  TABLE_DEF,
   IMAGE_DEF,
   LINK_DEF,
   ICON_DEF,

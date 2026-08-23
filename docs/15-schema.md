@@ -80,7 +80,7 @@ normal edit.
 | **D5** | Tables and columns: create, add, rename, retype, default, required, drop | done  |
 | **D6** | Relations, unique constraints and indexes                              | done  |
 | **D7** | Migrations emitted into the repo, and seeding a table with rows        | done  |
-| **D8** | The elements: a Table that renders rows, a Form built from columns     | next  |
+| **D8** | The elements: a Table that renders rows, a Form built from columns     | done  |
 
 ## What happens after a change
 
@@ -134,3 +134,27 @@ travel as **parameters**, like every other value loom sends a database; the rows
 nothing about them becomes SQL text. Columns the database fills in are skipped, and so are columns
 pointing at another table: inventing a key that matches nothing there is not sample data, it is a
 broken row.
+
+## The elements
+
+**Table** is the one arrangement of data worth its own element. A List with a Frame inside it can
+be made to look like a table, and every project ended up doing exactly that — badly, because
+columns lining up across rows is the one thing a List cannot promise. Its columns are **named**
+rather than discovered from the first row: a row missing a field would otherwise reorder every
+column after it, and a table whose columns move between rows is worse than no table. Naming
+nothing falls back to the keys of the first row, worked out once so the rest still line up.
+
+**Form** is not an element at all. "Build me the form for this table" lays out a Frame, a label and
+an input per column, and a button, then wires each field to the column it was made for and the
+button to a route that writes the row. Everything it makes is an **ordinary component**, editable
+afterwards exactly like one placed by hand — a generator that produced something only it could
+edit would be a worse version of the thing it saved you from. Columns the database fills in are
+not asked for, and the control follows what the column holds: a number gets a number field, a
+yes/no gets a checkbox, a structure gets a text area, because nothing here edits a structure.
+
+**What it cannot wire, it says.** A DateField hands back the browser's `YYYY-MM-DD`, which is
+text, and loom will not call text a date on the way into a date column — that is a conversion
+nothing performs. So the form reports the field it could not connect, with the reason, instead of
+laying out something that looks finished and drops what you type into it. Closing that gap
+properly — a conversion step, or a date type that admits it is a string — is a decision, not an
+oversight.

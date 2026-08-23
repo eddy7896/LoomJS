@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CompileError, compile } from '../src/index';
 import { writeFiles } from '../src/node';
-import { trivialSnapshot } from './fixtures';
+import { applyOps } from '@loom/ir';
+import { supabaseSnapshot, trivialSnapshot } from './fixtures';
 
 const byPath = (files: { path: string; content: string }[], path: string): string => {
   const found = files.find((f) => f.path === path);
@@ -116,5 +117,47 @@ describe('writeFiles', () => {
     await expect(writeFiles([{ path: '../escaped.txt', content: 'no' }], dir)).rejects.toThrow(
       /escapes the output directory/,
     );
+  });
+});
+
+describe('a Table renders rows as a table', () => {
+  const withTable = (props: Record<string, unknown>): string => {
+    const base = supabaseSnapshot();
+    const snapshot = applyOps(base, [
+      {
+        type: 'addComponent',
+        parentId: 'cp_root000001',
+        component: {
+          id: 'cp_table',
+          type: 'Table',
+          name: 'Notes table',
+          props: {
+            items: { kind: 'bound', source: { nodeId: 'nd_read', portId: 'pt_result' } },
+            ...Object.fromEntries(
+              Object.entries(props).map(([key, value]) => [key, { kind: 'static', value }]),
+            ),
+          },
+        },
+      },
+    ]);
+    const file = compile(snapshot).files.find((entry) => entry.path === 'src/artboards/Home.tsx');
+    return file!.content;
+  };
+
+  it('names its columns once, so every row lines up', () => {
+    const home = withTable({ columns: 'title, body', empty: 'Nothing yet' });
+    expect(home).toContain('["title","body"]');
+    expect(home).toContain('<thead>');
+    expect(home).toContain('borderCollapse');
+  });
+
+  it('falls back to what the first row carries when no columns were named', () => {
+    const home = withTable({ columns: '' });
+    // Worked out once, so a row missing a field cannot reorder the columns after it.
+    expect(home).toContain('Object.keys(');
+  });
+
+  it('renders the empty text rather than an empty grid', () => {
+    expect(withTable({ columns: 'title', empty: 'No notes yet' })).toContain('"No notes yet"');
   });
 });

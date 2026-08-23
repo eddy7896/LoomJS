@@ -2,6 +2,7 @@ import type { ComponentEmitter } from '../types';
 import { buttonEmitter } from './button';
 import { frameEmitter } from './frame';
 import { listEmitter } from './list';
+import { tableEmitter } from './table';
 import { textEmitter } from './textComponent';
 import { textFieldEmitter } from './textField';
 import { checkboxEmitter, numberFieldEmitter, selectEmitter } from './inputs';
@@ -28,6 +29,7 @@ const EMITTERS: ComponentEmitter[] = [
   checkboxEmitter,
   selectEmitter,
   listEmitter,
+  tableEmitter,
   imageEmitter,
   linkEmitter,
   iconEmitter,

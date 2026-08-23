@@ -620,6 +620,7 @@ export function mirrorPortsFor(componentType: string): Port[] {
     case 'Link':
       return [port('pt_href', 'address', 'in', 'data', { kind: 'text' })];
     case 'List':
+    case 'Table':
       return [port('pt_items', 'items', 'in', 'data', { kind: 'list', of: { kind: 'record' } })];
     default:
       return [];
