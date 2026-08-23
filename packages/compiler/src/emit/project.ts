@@ -58,6 +58,9 @@ export function scaffoldFiles(
       dev: 'vite',
       build: 'tsc --noEmit && vite build',
       preview: 'vite preview',
+      // What a container runs, and what anyone can run locally to see the built app served the
+      // way it will be served (docs/18-containers.md).
+      start: 'tsx server.ts',
     },
     dependencies: {
       ...TARGET_DEPS,
@@ -66,6 +69,10 @@ export function scaffoldFiles(
       // does not open, and a Postgres app never carries a REST client it does not call.
       ...(options.usesSql ? { pg: '^8.13.1' } : {}),
       ...(options.usesFirestore ? { 'firebase-admin': '^13.0.0' } : {}),
+      // The server runs the emitted TypeScript directly: the handlers import each other without
+      // file extensions, which Node's own ESM loader requires and a compile step would have to
+      // rewrite. One dependency beats a second build configuration.
+      tsx: '^4.19.2',
     },
     devDependencies: { ...TARGET_DEV_DEPS, ...sqlTypes },
   };

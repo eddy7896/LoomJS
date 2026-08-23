@@ -9,6 +9,7 @@ import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
 import { dialectOf, isDocumentStore } from '@loom/connectors';
 import { migrationFile } from './emit/migrations';
+import { emitContainerFiles } from './emit/container';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
   ssoProvidersUsed,
@@ -85,6 +86,22 @@ export function compile(snapshot: Snapshot): CompileResult {
       content: emitArtboardModule(snapshot, artboard, routes, route.componentName, globals),
     });
   }
+
+  // Somewhere to run it that is not a platform (`docs/18-containers.md`). The route table is
+  // written out from what was actually emitted, so a route that fails to load is a compile error
+  // rather than a 404 nobody can explain.
+  files.push(
+    ...emitContainerFiles({
+      routes: files.filter((file) => file.path.startsWith('api/')).map((file) => file.path),
+      usesSql,
+      credentials: [
+        ...(usesSql ? ['DATABASE_URL'] : []),
+        ...(usesFirestore ? ['FIREBASE_SERVICE_ACCOUNT'] : []),
+        ...(usesDatabase ? ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : []),
+        ...(auth ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] : []),
+      ].filter((name, index, all) => all.indexOf(name) === index),
+    }),
+  );
 
   const messages = usesMessages(snapshot);
   files.push({

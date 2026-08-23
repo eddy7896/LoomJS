@@ -287,6 +287,70 @@ describe('emitted app builds for real', () => {
   });
 });
 
+describe('the container server', () => {
+  /**
+   * The image cannot be built here — there is no Docker in this environment — so what is checked
+   * is the half that matters and can be: the server the container's CMD runs. If `npm run start`
+   * serves the built app and answers an API route, the Dockerfile is a wrapper around a thing
+   * that works; if it does not, no Dockerfile would have saved it.
+   */
+  it('serves the built app and answers an API route', async () => {
+    const stub = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify([{ id: 1, title: 'first note', body: null }]));
+    });
+    const stubPort = takePort();
+    await new Promise<void>((resolve) => stub.listen(stubPort, resolve));
+
+    try {
+      const snapshot = supabaseSnapshot();
+      snapshot.connectors.cn_supabase!.config = { url: `http://localhost:${stubPort}` };
+
+      const dir = await emitProject(snapshot);
+      await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+      const port = takePort();
+      const child = spawn(npm, ['run', 'start'], {
+        cwd: dir,
+        shell: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          PORT: String(port),
+          SUPABASE_URL: `http://localhost:${stubPort}`,
+          SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key',
+        },
+      });
+      children.push(child);
+
+      expect(await waitForServer(port)).toBe(true);
+
+      // The built front end.
+      const page = await fetch(`http://localhost:${port}/`);
+      expect(page.headers.get('content-type')).toContain('text/html');
+      expect(await page.text()).toContain('<div id="root">');
+
+      // A screen that only exists in the browser's router still gets the app, not a 404.
+      expect((await fetch(`http://localhost:${port}/somewhere`)).status).toBe(200);
+
+      // And the API route, through the same process.
+      const api = await fetch(`http://localhost:${port}/api/notes`, { method: 'POST' });
+      expect(await api.json()).toEqual({ result: [{ id: 1, title: 'first note', body: null }] });
+
+      // A route that does not exist says so as JSON rather than handing back the app.
+      const missing = await fetch(`http://localhost:${port}/api/nope`);
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({ error: 'No such route.' });
+
+      // And nothing outside the built app is reachable by asking for it.
+      const escape = await fetch(`http://localhost:${port}/../package.json`);
+      expect(await escape.text()).not.toContain('"devDependencies"');
+    } finally {
+      stub.close();
+    }
+  });
+});
+
 describe('emitted serverless function answers for real', () => {
   it('runs the API route through the dev server the Preview uses', async () => {
     const dir = await emitProject(pipelineSnapshot());

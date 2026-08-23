@@ -17,7 +17,7 @@ const byPath = (files: { path: string; content: string }[], path: string): strin
 describe('compile(trivial snapshot)', () => {
   it('emits a complete Vite + React + TS repo', () => {
     const { files } = compile(trivialSnapshot());
-    expect(files.map((f) => f.path)).toEqual([
+    expect(files.map((f) => f.path).sort()).toEqual([
       '.gitignore',
       'index.html',
       'package.json',
@@ -28,7 +28,15 @@ describe('compile(trivial snapshot)', () => {
       'src/theme.css',
       'tsconfig.json',
       'vite.config.ts',
-    ]);
+      // Somewhere to run it that is not a platform (C1, `docs/18-containers.md`). Every project
+      // gets these: they are four small files, and "the repo is yours" means it runs anywhere.
+      'server.ts',
+      'Dockerfile',
+      '.dockerignore',
+      'docker-compose.yml',
+      // Compared as a set: the emitted order is the compiler's business, and pinning it here
+      // makes every new file a two-line edit for no reader's benefit.
+    ].sort());
   });
 
   it('emits the artboard as a React component with flex layout and the text content', () => {
