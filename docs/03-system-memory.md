@@ -373,9 +373,16 @@ Recorded here because they constrain everything downstream. Each was taken at th
   paired controls with a mark in front of each number, the name in the header — the densest
   arrangement of object properties that stays readable, and one every designer already knows. The
   colours stay loom's: light-mode only, red reserved for the primary action (`docs/13-inspector.md`).
-- **[C] No hex field on a fill.** Figma edits colour per object; loom edits it once, in the system.
-  A fill names a token and the swatch shows what it resolves to. A hex box would quietly turn the
-  design system back into a styling panel.
+- **[C] Custom colours are allowed, and the system still comes first.** The earlier "no hex field"
+  rule was half right: a hex box does weaken a design system, and a tool that refuses a colour
+  until the designer has named it is one they fight. The picker opens on the project's swatches,
+  with the custom controls underneath and one line explaining the difference. Tokens remain the
+  default and still emit `var(--loom-…)`; a custom colour is stored as the literal it is. Corner
+  rounding follows the same shape — the scale first, a number beside it.
+- **[C] An effect is a composition a designer names, not a property they assemble.** Glass is a
+  backdrop blur, a translucent tint and a hairline edge; noise is grain the browser draws from an
+  SVG filter rather than an image the app has to carry. Each emits ordinary CSS, so the escape
+  hatch stays open and nothing ships a runtime.
 - **[C] Opacity, rotation and clipping are per-object, not tokens.** No scale stands behind "37%"
   or "15 degrees". They emit plain CSS, and rotation is painted rather than laid out, so the box a
   thing occupies never moves.

@@ -1,8 +1,10 @@
 import type { Component, Style } from '@loom/ir';
 import { tokensIn } from '@loom/ui';
+import { useState } from 'react';
 import { defFor } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { isHiddenInEditor, setStyle, toggleEditorVisibility } from '../state/store';
+import { ColorField } from './ColorField';
 import { Cell, Choice, Glyph, Row, Section } from './Section';
 
 /**
@@ -19,56 +21,25 @@ import { Cell, Choice, Glyph, Row, Section } from './Section';
 const EYE = 'M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z M12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z';
 const EYE_OFF = 'M4 4l16 16M9.5 9.6A2.5 2.5 0 0012 14.5c.6 0 1.2-.2 1.6-.6M6.7 6.8C3.9 8.4 2 12 2 12s4 6 10 6c1.6 0 3-.4 4.2-1M9.9 6.2A9.7 9.7 0 0112 6c6 0 10 6 10 6a19 19 0 01-2.7 3.1';
 
-/** What a token id resolves to right now, project overrides included, for the swatch. */
-function swatch(token: string | undefined, overrides: Record<string, string> | undefined): string {
-  if (!token) return 'transparent';
-  return overrides?.[token] ?? tokensIn('color').find((entry) => entry.id === token)?.value ?? 'transparent';
-}
-
 function ColourRow({
   component,
   property,
   testId,
+  label,
 }: {
   component: Component;
   property: 'background' | 'textColor' | 'borderColor';
   testId: string;
+  label: string;
 }) {
-  const theme = useEditor((s) => s.snapshot.theme);
-  const value = component.style?.[property];
-  const token = value?.kind === 'token' ? value.token : undefined;
-
   return (
     <Row>
-      <span className="ins__swatch" style={{ background: swatch(token, theme) }} />
-      <select
-        className="ins__grow"
-        data-testid={testId}
-        value={token ?? ''}
-        onChange={(e) =>
-          setStyle(component.id, {
-            [property]: e.target.value ? { kind: 'token', token: e.target.value } : undefined,
-          })
-        }
-      >
-        <option value="">—</option>
-        {tokensIn('color').map((entry) => (
-          <option key={entry.id} value={entry.id}>
-            {entry.label}
-          </option>
-        ))}
-      </select>
-      {token ? (
-        <button
-          className="ins__icon"
-          title="Remove"
-          aria-label={`Remove ${property}`}
-          data-testid={`${testId}-clear`}
-          onClick={() => setStyle(component.id, { [property]: undefined })}
-        >
-          −
-        </button>
-      ) : null}
+      <ColorField
+        label={label}
+        testId={testId}
+        value={component.style?.[property]}
+        onChange={(next) => setStyle(component.id, { [property]: next })}
+      />
     </Row>
   );
 }
@@ -113,6 +84,101 @@ function TokenRow({
   );
 }
 
+/**
+ * Corner rounding: a token, a number, or four numbers.
+ *
+ * The token still comes first — it is the project's decision, and a screen full of `radius.md` is
+ * a screen that restyles in one move. But "round the top two corners of this card" is a real thing
+ * to want and no scale answers it, so a literal is offered beside the scale rather than instead of
+ * it. Four corners are one CSS value, not four properties, which is why they live in one field.
+ */
+function Corners({ component }: { component: Component }) {
+  const value = component.style?.radius;
+  const literal = value?.kind === 'literal' ? value.value : undefined;
+  const [perCorner, setPerCorner] = useState(Boolean(literal && literal.trim().includes(' ')));
+
+  const corners = (literal ?? '0px 0px 0px 0px').trim().split(/\s+/);
+  const at = (index: number): number => Number.parseFloat(corners[index] ?? corners[0] ?? '0') || 0;
+
+  const writeCorners = (next: number[]): void =>
+    setStyle(component.id, {
+      radius: { kind: 'literal', value: next.map((n) => `${n}px`).join(' ') },
+    });
+
+  if (perCorner) {
+    const all = [at(0), at(1), at(2), at(3)];
+    return (
+      <>
+        <Row>
+          {(['↖', '↗', '↘', '↙'] as const).map((mark, index) => (
+            <Cell key={mark} mark={mark} title="Corner rounding">
+              <input
+                type="number"
+                min={0}
+                data-testid={`radius-${index}`}
+                value={all[index]}
+                onChange={(e) =>
+                  writeCorners(all.map((n, i) => (i === index ? Number(e.target.value) : n)))
+                }
+              />
+            </Cell>
+          ))}
+          <button
+            className="ins__icon"
+            title="One radius for every corner"
+            data-testid="radius-single"
+            onClick={() => {
+              setPerCorner(false);
+              writeCorners([all[0]!, all[0]!, all[0]!, all[0]!]);
+            }}
+          >
+            ⌷
+          </button>
+        </Row>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Cell mark="⌜" title="Corner rounding">
+        <input
+          type="number"
+          min={0}
+          data-testid="radius"
+          value={literal ? at(0) : ''}
+          placeholder={value?.kind === 'token' ? 'token' : '0'}
+          onChange={(e) => writeCorners(Array(4).fill(Number(e.target.value)))}
+        />
+        <select
+          data-testid="style-radius"
+          value={value?.kind === 'token' ? value.token : ''}
+          onChange={(e) =>
+            setStyle(component.id, {
+              radius: e.target.value ? { kind: 'token', token: e.target.value } : undefined,
+            })
+          }
+        >
+          <option value="">custom</option>
+          {tokensIn('radius').map((token) => (
+            <option key={token.id} value={token.id}>
+              {token.label}
+            </option>
+          ))}
+        </select>
+      </Cell>
+      <button
+        className="ins__icon"
+        title="A different radius per corner"
+        data-testid="radius-per-corner"
+        onClick={() => setPerCorner(true)}
+      >
+        ⌟
+      </button>
+    </>
+  );
+}
+
 export function AppearanceSection({ component }: { component: Component }) {
   const hidden = useEditor((s) => isHiddenInEditor(s.snapshot, s.hiddenInEditor, component.id));
   const style = component.style ?? {};
@@ -135,14 +201,7 @@ export function AppearanceSection({ component }: { component: Component }) {
             }}
           />
         </Cell>
-        <TokenRow
-          component={component}
-          property="radius"
-          group="radius"
-          testId="style-radius"
-          mark="⌜"
-          title="Corner rounding, from the system"
-        />
+        <Corners component={component} />
         <Choice
           active={!hidden}
           title={hidden ? 'Hidden while designing' : 'Visible'}
@@ -172,8 +231,11 @@ export function AppearanceSection({ component }: { component: Component }) {
 
 export function FillSection({ component }: { component: Component }) {
   return (
-    <Section name="Fill" hint="A fill names a decision in the system, so moving that decision moves everything built on it.">
-      <ColourRow component={component} property="background" testId="style-background" />
+    <Section
+      name="Fill"
+      hint="A token is a decision the whole project follows; a custom colour is a value on this one thing."
+    >
+      <ColourRow component={component} property="background" testId="style-background" label="Fill" />
     </Section>
   );
 }
@@ -183,7 +245,12 @@ export function StrokeSection({ component }: { component: Component }) {
 
   return (
     <Section name="Stroke">
-      <ColourRow component={component} property="borderColor" testId="style-borderColor" />
+      <ColourRow
+        component={component}
+        property="borderColor"
+        testId="style-borderColor"
+        label="Stroke"
+      />
       <Row>
         <Cell mark="W" title="Stroke width, in pixels">
           <input
@@ -201,27 +268,10 @@ export function StrokeSection({ component }: { component: Component }) {
   );
 }
 
-export function EffectsSection({ component }: { component: Component }) {
-  return (
-    <Section name="Effects">
-      <Row>
-        <TokenRow
-          component={component}
-          property="shadow"
-          group="shadow"
-          testId="style-shadow"
-          mark="◍"
-          title="Shadow, from the system"
-        />
-      </Row>
-    </Section>
-  );
-}
-
 export function TypeSection({ component }: { component: Component }) {
   return (
     <Section name="Text">
-      <ColourRow component={component} property="textColor" testId="style-textColor" />
+      <ColourRow component={component} property="textColor" testId="style-textColor" label="Text" />
       <Row>
         <TokenRow
           component={component}

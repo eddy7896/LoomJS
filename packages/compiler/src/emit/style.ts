@@ -1,4 +1,4 @@
-import type { Component, Style, StyleValue } from '@loom/ir';
+import type { Component, Effect, Style, StyleValue } from '@loom/ir';
 import { tokenById, tokenVar } from '@loom/ui';
 import { CompileError, type EmitContext } from '../types';
 import { layoutToStyle } from './layout';
@@ -18,6 +18,79 @@ const ALIGN: Record<NonNullable<Style['align']>, string> = {
   center: 'center',
   end: 'flex-end',
 };
+
+/**
+ * Effects, as the CSS they are.
+ *
+ * Each one is a **composition** rather than a raw property: glass is a backdrop blur, a
+ * translucent tint and the hairline that makes an edge visible against what shows through. They
+ * are written out here so the emitted app carries ordinary CSS — no runtime, no library, nothing
+ * to install — and several of the same kind stack in the order they were added.
+ */
+function effectsToCss(effects: readonly Effect[]): Record<string, string> {
+  const css: Record<string, string> = {};
+  const shadows: string[] = [];
+  const filters: string[] = [];
+  const backdrop: string[] = [];
+  const layers: string[] = [];
+
+  for (const effect of effects) {
+    if (effect.kind === 'shadow') {
+      const parts = [
+        effect.inset ? 'inset' : '',
+        `${effect.x}px`,
+        `${effect.y}px`,
+        `${effect.blur}px`,
+        `${effect.spread}px`,
+        effect.color,
+      ].filter(Boolean);
+      shadows.push(parts.join(' '));
+      continue;
+    }
+
+    if (effect.kind === 'blur') {
+      filters.push(`blur(${effect.radius}px)`);
+      continue;
+    }
+
+    if (effect.kind === 'glass') {
+      backdrop.push(`blur(${effect.blur}px)`);
+      // The tint sits *over* the blur, so it has to be translucent or the blur is invisible.
+      css.background = withAlpha(effect.tint, effect.opacity);
+      // A frosted edge is what stops glass reading as a flat translucent rectangle.
+      css.border = `1px solid ${withAlpha('#ffffff', 35)}`;
+      continue;
+    }
+
+    // Grain, drawn by the browser from an SVG filter: no asset, no request, and it scales with
+    // the box rather than tiling a bitmap.
+    const turbulence = `<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${(
+      effect.scale / 100
+    ).toFixed(2)}' numOctaves='3'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='${(
+      effect.opacity / 100
+    ).toFixed(2)}'/></svg>`;
+    layers.push(`url("data:image/svg+xml,${turbulence.replace(/"/g, "'").replace(/#/g, '%23')}")`);
+  }
+
+  if (shadows.length > 0) css.boxShadow = shadows.join(', ');
+  if (filters.length > 0) css.filter = filters.join(' ');
+  if (backdrop.length > 0) css.backdropFilter = backdrop.join(' ');
+  if (layers.length > 0) {
+    css.backgroundImage = layers.join(', ');
+    // Over the fill rather than instead of it.
+    css.backgroundBlendMode = 'overlay';
+  }
+  return css;
+}
+
+/** `#1b1d21` at 35% -> `rgb(27 29 33 / 35%)`. Anything that is not a hex is passed through. */
+function withAlpha(color: string, percent: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!hex) return color;
+  const value = Number.parseInt(hex[1]!, 16);
+  const rgb = [(value >> 16) & 255, (value >> 8) & 255, value & 255].join(' ');
+  return `rgb(${rgb} / ${Math.round(percent)}%)`;
+}
 
 /** One styled property as a CSS value. */
 export function styleValueCss(value: StyleValue, componentId: string, key: string): string {
@@ -76,6 +149,11 @@ export function styleToCss(component: Component): Record<string, string | number
     .filter(Boolean)
     .join(' ');
   if (transform) css.transform = transform;
+
+  // Effects last: a shadow a designer added should win over the shadow token they had before.
+  if (style.effects && style.effects.length > 0) {
+    Object.assign(css, effectsToCss(style.effects));
+  }
 
   if (style.align) {
     css.textAlign = style.align;

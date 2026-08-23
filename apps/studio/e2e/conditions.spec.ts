@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { nameInput, pickColor } from './canvas';
 
 /**
  * P1's gate: something on the screen appears, disappears and restyles because of state. The
@@ -74,7 +74,7 @@ test('a style override holds while its condition does', async ({ page }) => {
   await drawCheckboxAndText(page);
 
   await page.locator('.layer', { hasText: 'Secret' }).first().click();
-  await page.getByTestId('style-textColor').selectOption('color.ink');
+  await pickColor(page, 'style-textColor', 'color.ink');
   await page.getByTestId('add-conditional-style').click();
   await page.getByTestId('conditional-when-0').selectOption({ label: 'Agree is checked' });
   await page.getByTestId('conditional-0-textColor').selectOption('color.brand');

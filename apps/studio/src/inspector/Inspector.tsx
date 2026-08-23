@@ -19,11 +19,11 @@ import { PositionSection } from './PositionSection';
 import { LayoutSection } from './LayoutSection';
 import {
   AppearanceSection,
-  EffectsSection,
   FillSection,
   StrokeSection,
   TypeSection,
 } from './AppearanceSection';
+import { EffectsSection } from './EffectsSection';
 import {
   removeArtboard,
   removeFlow,

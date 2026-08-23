@@ -846,6 +846,133 @@ select {
   display: none;
 }
 
+/* ---- the colour picker and the effects list (docs/13-inspector.md) ---- */
+.ins__color {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.ins__value {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 232px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(20 22 26 / 16%);
+}
+
+.picker__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.picker__swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.picker__swatch {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.picker__swatch.is-active {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.picker__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.picker__wheel {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.picker__hex {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker__note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* Each effect is one composed thing, boxed so a stack of them stays readable. */
+.ins__effect {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-sunken);
+}
+
+.ins__effect-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ins__add {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11px;
+  padding: 2px 4px;
+  width: auto;
+  cursor: pointer;
+}
+
 /* ---- preview: a floating window (docs/12-canvas.md) ---- */
 .preview {
   display: flex;

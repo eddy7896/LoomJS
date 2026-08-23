@@ -254,6 +254,54 @@ export const StyleValueSchema = z.discriminatedUnion('kind', [
 export type StyleValue = z.infer<typeof StyleValueSchema>;
 
 /**
+ * An effect on a surface.
+ *
+ * These are **compositions**, not raw CSS: "glass" is a backdrop blur, a translucent tint and a
+ * hairline together, because that is the thing a designer means by it. Each one emits plain CSS
+ * that a developer opening the repo would recognise, and nothing here needs a runtime.
+ *
+ * Several may stack — two shadows, or a blur under a noise — and they emit in the order they are
+ * listed, which is the order the panel shows them in.
+ */
+export const EffectSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('shadow'),
+    x: z.number(),
+    y: z.number(),
+    blur: z.number(),
+    spread: z.number(),
+    /** Any CSS colour, usually with alpha — a shadow is rarely a flat token. */
+    color: z.string(),
+    /** Inner shadows are the same property with one word added. */
+    inset: z.boolean().optional(),
+  }),
+  /** The layer itself, blurred. */
+  z.object({ kind: z.literal('blur'), radius: z.number() }),
+  /**
+   * Frosted glass: what is *behind* the layer is blurred, and the layer holds a translucent tint
+   * over it. Needs something behind it to be worth anything, which the panel says.
+   */
+  z.object({
+    kind: z.literal('glass'),
+    blur: z.number(),
+    tint: z.string(),
+    /** 0-100, how much of the tint sits over the blur. */
+    opacity: z.number().min(0).max(100),
+  }),
+  /**
+   * A grain overlay, drawn by the browser from an SVG filter rather than shipped as an image —
+   * no asset, no request, and it scales with the box.
+   */
+  z.object({
+    kind: z.literal('noise'),
+    opacity: z.number().min(0).max(100),
+    /** Higher is finer grain. */
+    scale: z.number(),
+  }),
+]);
+export type Effect = z.infer<typeof EffectSchema>;
+
+/**
  * The curated visual vocabulary. Small on purpose: every property here is one a designer reaches
  * for constantly, and anything beyond it belongs to a component kit rather than to loom's core
  * (`docs/02-system-architecture.md`).
@@ -263,8 +311,15 @@ export const StyleSchema = z.object({
   textColor: StyleValueSchema.optional(),
   fontSize: StyleValueSchema.optional(),
   fontWeight: StyleValueSchema.optional(),
+  /**
+   * Corner rounding. A token names a decision in the system; a literal carries any CSS the box
+   * accepts, including four different corners — `12px 12px 0 0` is one value, not four fields.
+   */
   radius: StyleValueSchema.optional(),
+  /** The shadow token, kept for every document written before `effects` existed. */
   shadow: StyleValueSchema.optional(),
+  /** Shadows, blurs, glass and grain, in the order they are drawn. */
+  effects: z.array(EffectSchema).optional(),
   borderColor: StyleValueSchema.optional(),
   /** Plain px. A border is one, two or none — a scale would be ceremony. */
   borderWidth: z.number().optional(),

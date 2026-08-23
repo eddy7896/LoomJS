@@ -100,3 +100,9 @@ export function nameInput(page: Page): Locator {
     )
     .first();
 }
+
+/** Pick a colour token through the picker: open the swatch, choose from the system. */
+export async function pickColor(page: Page, testId: string, token: string): Promise<void> {
+  await page.getByTestId(`${testId}-swatch`).click();
+  await page.getByTestId(`${testId}-token-${token}`).click();
+}

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { nameInput, pickColor } from './canvas';
 
 /**
  * The design-system loop: style a component from the token scale, watch it land in the running
@@ -36,7 +36,7 @@ test('styling is picked from the system and reaches the running app', async ({ p
   await placeHeading(page);
   await page.locator('.layer', { hasText: 'Heading' }).first().click();
 
-  await page.getByTestId('style-textColor').selectOption('color.brand');
+  await pickColor(page, 'style-textColor', 'color.brand');
   await page.getByTestId('style-fontSize').selectOption('text.xl');
 
   // The canvas renders the same markup the compiler emits, so it shows the change immediately.
@@ -52,7 +52,7 @@ test('styling is picked from the system and reaches the running app', async ({ p
 test('moving a token moves everything built on it', async ({ page }) => {
   await placeHeading(page);
   await page.locator('.layer', { hasText: 'Heading' }).first().click();
-  await page.getByTestId('style-textColor').selectOption('color.brand');
+  await pickColor(page, 'style-textColor', 'color.brand');
 
   // The theme lives with the screen: it is a project-wide decision, not a component's.
   await page.locator('.layer--artboard').first().click();

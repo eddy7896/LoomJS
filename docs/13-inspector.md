@@ -21,10 +21,16 @@ of object properties that stays readable, and every designer already knows where
 **The palette.** The mockup is dark; loom is light-mode only, and red is reserved for the primary
 action and the FN node category (`05-guardrails.md` 19-24). The structure is the borrowed part.
 
-**A hex field on the fill.** Figma edits colour per object; loom edits it *once*, in the system. A
-fill names a token and the swatch shows what that token currently resolves to, so moving the token
-moves every surface built on it. A hex box here would quietly turn the design system back into a
-styling panel.
+**Nothing about colour, in the end — but the order is the argument.** The first version of this
+panel offered tokens *only*, on the grounds that a hex box turns a design system back into a
+styling panel. That was half right. A designer composing a screen needs a colour before they know
+whether it deserves a name, and a tool that refuses until they decide is a tool they fight.
+
+So the picker opens on **the project's own swatches**, with the custom controls underneath and a
+line saying what the difference is: a token is a decision the whole project follows, a custom
+colour is a value on one object. Tokens stay first, stay the default, and still emit
+`var(--loom-…)`; a custom colour is stored as the literal it is. The same shape applies to corner
+rounding — the scale first, a number beside it.
 
 **Grid flow.** Figma offers grid; loom emits flex, and a grid control that produced rows of flex
 would be a picture of a layout the app does not have (`specs/layout-model.md`).
@@ -47,6 +53,21 @@ A control is only offered where it means something: a rectangle is not asked how
 children it cannot have, and a child of an auto-layout frame is not offered coordinates it does not
 own. **Alignment is a one-off calculation**, not a rule that keeps holding — a rule that keeps
 holding is what auto layout is for.
+
+## Effects
+
+Each entry is a **composition a designer names**, not a CSS property they assemble:
+
+| Effect | What it emits |
+| --- | --- |
+| Drop shadow · Inner shadow | `box-shadow`, stacking in the order added |
+| Glass | `backdrop-filter: blur(…)`, a translucent tint over it, and the hairline edge that makes glass read as glass |
+| Noise | a grain overlay the browser draws from an SVG filter — no asset, no request, and it scales with the box — blended over the fill |
+| Layer blur | `filter: blur(…)`, which is the layer itself rather than what is behind it |
+
+Asking someone to remember that "glass" means three properties is how a design tool turns into a
+stylesheet. Everything here is still ordinary CSS in the emitted app: no runtime, no library,
+nothing to install.
 
 ## The properties this added
 
