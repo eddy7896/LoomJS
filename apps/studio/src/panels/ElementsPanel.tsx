@@ -10,7 +10,7 @@ import {
 import { useEditor } from '../state/useEditor';
 import { addComponent } from '../state/store';
 import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
-import { addDbStep, connectedTables } from '../state/connectors';
+import { addDbStep, addQueryStep, canRunSql, connectedTables } from '../state/connectors';
 
 /**
  * The element palette (S0/S1, `docs/11-editor-shell.md`).
@@ -241,6 +241,13 @@ export function ElementsPanel() {
               + {label}
             </button>
           ))}
+          {/* Where the four stop: a join, a group-by, anything the vocabulary would have to
+              become SQL to say. Offered only on a connection that can run a statement. */}
+          {canRunSql(snapshot) ? (
+            <button className="palette__item" onClick={() => addQueryStep(containerId)}>
+              + Query (SQL)
+            </button>
+          ) : null}
         </section>
       ) : null}
     </aside>

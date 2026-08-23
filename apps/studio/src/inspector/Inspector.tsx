@@ -13,6 +13,7 @@ import {
 } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
+import { QuerySection, TableSchemaSection } from './QuerySection';
 import { ActionsSection } from './ActionsSection';
 import { Section } from './Section';
 import { PositionSection } from './PositionSection';
@@ -856,7 +857,9 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
   const applicable = new Set<string>(insideRoute ? MATH_BODY_FIELDS : MATH_CANVAS_FIELDS);
   const fields =
     node.category === 'db'
-      ? dbNodeFields(node.kind as 'select' | 'insert' | 'update' | 'delete')
+      ? node.kind === 'query'
+        ? []
+        : dbNodeFields(node.kind as 'select' | 'insert' | 'update' | 'delete')
       : node.kind === 'math'
         ? (def?.fields ?? []).filter((entry) => applicable.has(entry.key))
         : (def?.fields ?? []);
@@ -881,6 +884,12 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
 
       {node.category === 'db' && node.kind === 'select' ? (
         <FiltersSection nodeId={node.id} />
+      ) : null}
+
+      {node.category === 'db' && node.kind === 'query' ? <QuerySection nodeId={node.id} /> : null}
+
+      {node.category === 'db' && typeof config.table === 'string' ? (
+        <TableSchemaSection tableName={config.table} />
       ) : null}
 
       {fields.length > 0 ? (

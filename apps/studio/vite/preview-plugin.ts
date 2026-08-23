@@ -21,6 +21,22 @@ import { createServer, type Plugin, type ViteDevServer } from 'vite';
  * it is hosting them for the Preview, not using them itself.
  */
 
+/** Kept in step with `INTROSPECT_SQL.postgres` in `packages/connectors/src/sql.ts`. */
+const INTROSPECT_POSTGRES = `
+  SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.column_default,
+         (pk.column_name IS NOT NULL) AS is_primary
+  FROM information_schema.columns c
+  LEFT JOIN (
+    SELECT kcu.table_name, kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+    WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1
+  ) pk ON pk.table_name = c.table_name AND pk.column_name = c.column_name
+  WHERE c.table_schema = $1
+  ORDER BY c.table_name, c.ordinal_position
+`;
+
 /** Preferred port; the child server falls back if it is taken, and reports its real URL. */
 export const PREVIEW_PORT = 5174;
 
@@ -37,6 +53,24 @@ const ENV_FILE = fileURLToPath(new URL('../.env.local', import.meta.url));
  * (`docs/specs/connector-credentials.md`).
  */
 const CLIENT_SCOPED = new Set(['SUPABASE_URL', 'SUPABASE_ANON_KEY']);
+
+/**
+ * The credential names this server will report holding. `DATABASE_URL` is never in CLIENT_SCOPED:
+ * a connection string carries its own password, so the studio may learn that one exists and never
+ * what it is (`docs/specs/connector-credentials.md`).
+ */
+const HELD = /^(SUPABASE_|DATABASE_URL$)/;
+
+/**
+ * A connection string, scrubbed out of whatever a driver said.
+ *
+ * `pg` puts the host in its errors and not the password, but "usually not" is not a rule, and an
+ * error message travels to a browser and into a screenshot.
+ */
+function scrub(message: string, secret: string): string {
+  const text = secret ? message.split(secret).join('the connection string') : message;
+  return text.replace(/(postgres(?:ql)?|mysql):\/\/[^\s'"]+/gi, '$1://…');
+}
 
 /** A deliberately small .env reader: KEY=VALUE, # comments, optional surrounding quotes. */
 function parseEnvFile(contents: string): Record<string, string> {
@@ -209,7 +243,7 @@ export function loomPreview(): Plugin {
         if (req.method === 'GET') {
           // Names of everything held, but values only for client-scoped credentials. A service
           // role key is loaded, used by the Preview, and never handed to a browser.
-          const names = Object.keys(process.env).filter((name) => name.startsWith('SUPABASE_'));
+          const names = Object.keys(process.env).filter((name) => HELD.test(name));
           const values: Record<string, string> = {};
           for (const name of names) {
             if (CLIENT_SCOPED.has(name)) values[name] = process.env[name] ?? '';
@@ -276,6 +310,54 @@ export function loomPreview(): Plugin {
             json(res, 200, { ok: response.ok, status: response.status, body: text });
           } catch (error) {
             json(res, 200, { ok: false, error: (error as Error).message });
+          }
+        })();
+      });
+
+      /**
+       * Schema introspection over a real connection.
+       *
+       * A browser cannot open a database socket, so this is not a relay of convenience like the
+       * Supabase one above — it is the only place the read can happen. The connection string is
+       * held here and answered with names only: tables and columns are not secret, the string is.
+       *
+       * The query itself is `INTROSPECT_SQL.postgres` in `packages/connectors/src/sql.ts`, copied
+       * rather than imported because this file must stay free of workspace imports (see the note
+       * at the top). The schema name travels as a parameter, like every other value loom sends.
+       */
+      server.middlewares.use('/__loom/introspect-sql', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+
+        void (async () => {
+          const body = JSON.parse(await readBody(req)) as {
+            connectionString?: string;
+            schema?: string;
+          };
+          // An empty string means "use what you already hold", which is how a DATABASE_URL in
+          // .env.local connects without anyone typing it into a browser.
+          const connectionString = body.connectionString || process.env.DATABASE_URL || '';
+          const schema = String(body.schema || 'public');
+
+          if (!connectionString) {
+            return json(res, 200, {
+              ok: false,
+              error: 'No connection string, and no DATABASE_URL on the dev server.',
+            });
+          }
+
+          let pool: { query: (text: string, values: unknown[]) => Promise<{ rows: unknown[] }>; end: () => Promise<void> } | undefined;
+          try {
+            const { Pool } = (await import('pg')) as unknown as {
+              Pool: new (config: Record<string, unknown>) => NonNullable<typeof pool>;
+            };
+            pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 10_000 });
+            const result = await pool.query(INTROSPECT_POSTGRES, [schema]);
+            json(res, 200, { ok: true, rows: result.rows });
+          } catch (error) {
+            json(res, 200, { ok: false, error: scrub((error as Error).message, connectionString) });
+          } finally {
+            // A studio that connects five times in a row should not leave five pools open.
+            await pool?.end().catch(() => undefined);
           }
         })();
       });

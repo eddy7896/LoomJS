@@ -1605,6 +1605,81 @@ select {
   color: var(--ink-soft);
 }
 
+.table-row--button {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.table-row__caret {
+  color: var(--ink-faint, var(--ink-soft));
+  font-size: 9px;
+}
+
+/* D2: the schema, as a table — a designer builds against these names all day. */
+.connect-form__modules {
+  display: flex;
+  gap: 4px;
+}
+
+.connect-form__modules button {
+  flex: 1;
+}
+
+.connect-form__modules .is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.schema {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 2px 0 8px;
+}
+
+.schema th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-soft);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.schema td {
+  padding: 2px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+
+.schema__type {
+  color: var(--ink-soft);
+}
+
+.schema__flags {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.schema__flag {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
+  color: var(--ink-soft);
+}
+
+.schema__flag--required {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
 /* Node categories are functional colour (guardrail 19): DB and State join UI/FN/API. */
 .nnode--db .nnode__head {
   background: color-mix(in srgb, #d98a12 14%, transparent);
@@ -1979,4 +2054,26 @@ input[type='color'] {
 .layer:hover .layer__eye,
 .layer__eye.is-hidden {
   opacity: 1;
+}
+
+/* D2: a statement is written, not assembled — so it gets room to be read. */
+.query-editor {
+  width: 100%;
+  resize: vertical;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+
+.field-group__toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }

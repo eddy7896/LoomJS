@@ -1,8 +1,14 @@
 import { newConnectorId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
+  checkConnectionString,
   createDbNode,
+  createQueryNode,
   dbNodePorts,
+  parseColumnRows,
+  queryNodePorts,
+  speaksSql,
   supabaseConnector,
+  type ColumnRow,
   type DbFilter,
   type DbNodeConfig,
   type DbOperation,
@@ -70,6 +76,23 @@ export async function pushEnvToPreview(bucket: EnvBucket = readBucket()): Promis
   } catch {
     /* the Preview simply stays unconfigured */
   }
+}
+
+/**
+ * Hand a credential to the dev server **without** keeping a copy here.
+ *
+ * The env bucket above is a convenience for values a designer would otherwise retype; a
+ * connection string is not one of those, because it carries the password to the whole database in
+ * the middle of it. It goes to the server, the server holds it, and a reload asks the server
+ * whether it still does rather than reading it back out of this browser
+ * (`docs/specs/connector-credentials.md`).
+ */
+async function sendToServer(values: EnvBucket): Promise<void> {
+  await fetch('/__loom/env', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ env: values }),
+  });
 }
 
 export interface ConnectInput {
@@ -197,23 +220,97 @@ export async function connectSupabase(input: ConnectInput): Promise<ConnectResul
   return { ok: true, connectorId, tables: introspection.tables };
 }
 
+export interface PostgresInput {
+  /** Empty means "use the DATABASE_URL the dev server already holds". */
+  connectionString: string;
+  schema?: string;
+}
+
+/**
+ * Connect straight to a database.
+ *
+ * A browser cannot open a database socket, so the read happens on loom's dev server and only the
+ * schema comes back. Connecting *is* validating here too: if the string is wrong, or the user it
+ * names cannot see the schema, that surfaces now rather than at the first query.
+ */
+export async function connectPostgres(input: PostgresInput): Promise<ConnectResult> {
+  const schema = (input.schema ?? '').trim() || 'public';
+  const connectionString = input.connectionString.trim();
+
+  if (connectionString) {
+    try {
+      checkConnectionString(connectionString, 'postgres');
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  }
+
+  let tables: TableSchema[];
+  try {
+    const response = await fetch('/__loom/introspect-sql', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ connectionString, schema }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; rows?: ColumnRow[]; error?: string };
+    if (!payload.ok) return { ok: false, error: payload.error ?? 'Could not read the schema.' };
+    tables = parseColumnRows(payload.rows ?? []);
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  // The string goes to the server and nowhere else; the document gets the schema name and the
+  // cached schema, neither of which is secret.
+  if (connectionString) await sendToServer({ DATABASE_URL: connectionString });
+
+  const existing = Object.values(getState().snapshot.connectors).find(
+    (connector) => connector.moduleId === 'postgres',
+  );
+  const connectorId = existing?.id ?? newConnectorId();
+  const config = { schema: { tables }, schemaName: schema };
+
+  if (existing) {
+    dispatch({ type: 'setConnectorConfig', connectorId, config });
+  } else {
+    dispatch({
+      type: 'addConnector',
+      connector: { id: connectorId, moduleId: 'postgres', config, credentialRef: 'default' },
+    });
+  }
+
+  return { ok: true, connectorId, tables };
+}
+
 export function supabaseConnection(snapshot: Snapshot) {
   return Object.values(snapshot.connectors).find((c) => c.moduleId === 'supabase');
 }
 
+/**
+ * The connection a project is working against.
+ *
+ * One at a time, deliberately: a database node names its connector, so two connections would be
+ * a picker on every node and a way to wire a read from one into a write to the other. That is a
+ * decision to make on purpose rather than to fall into.
+ */
+export function connection(snapshot: Snapshot) {
+  return Object.values(snapshot.connectors)[0];
+}
+
 export function connectedTables(snapshot: Snapshot): TableSchema[] {
-  const connector = supabaseConnection(snapshot);
-  const config = (connector?.config ?? {}) as { schema?: IntrospectionResult };
+  const config = (connection(snapshot)?.config ?? {}) as { schema?: IntrospectionResult };
   return config.schema?.tables ?? [];
 }
 
+/** What to show as the connection: a project URL, or the schema a database connection read. */
 export function connectionUrl(snapshot: Snapshot): string | undefined {
-  const config = (supabaseConnection(snapshot)?.config ?? {}) as { url?: string };
-  return config.url;
+  const connector = connection(snapshot);
+  if (!connector) return undefined;
+  const config = (connector.config ?? {}) as { url?: string; schemaName?: string };
+  return config.url ?? `${config.schemaName ?? 'public'} schema`;
 }
 
 export function disconnect(): void {
-  const connector = supabaseConnection(getState().snapshot);
+  const connector = connection(getState().snapshot);
   if (connector) dispatch({ type: 'removeConnector', connectorId: connector.id });
 }
 
@@ -228,7 +325,7 @@ export function addDbStep(
 ): Id | undefined {
   const snapshot = getState().snapshot;
   const api = snapshot.nodes[apiNodeId];
-  const connector = supabaseConnection(snapshot);
+  const connector = connection(snapshot);
   const table = connectedTables(snapshot).find((candidate) => candidate.name === tableName);
   if (!api || api.category !== 'api' || !connector || !table) return undefined;
 
@@ -263,6 +360,68 @@ export function addDbStep(
 
   select({ kind: 'node', id: node.id });
   return node.id;
+}
+
+/** True when the attached connection can run a statement, rather than only a request. */
+export function canRunSql(snapshot: Snapshot): boolean {
+  const connector = connection(snapshot);
+  return Boolean(connector && speaksSql(connector.moduleId));
+}
+
+/**
+ * Add a statement the designer writes themselves.
+ *
+ * The four table nodes cover what most screens need and cover it safely; a join, a group-by or a
+ * window function is where they stop. Rather than growing the vocabulary until it is SQL with
+ * dropdowns, this node *is* SQL — with the one rule kept: a `:name` is a parameter, never text
+ * spliced into the statement.
+ */
+export function addQueryStep(apiNodeId: Id): Id | undefined {
+  const snapshot = getState().snapshot;
+  const api = snapshot.nodes[apiNodeId];
+  const connector = connection(snapshot);
+  if (!api || api.category !== 'api' || !connector || !speaksSql(connector.moduleId)) {
+    return undefined;
+  }
+
+  const node = createQueryNode(
+    newNodeId(),
+    { x: api.position.x, y: api.position.y + 160 },
+    connector.id,
+  );
+  dispatch({ type: 'addNode', node });
+
+  const config = (api.config ?? {}) as { body?: Id[]; path?: string; method?: string };
+  dispatch({
+    type: 'setNodeConfig',
+    nodeId: apiNodeId,
+    config: { ...config, body: [...(config.body ?? []), node.id] },
+  });
+
+  select({ kind: 'node', id: node.id });
+  retypeRoute(apiNodeId);
+  return node.id;
+}
+
+/**
+ * Edit a statement.
+ *
+ * The names it asks for *are* its input ports, so typing `:since` into the text adds a port and
+ * deleting it takes one away — and the route that holds the step is retyped in the same breath,
+ * because its inputs are its body's shape.
+ */
+export function setQuerySql(nodeId: Id, sql: string, returns?: 'one' | 'many'): void {
+  const snapshot = getState().snapshot;
+  const node = snapshot.nodes[nodeId];
+  if (!node || node.category !== 'db' || node.kind !== 'query') return;
+
+  const config = { ...((node.config ?? {}) as Record<string, unknown>), sql, returns:
+    returns ?? ((node.config ?? {}) as { returns?: string }).returns ?? 'many' };
+
+  dispatch({ type: 'setNodeConfig', nodeId, config, ports: queryNodePorts(sql) });
+
+  const route = routeContaining(getState().snapshot, nodeId);
+  if (route) retypeRoute(route);
 }
 
 /**
