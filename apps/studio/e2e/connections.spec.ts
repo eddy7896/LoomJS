@@ -112,6 +112,8 @@ test('a statement becomes a step whose inputs are the names it asks for', async 
   // A route to hold it: database work only ever runs on the server.
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  // The statement is written where the schema is (D9).
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Query (SQL)' }).click();
 
   const editor = page.getByTestId('query-sql');
@@ -201,6 +203,7 @@ test('a comparison Firestore cannot make is not on the menu', async ({ page }) =
   // A read step, so the filter editor is on screen.
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Read rows' }).click();
   await page.getByTestId('add-filter').click();
 
@@ -343,6 +346,7 @@ test('an unindexed filter says so while the column is being chosen', async ({ pa
 
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Read rows' }).click();
   await page.getByTestId('add-filter').click();
 
@@ -352,4 +356,62 @@ test('an unindexed filter says so while the column is being chosen', async ({ pa
   // The palette's step stands on the first table, so this is that table's own column.
   await page.getByTestId('filter-0-column').selectOption('name');
   await expect(page.getByTestId('filter-0-unindexed')).toContainText('reads every row');
+});
+
+/**
+ * Where the data work lives (D9).
+ *
+ * Reading a table used to sit in the Nodes palette next to Compute and Compare, one mode switch
+ * away from the schema that says what the tables are. These check that it moved, that the Nodes
+ * palette kept what is not about a table, and that a step no longer needs a route made first.
+ */
+test('table steps live in the Data tab, not the Nodes palette', async ({ page }) => {
+  await stubSchema(page);
+  await connect(page);
+
+  await page.getByRole('button', { name: 'Nodes' }).click();
+  await page.getByTestId('rail-nodes').click();
+
+  // Gone from here…
+  await expect(page.getByRole('button', { name: '+ Read rows' })).toHaveCount(0);
+  await expect(page.getByTestId('generate-form')).toHaveCount(0);
+  // …and what is not about a table stayed.
+  await expect(page.getByRole('button', { name: '+ API route' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '+ Compute' })).toBeVisible();
+
+  await page.getByTestId('rail-data').click();
+  await expect(page.getByTestId('data-steps')).toContainText('Read rows');
+  await expect(page.getByTestId('data-elements')).toContainText('Form for');
+});
+
+test('a step brings its own route when none is selected', async ({ page }) => {
+  await stubSchema(page);
+  await connect(page);
+
+  // Straight to the step, with no route made first.
+  await page.getByTestId('rail-data').click();
+  await expect(page.getByTestId('data-steps')).toContainText('Makes an API route');
+  await page.getByRole('button', { name: '+ Read rows' }).click();
+
+  await page.getByTestId('rail-nodes').click();
+  await expect(page.locator('.nstep')).toHaveCount(1);
+
+  // With that route still selected, the panel says where the next step is going instead.
+  await page.getByTestId('rail-data').click();
+  await expect(page.getByTestId('data-steps')).toContainText('runs on the server');
+});
+
+test('a table on screen comes with the route that fills it', async ({ page }) => {
+  await stubSchema(page);
+  await connect(page);
+
+  // The panel starts on the first table alphabetically, so the one being used is chosen.
+  await page.getByTestId('data-steps').locator('select').selectOption('notes');
+  await page.getByTestId('generate-table').click();
+  await page.getByTestId('rail-design').click();
+
+  // The element, its columns named from the schema, and a route reading the rows behind it.
+  await expect(page.locator('.layer', { hasText: 'Notes table' }).first()).toBeVisible();
+  await page.getByTestId('rail-nodes').click();
+  await expect(page.locator('.nstep')).toHaveCount(1);
 });

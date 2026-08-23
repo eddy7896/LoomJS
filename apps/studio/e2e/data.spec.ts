@@ -84,7 +84,10 @@ test('rows from the database render in the Preview, and a form writes one back',
   // reactive — it runs on mount.
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  // Table steps live in the Data tab, beside the schema that says what the tables are (D9).
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Read rows' }).click();
+  await page.getByTestId('rail-nodes').click();
   await expect(page.locator('.nstep')).toHaveCount(1);
 
   await drag(
@@ -104,7 +107,9 @@ test('rows from the database render in the Preview, and a form writes one back',
   await page.getByRole('button', { name: 'Nodes' }).click();
   await page.locator('.react-flow__pane').click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Insert row' }).click();
+  await page.getByTestId('rail-nodes').click();
 
   const write = graphNode(page, 'API route').last();
   await drag(page, handle(graphNode(page, 'Save'), 'pt_click'), handle(write, 'pt_run'));
@@ -161,7 +166,9 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
 
   // Read.
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Read rows' }).click();
+  await page.getByTestId('rail-nodes').click();
   await drag(
     page,
     handle(graphNode(page, 'API route'), 'pt_result'),
@@ -171,7 +178,9 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   // Update.
   await page.locator('.react-flow__pane').click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Update row' }).click();
+  await page.getByTestId('rail-nodes').click();
   const edit = graphNode(page, 'API route').last();
   await drag(page, handle(graphNode(page, 'Rename'), 'pt_click'), handle(edit, 'pt_run'));
   await drag(page, handle(graphNode(page, 'Which'), 'pt_value'), handle(edit, 'pt_id'));
@@ -180,7 +189,9 @@ test('a row can be edited and removed, and the list keeps up', async ({ page, re
   // Delete.
   await page.locator('.react-flow__pane').click();
   await page.getByRole('button', { name: '+ API route' }).click();
+  await page.getByTestId('rail-data').click();
   await page.getByRole('button', { name: '+ Delete row' }).click();
+  await page.getByTestId('rail-nodes').click();
   const remove = graphNode(page, 'API route').last();
   await drag(page, handle(graphNode(page, 'Remove'), 'pt_click'), handle(remove, 'pt_run'));
   await drag(page, handle(graphNode(page, 'Which'), 'pt_value'), handle(remove, 'pt_id'));

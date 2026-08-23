@@ -22,6 +22,7 @@ import {
 } from '../state/connectors';
 import { SchemaList } from './SchemaTable';
 import { NewTable } from './SchemaEditor';
+import { DataWorkPanel } from './DataWorkPanel';
 
 /**
  * Connections live here. The panel can write credentials and prove they work; it can never read
@@ -155,6 +156,10 @@ export function DataPanel() {
             tables={tables}
             editing={editing === 'sql' || editing === 'shape' ? editing : undefined}
           />
+
+          {/* Reading a table, and putting one on a screen, belong beside the schema that says
+              what the tables are — not in the Nodes palette next to Compute (D9). */}
+          <DataWorkPanel />
         </>
       ) : null}
 

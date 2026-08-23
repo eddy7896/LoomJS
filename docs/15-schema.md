@@ -81,6 +81,7 @@ normal edit.
 | **D6** | Relations, unique constraints and indexes                              | done  |
 | **D7** | Migrations emitted into the repo, and seeding a table with rows        | done  |
 | **D8** | The elements: a Table that renders rows, a Form built from columns     | done  |
+| **D9** | All of it in one tab: the data work moves next to the data              | done  |
 
 ## What happens after a change
 
@@ -158,3 +159,25 @@ nothing performs. So the form reports the field it could not connect, with the r
 laying out something that looks finished and drops what you type into it. Closing that gap
 properly — a conversion step, or a date type that admits it is a string — is a decision, not an
 oversight.
+
+## One tab for data
+
+Reading a table used to be in the **Nodes** palette, next to Compute and Compare — one mode switch
+away from the schema that says what the tables are. A designer thinking about data was reading one
+panel and clicking in another, and the two panels never agreed about which table they meant.
+
+So everything about a table is in the **Data** tab now: the connection, the schema, the seven
+things you can do to a table, the written statement, and the two elements generated *from* a table
+— a Table of it, and a Form for it. The Nodes palette keeps what is not about a table: API routes,
+logic, values, the Current user node. Nothing is duplicated between them.
+
+Two things fell out of moving it:
+
+**A step brings its own route.** Server work lives inside an API route, and the old panel simply
+did not offer the buttons until one was selected. Now the step makes the route if there is not one
+— the same node, one click earlier.
+
+**And the next step joins the same route.** Adding a step selects that *step*, so a panel that only
+recognised a selected route would have started a second route for the second step. Two routes
+doing one job is not what anybody drew, so the panel follows a selected step back to the route
+holding it and says which one the next step is going into.

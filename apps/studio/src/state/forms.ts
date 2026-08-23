@@ -156,3 +156,36 @@ export function generateForm(tableName: string, parentId?: Id): GeneratedForm | 
   selectComponent(frame.id);
   return { frameId: frame.id, unwired };
 }
+
+/**
+ * A table on screen, reading a table in the database (D9).
+ *
+ * The other half of the form: a Table element with the columns already named, a route that reads
+ * the rows, and the binding between them. Same rule as the form — what it makes is ordinary
+ * components and an ordinary route, editable afterwards.
+ */
+export function generateTable(tableName: string, parentId?: Id): Id | undefined {
+  const snapshot = getState().snapshot;
+  const table = connectedTables(snapshot).find((candidate) => candidate.name === tableName);
+  const root = parentId ?? snapshot.artboards[getState().activeArtboardId]?.root;
+  if (!table || !root) return undefined;
+
+  const element = make('Table', `${labelFor(table.name)} table`, {
+    // Named from the schema rather than discovered from the first row, which is the whole
+    // reason a Table names its columns at all.
+    columns: table.columns.map((column) => column.name).join(', '),
+    empty: `No ${table.name} yet`,
+  });
+  dispatch({ type: 'addComponent', component: element, parentId: root });
+
+  const route = addGraphNode('api', 'route');
+  if (!addDbStep(route, table.name, 'select')) return element.id;
+
+  // The binding is drawn the way a designer would draw it: the route's result into the element's
+  // items port, which the wire turns into the property.
+  const mirror = ensureMirror(element.id, { x: 0, y: 0 });
+  if (mirror) connect({ nodeId: route, portId: 'pt_result' }, { nodeId: mirror, portId: 'pt_items' });
+
+  selectComponent(element.id);
+  return element.id;
+}

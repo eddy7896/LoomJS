@@ -10,8 +10,6 @@ import {
 import { useEditor } from '../state/useEditor';
 import { addComponent } from '../state/store';
 import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
-import { addDbStep, addQueryStep, canRunSql, connectedTables } from '../state/connectors';
-import { generateForm } from '../state/forms';
 
 /**
  * The element palette (S0/S1, `docs/11-editor-shell.md`).
@@ -103,16 +101,12 @@ export function ElementsPanel() {
   // Which sections you keep shut is a preference, not project data: it belongs to the browser,
   // never to the snapshot. Losing it on every reload made the setting not worth having.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
-  const [table, setTable] = useState('');
-  const [unwired, setUnwired] = useState<{ column: string; reason: string }[]>([]);
 
   // A function node added while an API route is selected goes *into* its body — the server side.
   const containerId =
     selection?.kind === 'node' && snapshot.nodes[selection.id]?.category === 'api'
       ? selection.id
       : undefined;
-
-  const tables = connectedTables(snapshot);
 
   const sections = useMemo(() => {
     if (mode === 'design') {
@@ -210,90 +204,6 @@ export function ElementsPanel() {
         />
       ))}
 
-      {mode === 'nodes' && containerId && tables.length > 0 ? (
-        <section className="palette__section">
-          <div className="palette__head">Table steps</div>
-          <select
-            className="palette__select"
-            value={table}
-            onChange={(event) => setTable(event.target.value)}
-            aria-label="Table"
-          >
-            {tables.map((candidate) => (
-              <option key={candidate.name} value={candidate.name}>
-                {candidate.name}
-              </option>
-            ))}
-          </select>
-          {/* What you can do to a table. Read and insert were the whole vocabulary until P4; an
-              app that cannot edit or remove a row is a demo. Count, Save and Total are D3: the
-              three things a screen kept asking for that the first four could not say. */}
-          {(
-            [
-              ['select', 'Read rows'],
-              ['insert', 'Insert row'],
-              ['update', 'Update row'],
-              ['delete', 'Delete row'],
-              ['count', 'Count rows'],
-              ['upsert', 'Save row'],
-              ['aggregate', 'Total a column'],
-            ] as const
-          ).map(([operation, label]) => (
-            <button
-              key={operation}
-              className="palette__item"
-              onClick={() => addDbStep(containerId, table || tables[0]!.name, operation)}
-            >
-              + {label}
-            </button>
-          ))}
-          {/* Where the four stop: a join, a group-by, anything the vocabulary would have to
-              become SQL to say. Offered only on a connection that can run a statement. */}
-          {canRunSql(snapshot) ? (
-            <button className="palette__item" onClick={() => addQueryStep(containerId)}>
-              + Query (SQL)
-            </button>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* The form everyone builds by hand: a field per column, wired to a route that writes the
-          row. What it makes is ordinary components, editable afterwards (D8). */}
-      {mode === 'design' && tables.length > 0 ? (
-        <section className="palette__section">
-          <div className="palette__head">From a table</div>
-          <select
-            className="palette__select"
-            value={table}
-            onChange={(event) => setTable(event.target.value)}
-            aria-label="Table for a form"
-          >
-            {tables.map((candidate) => (
-              <option key={candidate.name} value={candidate.name}>
-                {candidate.name}
-              </option>
-            ))}
-          </select>
-          <button
-            className="palette__item"
-            data-testid="generate-form"
-            onClick={() => {
-              const made = generateForm(table || tables[0]!.name);
-              setUnwired(made?.unwired ?? []);
-            }}
-          >
-            + Form for {table || tables[0]!.name}
-          </button>
-          {/* A field wired to nothing looks finished and is not, so what could not be wired is
-              said here rather than left to be discovered by an empty column (D8). */}
-          {unwired.length > 0 ? (
-            <p className="panel__hint" data-testid="form-unwired">
-              {unwired.map((entry) => entry.column).join(', ')} could not be wired:{' '}
-              {unwired[0]!.reason} Wire it by hand in Nodes, or store it as text.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
     </aside>
   );
 }
