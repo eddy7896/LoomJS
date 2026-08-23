@@ -18,6 +18,9 @@ import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { select } from '../state/store';
 import {
+  groupNodes,
+  removeNodeGroup,
+  renameNodeGroup,
   connect,
   ensureMirror,
   graphNodesFor,
@@ -113,13 +116,64 @@ function LoomNode({ data, selected }: NodeProps) {
   );
 }
 
-const nodeTypes = { loom: LoomNode };
+/**
+ * A named box drawn behind some nodes (G2, `docs/16-grouping.md`).
+ *
+ * It is how the graph is *read* — "these four are the sign-up flow" — and nothing else. What
+ * groups nodes for execution is an API route's body, and this is deliberately not that: a box
+ * that quietly changed what ran would be two ideas wearing one shape.
+ *
+ * The box has `pointer-events: none` over its middle, so the nodes inside stay clickable and the
+ * only things you can grab are its title and its ×.
+ */
+function GroupBox({ data }: { data: GroupBoxData }) {
+  return (
+    <div className="ngroup" style={{ width: data.width, height: data.height }}>
+      <div className="ngroup__head">
+        <input
+          className="ngroup__title"
+          data-testid={`group-title-${data.id}`}
+          value={data.title}
+          onChange={(event) => renameNodeGroup(data.id, event.target.value)}
+        />
+        <button
+          className="ngroup__remove"
+          data-testid={`ungroup-${data.id}`}
+          title="Remove this box, keeping the nodes"
+          onClick={() => removeNodeGroup(data.id)}
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface GroupBoxData {
+  id: string;
+  title: string;
+  width: number;
+  height: number;
+}
+
+const nodeTypes = { loom: LoomNode, ngroup: GroupBox };
+
+/** Room for the title bar above the topmost node, and a margin around the rest. */
+const GROUP_PADDING = 24;
+const GROUP_HEADER = 34;
+
+/** A node's size on the canvas, near enough to draw a box around it. */
+const NODE_WIDTH = 210;
+const NODE_HEIGHT = 90;
 
 export function NodesCanvas() {
   const snapshot = useEditor((s) => s.snapshot);
   const selection = useEditor((s) => s.selection);
   const activeArtboardId = useEditor((s) => s.activeArtboardId);
   const [problem, setProblem] = useState<string | undefined>();
+  // React Flow owns the multiple selection here — it already has the shift-drag box — so what is
+  // kept is only which ids it reported.
+  const [picked, setPicked] = useState<string[]>([]);
 
   // Components that could be mirrored but have not been wired yet still need somewhere to sit.
   const pendingMirrors = useMemo(() => {
@@ -138,6 +192,47 @@ export function NodesCanvas() {
     }
     return ids;
   }, [snapshot.nodes]);
+
+  /**
+   * One box per group, sized from where its members currently sit.
+   *
+   * Computed rather than stored: a stored box would drift the moment a node inside it moved, and
+   * a box that no longer contains what it claims to is worse than no box.
+   */
+  const groupBoxes: FlowNode[] = useMemo(() => {
+    const boxes: FlowNode[] = [];
+
+    for (const group of Object.values(snapshot.nodeGroups ?? {})) {
+      const members = group.nodeIds
+        .map((id) => snapshot.nodes[id])
+        .filter((node): node is Node => Boolean(node) && !bodyIds.has(node!.id));
+      if (members.length === 0) continue;
+
+      const left = Math.min(...members.map((node) => node.position.x));
+      const top = Math.min(...members.map((node) => node.position.y));
+      const right = Math.max(...members.map((node) => node.position.x + NODE_WIDTH));
+      const bottom = Math.max(...members.map((node) => node.position.y + NODE_HEIGHT));
+
+      boxes.push({
+        id: `group:${group.id}`,
+        type: 'ngroup',
+        draggable: false,
+        selectable: false,
+        // Behind everything: React Flow paints in order, and a box over its own nodes would
+        // swallow every click meant for them.
+        zIndex: -1,
+        position: { x: left - GROUP_PADDING, y: top - GROUP_PADDING - GROUP_HEADER },
+        data: {
+          id: group.id,
+          title: group.title,
+          width: right - left + GROUP_PADDING * 2,
+          height: bottom - top + GROUP_PADDING * 2 + GROUP_HEADER,
+        } satisfies GroupBoxData,
+      } as FlowNode);
+    }
+
+    return boxes;
+  }, [snapshot.nodeGroups, snapshot.nodes, bodyIds]);
 
   const flowNodes: FlowNode[] = useMemo(() => {
     const graphNodes = graphNodesFor(snapshot, activeArtboardId)
@@ -235,8 +330,17 @@ export function NodesCanvas() {
 
   return (
     <div className="nodes-canvas">
+      {picked.length > 1 ? (
+        <button className="nodes-canvas__group" data-testid="group-nodes" onClick={() => {
+          groupNodes(picked);
+          setPicked([]);
+        }}>
+          Group {picked.length} nodes
+        </button>
+      ) : null}
+
       <ReactFlow
-        nodes={flowNodes}
+        nodes={[...groupBoxes, ...flowNodes]}
         edges={edges}
         nodeTypes={nodeTypes}
         onConnect={onConnect}
@@ -246,12 +350,22 @@ export function NodesCanvas() {
             ? select({ kind: 'component', id: node.id.slice('pending:'.length) })
             : select({ kind: 'node', id: node.id })
         }
+        onSelectionChange={({ nodes: selectedNodes }) =>
+          setPicked(
+            selectedNodes
+              .filter((node) => node.type === 'loom' && !node.id.startsWith('pending:'))
+              .map((node) => node.id),
+          )
+        }
         onEdgeClick={(_, edge) => select({ kind: 'wire', id: edge.id })}
         onEdgesDelete={(deleted) => deleted.forEach((edge) => removeWire(edge.id))}
         onPaneClick={() => {
           select(undefined);
           setProblem(undefined);
         }}
+        // Shift-drag draws a selection box, which is what makes grouping possible at all.
+        selectionOnDrag
+        panOnDrag={[1, 2]}
         fitView
         // React Flow stops zooming out at 0.5 by default, which is not far enough to fit a
         // pipeline and its mirrors into the pane while the Preview is open — "Fit view" would

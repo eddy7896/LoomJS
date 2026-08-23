@@ -1,4 +1,5 @@
 import {
+  newId,
   newNodeId,
   newPortId,
   newWireId,
@@ -318,3 +319,29 @@ export function graphNodesFor(snapshot: Snapshot, artboardId: Id): Node[] {
 
 /** A fresh port id, for definitions that need one at runtime. */
 export const freshPortId = (): string => newPortId();
+
+/**
+ * Draw a box around some nodes (G2, `docs/16-grouping.md`).
+ *
+ * Editor metadata, kept in the document because it is a fact about the project a colleague should
+ * see when they open it — not a preference like which panels are collapsed. Nothing about it
+ * reaches the emitted app.
+ */
+export function groupNodes(nodeIds: readonly Id[], title = 'Group'): Id | undefined {
+  const snapshot = getState().snapshot;
+  const members = nodeIds.filter((id) => snapshot.nodes[id]);
+  if (members.length < 2) return undefined;
+
+  const id = newId('ng');
+  dispatch({ type: 'addNodeGroup', group: { id, title, nodeIds: [...members] } });
+  return id;
+}
+
+export function renameNodeGroup(groupId: Id, title: string): void {
+  dispatch({ type: 'setNodeGroup', groupId, title });
+}
+
+/** Take the box away and leave the nodes exactly where they are. */
+export function removeNodeGroup(groupId: Id): void {
+  dispatch({ type: 'removeNodeGroup', groupId });
+}

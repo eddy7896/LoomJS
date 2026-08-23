@@ -13,6 +13,7 @@ import {
   resizeTo,
 } from '../src/state/store';
 import { groupSelection, groupingProblem, ungroup } from '../src/state/grouping';
+import { addGraphNode, groupNodes, removeNode, removeNodeGroup } from '../src/state/graph';
 
 /**
  * Grouping (G1, `docs/16-grouping.md`).
@@ -210,5 +211,61 @@ describe('what a group is', () => {
       file.path.startsWith('src/artboards/'),
     )!;
     expect(home.content).toContain('position: "absolute"');
+  });
+});
+
+describe('grouping nodes in the graph', () => {
+  it('draws a box around them, and changes nothing that runs', () => {
+    __resetStore();
+    addArtboard('Home');
+    const first = addGraphNode('api', 'route');
+    const second = addGraphNode('fn', 'compute');
+
+    const group = groupNodes([first, second], 'Sign up')!;
+    const stored = getState().snapshot.nodeGroups![group]!;
+    expect(stored.title).toBe('Sign up');
+    expect(stored.nodeIds).toEqual([first, second]);
+
+    // The nodes are untouched: a box is how the graph reads, not what it does.
+    expect(getState().snapshot.nodes[first]!.config).toEqual(
+      getState().snapshot.nodes[first]!.config,
+    );
+    expect(compile(getState().snapshot).files.some((file) => file.content.includes('Sign up'))).toBe(
+      false,
+    );
+  });
+
+  it('needs two nodes, because one node is not a group', () => {
+    __resetStore();
+    addArtboard('Home');
+    const only = addGraphNode('fn', 'compute');
+    expect(groupNodes([only])).toBeUndefined();
+  });
+
+  it('removing the box leaves the nodes where they are', () => {
+    __resetStore();
+    addArtboard('Home');
+    const first = addGraphNode('fn', 'compute');
+    const second = addGraphNode('fn', 'compute');
+    const group = groupNodes([first, second])!;
+
+    removeNodeGroup(group);
+    expect(getState().snapshot.nodeGroups?.[group]).toBeUndefined();
+    expect(getState().snapshot.nodes[first]).toBeDefined();
+    expect(getState().snapshot.nodes[second]).toBeDefined();
+  });
+
+  it('a group whose last node is deleted goes with it', () => {
+    __resetStore();
+    addArtboard('Home');
+    const first = addGraphNode('fn', 'compute');
+    const second = addGraphNode('fn', 'compute');
+    const group = groupNodes([first, second])!;
+
+    removeNode(first);
+    expect(getState().snapshot.nodeGroups![group]!.nodeIds).toEqual([second]);
+    removeNode(second);
+    // A box around nothing is not a box.
+    expect(getState().snapshot.nodeGroups?.[group]).toBeUndefined();
   });
 });

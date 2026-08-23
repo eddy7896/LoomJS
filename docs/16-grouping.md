@@ -53,3 +53,22 @@ on the grounds that layout belongs to containers — but that stopped being true
 sizes, since a Shape or a Table carries a layout to hold one. It now starts from the default layout
 instead, and the test that encoded the old rule was rewritten to state the new one rather than
 deleted.
+
+## Grouping nodes
+
+A node group is a **named box drawn behind some nodes** — "these four are the sign-up flow" — and
+nothing else. It changes nothing about what runs, and the compiler never looks at it. What already
+groups nodes for execution is an API route's body, and this is deliberately not that: a box that
+quietly changed what ran would be two ideas wearing one shape.
+
+It lives in the document rather than in the browser, because it is a fact about the project a
+colleague opening it should see, not a preference like which panels are collapsed.
+
+The box is **computed from where its members sit**, never stored. A stored box would drift the
+moment a node inside it moved, and a box that no longer contains what it claims to is worse than
+no box at all. It paints behind the nodes with pointer events off over its middle, so the only
+things you can grab are its title and its ×; removing it leaves every node exactly where it is,
+and deleting the last node in a group takes the box with it.
+
+Shift-drag on the nodes canvas draws a selection box — React Flow's own — and a button appears
+saying how many nodes it will wrap.

@@ -2156,3 +2156,47 @@ input[type='color'] {
   outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 1px;
 }
+
+/* G2: a named box behind some nodes. It says how the graph reads; it changes nothing that runs. */
+.ngroup {
+  border: 1px dashed color-mix(in srgb, var(--ink-soft) 45%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink-soft) 5%, transparent);
+  pointer-events: none;
+}
+
+.ngroup__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  /* Only the title bar is grabbable: the nodes inside have to stay clickable. */
+  pointer-events: auto;
+}
+
+.ngroup__title {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding: 0;
+}
+
+.ngroup__remove {
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.nodes-canvas__group {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}

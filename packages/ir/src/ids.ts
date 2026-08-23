@@ -7,7 +7,7 @@ import { nanoid } from 'nanoid';
  * Ids are prefixed for readability in the snapshot JSON: `cp_V1StGXR8_Z`.
  */
 
-export type IdPrefix = 'pj' | 'ab' | 'cp' | 'nd' | 'wr' | 'fl' | 'pt' | 'cn' | 'au' | 'mg';
+export type IdPrefix = 'pj' | 'ab' | 'cp' | 'nd' | 'wr' | 'fl' | 'pt' | 'cn' | 'au' | 'mg' | 'ng';
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${nanoid(10)}`;

@@ -11,6 +11,7 @@ import type {
   ConditionalStyle,
   Layout,
   Migration,
+  NodeGroup,
   Param,
   ScreenSize,
   Style,
@@ -62,6 +63,9 @@ export type Op =
   | { type: 'addConnector'; connector: ConnectorInstance }
   | { type: 'setConnectorConfig'; connectorId: string; config: unknown }
   | { type: 'recordMigration'; migration: Migration }
+  | { type: 'addNodeGroup'; group: NodeGroup }
+  | { type: 'setNodeGroup'; groupId: string; title?: string; nodeIds?: string[] }
+  | { type: 'removeNodeGroup'; groupId: string }
   | { type: 'removeConnector'; connectorId: string }
   | { type: 'acceptAuto'; group: string }
   | { type: 'detachAuto'; group: string }
@@ -256,6 +260,15 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
           config.body = config.body.filter((id) => id !== op.nodeId);
         }
       }
+      // A group is a box around nodes; one whose last node is gone is a box around nothing.
+      if (next.nodeGroups) {
+        const groups: typeof next.nodeGroups = {};
+        for (const [groupId, group] of Object.entries(next.nodeGroups)) {
+          const nodeIds = group.nodeIds.filter((id) => id !== op.nodeId);
+          if (nodeIds.length > 0) groups[groupId] = { ...group, nodeIds };
+        }
+        next.nodeGroups = groups;
+      }
       return next;
     }
 
@@ -334,6 +347,33 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         throw new Error(`setEntryArtboard: unknown artboard ${op.artboardId}`);
       }
       next.entryArtboard = op.artboardId;
+      return next;
+    }
+
+    case 'addNodeGroup': {
+      next.nodeGroups = { ...(next.nodeGroups ?? {}), [op.group.id]: op.group };
+      return next;
+    }
+
+    case 'setNodeGroup': {
+      const group = next.nodeGroups?.[op.groupId];
+      if (!group) throw new Error(`setNodeGroup: unknown group ${op.groupId}`);
+      next.nodeGroups = {
+        ...next.nodeGroups,
+        [op.groupId]: {
+          ...group,
+          ...(op.title === undefined ? {} : { title: op.title }),
+          ...(op.nodeIds === undefined ? {} : { nodeIds: op.nodeIds }),
+        },
+      };
+      return next;
+    }
+
+    case 'removeNodeGroup': {
+      if (!next.nodeGroups) return next;
+      const rest = { ...next.nodeGroups };
+      delete rest[op.groupId];
+      next.nodeGroups = rest;
       return next;
     }
 

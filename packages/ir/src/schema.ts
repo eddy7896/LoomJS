@@ -515,6 +515,28 @@ export const ConnectorInstanceSchema = z.object({
 export type ConnectorInstance = z.infer<typeof ConnectorInstanceSchema>;
 
 // ---------------------------------------------------------------------------
+// Node groups (G2) — editor metadata, never emitted
+// ---------------------------------------------------------------------------
+
+/**
+ * A named box drawn around some nodes (`docs/16-grouping.md`).
+ *
+ * Purely how the graph is *read*: "these four are the sign-up flow". It changes nothing about what
+ * runs, and the compiler never looks at it — the thing that already groups nodes for execution is
+ * an API route's body, and this is deliberately not that.
+ *
+ * It lives in the document rather than in the browser because it is a fact about the project that
+ * a colleague opening it should see, not a preference like which panels are collapsed.
+ */
+export const NodeGroupSchema = z.object({
+  id: IdSchema,
+  title: z.string(),
+  /** Members, by node id. A group whose nodes are all gone is dropped with them. */
+  nodeIds: z.array(IdSchema),
+});
+export type NodeGroup = z.infer<typeof NodeGroupSchema>;
+
+// ---------------------------------------------------------------------------
 // Migrations
 // ---------------------------------------------------------------------------
 
@@ -567,6 +589,8 @@ export const SnapshotSchema = z.object({
    * changed a schema, which is most of them.
    */
   migrations: z.array(MigrationSchema).optional(),
+  /** Named boxes drawn around nodes. Editor metadata: nothing here reaches the emitted app. */
+  nodeGroups: z.record(z.string(), NodeGroupSchema).optional(),
 });
 export type Snapshot = z.infer<typeof SnapshotSchema>;
 
