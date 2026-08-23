@@ -223,14 +223,18 @@ export function ElementsPanel() {
               </option>
             ))}
           </select>
-          {/* The four things you can do to a table. Read and insert were the whole vocabulary
-              until P4; an app that cannot edit or remove a row is a demo. */}
+          {/* What you can do to a table. Read and insert were the whole vocabulary until P4; an
+              app that cannot edit or remove a row is a demo. Count, Save and Total are D3: the
+              three things a screen kept asking for that the first four could not say. */}
           {(
             [
               ['select', 'Read rows'],
               ['insert', 'Insert row'],
               ['update', 'Update row'],
               ['delete', 'Delete row'],
+              ['count', 'Count rows'],
+              ['upsert', 'Save row'],
+              ['aggregate', 'Total a column'],
             ] as const
           ).map(([operation, label]) => (
             <button

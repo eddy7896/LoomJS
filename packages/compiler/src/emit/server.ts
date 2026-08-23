@@ -121,6 +121,17 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   }`;
   }
 
+  if (config.operation === 'upsert') {
+    // PostgREST resolves the clash on the primary key itself, so this is the same one call the
+    // SQL side makes — insert, or update the row that was already there.
+    return `  {
+    const row = (value ?? {}) as Record<string, unknown>;
+    const { data, error } = await supabase.from(${name}).upsert(row).select().single();
+    if (error) throw new Error(error.message);
+    value = data;
+  }`;
+  }
+
   if (config.operation === 'update') {
     // The identity is pulled out and the rest is the patch; sending the key back as a column
     // would ask the database to rewrite the row it is being used to find.
@@ -154,6 +165,16 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   }`;
   }
 
+  if (config.operation === 'aggregate') {
+    // PostgREST can do this only where the server has been set up for it, and a node that
+    // compiles against one project and fails against the next is worse than one that says so.
+    throw new CompileError(
+      'A total is worked out by the database, and this connection is reached over HTTP. Connect ' +
+        'to the database directly to use it, or read the rows and total them on the screen.',
+      node.id,
+    );
+  }
+
   const limit = Number(config.limit ?? 100);
   const orderBy = String(config.orderBy ?? '').trim();
   // Sorting and limiting belong to the query, not to a loop the designer would have to write.
@@ -167,6 +188,17 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   const input = filters.some((filter) => filter.source === 'input')
     ? '    const input = (value ?? {}) as Record<string, unknown>;\n'
     : '';
+
+  if (config.operation === 'count') {
+    // `head: true` asks for the number without the rows: PostgREST answers it in the
+    // Content-Range header, so counting a large table costs one small response.
+    return `  {
+${input}    let query = supabase.from(${name}).select('*', { count: 'exact', head: true });${narrowing}
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    value = count ?? 0;
+  }`;
+  }
 
   return `  {
 ${input}    let query = supabase
@@ -187,7 +219,10 @@ ${input}    let query = supabase
  */
 function primaryKeyName(node: Node, snapshot: Snapshot, table: string): string {
   const config = (node.config ?? {}) as Partial<DbNodeConfig>;
-  if (config.operation !== 'update' && config.operation !== 'delete') return 'id';
+  // An upsert needs the real key too: it is the column the clash is resolved on.
+  const needsKey =
+    config.operation === 'update' || config.operation === 'delete' || config.operation === 'upsert';
+  if (!needsKey) return 'id';
 
   const connector = config.connectorId ? snapshot.connectors[config.connectorId] : undefined;
   const schema = (connector?.config as { schema?: { tables?: { name: string; columns?: { name: string; primaryKey?: boolean }[] }[] } } | undefined)?.schema;

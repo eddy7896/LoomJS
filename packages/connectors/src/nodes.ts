@@ -12,7 +12,25 @@ import type { ColumnSchema, TableSchema } from './module';
  * The four things you can do to a table (P4). `update` and `delete` need a **row identity**, which
  * is the primary key from introspection — not a concept a designer has to supply.
  */
-export type DbOperation = 'select' | 'insert' | 'update' | 'delete';
+export type DbOperation =
+  | 'select'
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'count'
+  | 'upsert'
+  | 'aggregate';
+
+/**
+ * The three operations added in D3, and why each one is a node rather than a query someone writes.
+ *
+ * `count` because "how many" is a number on a screen, and getting it by reading every row and
+ * measuring the list is both slow and wrong past the limit. `upsert` because "save this" is one
+ * button whether or not the row exists, and doing it as read-then-branch-then-write is three
+ * nodes and a race. `aggregate` because a total is the other number that ends up on a screen.
+ */
+export const AGGREGATE_FNS = ['sum', 'avg', 'min', 'max'] as const;
+export type AggregateFn = (typeof AGGREGATE_FNS)[number];
 
 /**
  * How a filter's comparison value arrives.
@@ -51,6 +69,9 @@ export interface DbNodeConfig {
   descending?: boolean;
   /** Narrowing on a read. Empty means every row the limit allows. */
   filters?: DbFilter[];
+  /** Aggregate options: which column, and what to do to it. */
+  column?: string;
+  fn?: AggregateFn;
 }
 
 /** The column that identifies a row. Update and delete are impossible without one. */
@@ -69,12 +90,34 @@ export const ID_PORT = 'pt_id';
  * order are part of it — that is also loom's answer to "where is the loop": you narrow the query
  * and a List renders one row at a time (`04-hallucination-check.md`: loops are never nodes).
  */
-export function dbNodeFields(operation: DbOperation): readonly {
+export function dbNodeFields(
+  operation: DbOperation,
+  table?: TableSchema,
+): readonly {
   key: string;
   label: string;
-  control: 'text' | 'number' | 'boolean';
+  control: 'text' | 'number' | 'boolean' | 'select';
   default: string | number | boolean;
+  options?: readonly string[];
 }[] {
+  if (operation === 'aggregate') {
+    // Only the columns worth doing arithmetic to: offering `sum` on a name is an error the
+    // database would report at run time, from a dropdown that suggested it.
+    const numeric = (table?.columns ?? [])
+      .filter((column) => column.type.kind === 'number')
+      .map((column) => column.name);
+    return [
+      { key: 'fn', label: 'Function', control: 'select', default: 'sum', options: AGGREGATE_FNS },
+      {
+        key: 'column',
+        label: 'Column',
+        control: 'select',
+        default: numeric[0] ?? '',
+        options: numeric,
+      },
+    ];
+  }
+
   if (operation !== 'select') return [];
   return [
     { key: 'limit', label: 'Limit', control: 'number', default: 100 },
@@ -115,10 +158,9 @@ export function dbNodePorts(
   operation: DbOperation,
   filters: readonly DbFilter[] = [],
 ): Port[] {
-  if (operation === 'select') {
-    // A filter comparing against an input becomes a port, which becomes a route input: that is
-    // the whole of "search" — the value the person typed travels the same road as a form field.
-    const supplied = filters
+  /** A filter supplied at call time is a port here, and a route input one level up. */
+  const supplied = (): Port[] =>
+    filters
       .filter((filter) => filter.source === 'input')
       .map((filter) => {
         const column = table.columns.find((candidate) => candidate.name === filter.column);
@@ -128,9 +170,23 @@ export function dbNodePorts(
         });
       });
 
+  if (operation === 'count') {
+    return [...supplied(), port('pt_count', 'count', 'out', { kind: 'number' })];
+  }
+
+  if (operation === 'aggregate') {
+    // Optional, because a total over no rows is not zero — `min` of nothing has no answer, and
+    // answering 0 would be a number on a screen that means something else.
+    return [
+      ...supplied(),
+      port('pt_value', 'value', 'out', { kind: 'optional', of: { kind: 'number' } }),
+    ];
+  }
+
+  if (operation === 'select') {
     // A select yields rows; per-column typing shows up when a row is read downstream.
     return [
-      ...supplied,
+      ...supplied(),
       port('pt_rows', 'rows', 'out', { kind: 'list', of: { kind: 'record' } }),
       port('pt_count', 'count', 'out', { kind: 'number' }),
     ];
@@ -140,7 +196,11 @@ export function dbNodePorts(
   const identity =
     operation === 'update' || operation === 'delete'
       ? [port(ID_PORT, key?.name ?? 'id', 'in', key?.type ?? { kind: 'text' })]
-      : [];
+      : // An upsert takes the key as a *column*: supplied, it decides which row is written;
+        // left out, the database makes one, and the same node covers both.
+        operation === 'upsert' && key
+        ? [port(columnPortId(key.name), key.name, 'in', { kind: 'optional', of: key.type })]
+        : [];
 
   if (operation === 'delete') {
     return [...identity, port('pt_row', 'row', 'out', { kind: 'record' })];
@@ -148,7 +208,7 @@ export function dbNodePorts(
 
   return [
     ...identity,
-    ...columnInputs(table, operation === 'update'),
+    ...columnInputs(table, operation === 'update' || operation === 'upsert'),
     port('pt_row', 'row', 'out', { kind: 'record' }),
   ];
 }
@@ -158,6 +218,9 @@ const OPERATION_LABELS: Record<DbOperation, string> = {
   insert: 'Insert',
   update: 'Update',
   delete: 'Delete',
+  count: 'Count',
+  upsert: 'Save',
+  aggregate: 'Total',
 };
 
 /**

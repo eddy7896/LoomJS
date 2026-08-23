@@ -1459,3 +1459,54 @@ export function postgresSnapshot(): Snapshot {
     },
   };
 }
+
+/**
+ * A Postgres project using the operations added in D3, one route each.
+ *
+ * The point of the fixture is the emitted file rather than the screen: a count, a save and a
+ * total have to type-check next to each other in one project, sharing one pool and one set of
+ * helpers. Each route's result is shown somewhere, because a route no screen reads is not
+ * emitted — reachability is what decides what an app contains.
+ */
+export function postgresOperationsSnapshot(): Snapshot {
+  const base = postgresSnapshot();
+  const ops: Op[] = [];
+
+  const steps = [
+    { id: 'nd_count', operation: 'count' as const, config: {} },
+    { id: 'nd_upsert', operation: 'upsert' as const, config: {} },
+    { id: 'nd_total', operation: 'aggregate' as const, config: { fn: 'sum', column: 'id' } },
+  ];
+
+  for (const step of steps) {
+    const made = createDbNode(step.id, { x: 0, y: 400 }, 'cn_supabase', NOTES_TABLE, step.operation);
+    const node = { ...made, config: { ...made.config, ...step.config } };
+    const routeId = `nd_r_${step.operation}`;
+
+    ops.push({ type: 'addNode', node });
+    ops.push({
+      type: 'addNode',
+      node: {
+        id: routeId,
+        category: 'api',
+        kind: 'route',
+        name: `${step.operation} notes`,
+        position: { x: 320, y: 400 },
+        config: { method: 'POST', path: `${step.operation}notes`, body: [step.id] },
+        ports: apiPortsFromBody([node]),
+      },
+    });
+    ops.push({
+      type: 'addComponent',
+      parentId: 'cp_root000001',
+      component: {
+        id: `cp_show_${step.operation}`,
+        type: 'Text',
+        name: `The ${step.operation}`,
+        props: { content: { kind: 'bound', source: { nodeId: routeId, portId: 'pt_result' } } },
+      },
+    });
+  }
+
+  return applyOps(base, ops);
+}

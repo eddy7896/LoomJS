@@ -22,8 +22,8 @@ integration to slip in.
 | ------ | ------------------------------------------------------------------------- | ----- |
 | **D1** | Postgres emission — statements, parameters, the pool, the driver, the env | done  |
 | **D2** | The studio side — connect, introspect, the schema table, the query editor | done  |
-| **D3** | More of what a database can do: count, upsert, aggregate                  | next  |
-| **D4** | MySQL emission, once writes can be done honestly                          | later |
+| **D3** | More of what a database can do: count, save, total                        | done  |
+| **D4** | MySQL emission, once writes can be done honestly                          | next  |
 | **D5** | Firestore, or the decision not to                                         | open  |
 
 ## What is emitted
@@ -88,3 +88,32 @@ database fills the column in (**auto**). A list of table names with a column cou
 that, and every question about it got answered by opening a node and reading a dropdown. It
 appears in the Data panel and again under the step being edited, because reading column names
 should not mean leaving the statement you are writing.
+
+## Count, Save and Total
+
+Three things a screen kept asking for that the first four nodes could not say.
+
+**Count** is a number the database works out. Getting it by reading the rows and measuring the
+list is slower and, past the limit, answers a different question — how many were fetched, not how
+many there are. Over HTTP it is `head: true`, so the count arrives in a header and the rows never
+travel at all.
+
+**Save** is one button whether or not the row is already there. Doing that as read-then-branch-
+then-write is three nodes and a race between them; as one statement it is `ON CONFLICT` and one
+round trip. The key is a *column* on this node rather than an identity port: supplied, it decides
+which row is written; left out, the database makes one. When nothing but the key is sent, the key
+is written to itself — `DO UPDATE SET` with nothing to set is invalid, and `DO NOTHING` returns no
+row to answer with.
+
+**Total** is `sum`, `avg`, `min` or `max` over a column, and it answers with **nothing** rather
+than zero when no rows match: `min` of an empty set has no answer, and 0 on a screen means
+something else. The function name is the one config value that becomes part of the statement
+rather than a parameter — a function name cannot be a placeholder — so it is matched against a
+closed set of four, and anything else is a compile error. The column, like every identifier, comes
+from the cached introspection.
+
+Count and Total narrow with the same filters a read uses, and count as **reads** for the purpose of
+invalidation: a screen that counted itself into re-reading itself would be a loop with a network
+call in it. Total is refused on a connection reached over HTTP, with what to do instead, because
+PostgREST can do it only where the server was set up for it and a node that compiles against one
+project and fails against the next is worse than one that says so.

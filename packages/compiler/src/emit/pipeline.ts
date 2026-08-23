@@ -203,7 +203,11 @@ export function planPipelines(
       const stepConfig = (step.config ?? {}) as { table?: string; operation?: string };
       const table = String(stepConfig.table ?? '');
       if (!table) continue;
-      const side = stepConfig.operation === 'select' ? tables.reads : tables.writes;
+      // A count and a total read the table as surely as a select does. Filing them under
+      // writes would have every screen re-read itself each time it counted.
+      const reads = stepConfig.operation === 'select' || stepConfig.operation === 'count' ||
+        stepConfig.operation === 'aggregate';
+      const side = reads ? tables.reads : tables.writes;
       if (!side.includes(table)) side.push(table);
     }
 

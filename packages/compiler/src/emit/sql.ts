@@ -96,6 +96,15 @@ function where(
   return { clauses, values, conditional };
 }
 
+/**
+ * What a total can be.
+ *
+ * A closed set, checked before it reaches a statement: this is the one place a config value
+ * becomes part of the SQL text rather than a parameter, and a function name cannot be a
+ * placeholder. So it is matched against this list, and anything else is a compile error.
+ */
+const AGGREGATES = new Set(['sum', 'avg', 'min', 'max']);
+
 /** loom's comparisons, in SQL. `contains` is a case-insensitive wildcard in both dialects. */
 const SQL_OPS: Record<FilterOp, string> = {
   equals: '=',
@@ -155,6 +164,31 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
   }`;
   }
 
+  if (config.operation === 'upsert') {
+    // Insert, or update the row that clashes on the key. The key is a *column* here rather than
+    // an identity port: supplied, it decides which row is written; left out, the database makes
+    // one — and "save this" is one button either way.
+    return `  {
+    const row = (value ?? {}) as Record<string, unknown>;
+    const columns = Object.keys(row).filter((column) => row[column] !== undefined);
+    if (columns.length === 0) throw new Error("Save has nothing to write.");
+    const changed = columns.filter((column) => column !== ${JSON.stringify(key)});
+    const statement =
+      ${text(`INSERT INTO ${name} (`)} +
+      columns.map((column) => quote(column)).join(", ") +
+      ") VALUES (" +
+      columns.map((_, index) => slot(index + 1)).join(", ") +
+      ${text(`) ON CONFLICT (${id}) DO UPDATE SET `)} +
+      // Nothing but the key was sent, so the row is written as it already is: a no-op update,
+      // which is still what makes RETURNING answer with the row rather than with nothing.
+      (changed.length > 0 ? changed : [${JSON.stringify(key)}])
+        .map((column) => quote(column) + " = EXCLUDED." + quote(column))
+        .join(", ") +
+      " RETURNING *";
+    value = await one(statement, columns.map((column) => row[column]));
+  }`;
+  }
+
   if (config.operation === 'delete') {
     return `  {
     const input = (value ?? {}) as Record<string, unknown>;
@@ -166,7 +200,8 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
   }`;
   }
 
-  // A read: order, limit and whatever narrowing the designer wired.
+  // A read, a count or a total: all three narrow the same way, and differ only in what they
+  // select and what they do with the row that comes back.
   const filters = config.filters ?? [];
   const fixed = where(dialect, node, filters, 1);
   const limit = Number(config.limit ?? 100);
@@ -185,10 +220,45 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
     ? '    const input = (value ?? {}) as Record<string, unknown>;\n'
     : '';
 
-  return `  {
-${input}    const clauses: string[] = ${seed};
+  const narrowed = `${input}    const clauses: string[] = ${seed};
     const values: unknown[] = ${seedValues};
-${fixed.conditional.join('\n')}
+${fixed.conditional.join('\n')}`;
+
+  if (config.operation === 'count') {
+    // Counted by the database. Reading the rows to measure the list is both slower and wrong:
+    // past the limit it answers how many were fetched, not how many there are.
+    return `  {
+${narrowed}
+    const statement =
+      ${text(`SELECT COUNT(*) AS count FROM ${name}`)} +
+      (clauses.length > 0 ? " WHERE " + clauses.join(" AND ") : "");
+    const rows = (await many(statement, values)) as { count?: unknown }[];
+    value = Number(rows[0]?.count ?? 0);
+  }`.replace(/ILIKE/g, contains);
+  }
+
+  if (config.operation === 'aggregate') {
+    const fn = String(config.fn ?? 'sum').toLowerCase();
+    if (!AGGREGATES.has(fn)) {
+      throw new CompileError(`"${fn}" is not something this step can work out.`, node.id);
+    }
+    const column = String(config.column ?? '').trim();
+    if (!column) throw new CompileError('Total has no column chosen.', node.id);
+
+    return `  {
+${narrowed}
+    const statement =
+      ${text(`SELECT ${fn.toUpperCase()}(${quote(dialect, column, node)}) AS value FROM ${name}`)} +
+      (clauses.length > 0 ? " WHERE " + clauses.join(" AND ") : "");
+    const rows = (await many(statement, values)) as { value?: unknown }[];
+    // No rows means no answer, and 0 would be a number on a screen that means something else.
+    const answer = rows[0]?.value;
+    value = answer === null || answer === undefined ? null : Number(answer);
+  }`.replace(/ILIKE/g, contains);
+  }
+
+  return `  {
+${narrowed}
     const statement =
       ${text(`SELECT * FROM ${name}`)} +
       (clauses.length > 0 ? " WHERE " + clauses.join(" AND ") : "")${order} +

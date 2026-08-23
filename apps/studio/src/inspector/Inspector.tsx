@@ -14,6 +14,9 @@ import {
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { QuerySection, TableSchemaSection } from './QuerySection';
+
+/** The steps a filter narrows: everything that reads rather than writes. */
+const NARROWABLE = new Set(['select', 'count', 'aggregate']);
 import { ActionsSection } from './ActionsSection';
 import { Section } from './Section';
 import { PositionSection } from './PositionSection';
@@ -42,7 +45,13 @@ import {
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables } from '../state/connectors';
-import { dbNodeFields, FILTER_OPS, type DbFilter, type FilterOp } from '@loom/connectors';
+import {
+  dbNodeFields,
+  FILTER_OPS,
+  type DbFilter,
+  type DbOperation,
+  type FilterOp,
+} from '@loom/connectors';
 import { columnsOf, setDbFilters } from '../state/connectors';
 import { TOKENS, tokenValue, tokensIn, type TokenGroup } from '@loom/ui';
 import type { Condition } from '@loom/ir';
@@ -859,7 +868,11 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
     node.category === 'db'
       ? node.kind === 'query'
         ? []
-        : dbNodeFields(node.kind as 'select' | 'insert' | 'update' | 'delete')
+        : // A total offers the columns it could total, which means the field list needs the table.
+          dbNodeFields(
+            node.kind as DbOperation,
+            connectedTables(snapshot).find((table) => table.name === config.table),
+          )
       : node.kind === 'math'
         ? (def?.fields ?? []).filter((entry) => applicable.has(entry.key))
         : (def?.fields ?? []);
@@ -882,7 +895,9 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
 
       {node.auto ? <AutoSection group={node.auto.group} state={node.auto.state} /> : null}
 
-      {node.category === 'db' && node.kind === 'select' ? (
+      {/* Narrowing belongs to anything that reads: a count of everything and a total of
+          everything are rarely the numbers a screen wants. */}
+      {node.category === 'db' && NARROWABLE.has(node.kind) ? (
         <FiltersSection nodeId={node.id} />
       ) : null}
 

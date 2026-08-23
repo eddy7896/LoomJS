@@ -17,6 +17,7 @@ import {
   triggeredMathSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
+  postgresOperationsSnapshot,
   postgresSnapshot,
   submitSequenceSnapshot,
   supabaseSnapshot,
@@ -222,6 +223,17 @@ describe('emitted app builds for real', () => {
     };
     expect(pkg.dependencies.pg).toBeDefined();
     expect(await readFile(join(dir, '.env.example'), 'utf8')).toBe('DATABASE_URL=\n');
+  });
+
+  it('type-checks a count, a save and a total sharing one connection', async () => {
+    // Three routes, one pool, one set of helpers — and each route emitting only the helpers it
+    // calls, which `noUnusedLocals` in the emitted project is what proves.
+    const dir = await emitProject(postgresOperationsSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    expect(await readFile(join(dir, 'api', 'countnotes.ts'), 'utf8')).toContain('SELECT COUNT(*)');
+    expect(await readFile(join(dir, 'api', 'upsertnotes.ts'), 'utf8')).toContain('ON CONFLICT');
+    expect(await readFile(join(dir, 'api', 'aggregatenotes.ts'), 'utf8')).toContain('SUM(');
   });
 });
 
