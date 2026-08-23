@@ -1,6 +1,7 @@
 import { useCallback, type CSSProperties, type PointerEvent } from 'react';
 import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
 import { componentStyle, styleToCss } from '@loom/compiler';
+import { extendSelection } from '../state/store';
 
 /**
  * Design mode renders **real DOM**, not a raster canvas (docs/01) — what you see here is the
@@ -16,6 +17,8 @@ interface Props {
   registerNode: (id: Id, node: HTMLElement | null) => void;
   onPointerDown: (id: Id, event: PointerEvent) => void;
   draggingId: Id | undefined;
+  /** The rest of a multiple selection (G1). */
+  alsoSelected: Id[];
   /** Components hidden while designing. Editor-only; never reaches the compiler. */
   hidden?: ReadonlySet<Id>;
   /** True when the parent holds its children where they were put rather than arranging them. */
@@ -44,6 +47,7 @@ export function ComponentView({
   registerNode,
   onPointerDown,
   draggingId,
+  alsoSelected,
   hidden,
   placed,
 }: Props) {
@@ -67,10 +71,15 @@ export function ComponentView({
     'data-loom-id': id,
     onClick: (event: React.MouseEvent) => {
       event.stopPropagation();
-      onSelect(id);
+      // Shift adds to the selection rather than replacing it — the gesture every design tool
+      // uses, and the one grouping needs to exist at all (G1).
+      if (event.shiftKey) extendSelection(id);
+      else onSelect(id);
     },
     onPointerDown: (event: PointerEvent) => onPointerDown(id, event),
     'data-dragging': draggingId === id ? 'true' : undefined,
+    // Marked on the canvas too: a selection you can only see in the tree is one you lose track of.
+    'data-also': alsoSelected.includes(id) ? 'true' : undefined,
     // The canvas has no runtime values, so a conditional component is drawn and *marked* rather
     // than hidden — the Preview is where conditions actually run (`docs/specs/conditions.md`).
     'data-conditional': component.visibleWhen ? 'true' : undefined,
@@ -243,6 +252,7 @@ export function ComponentView({
           registerNode={registerNode}
           onPointerDown={onPointerDown}
           draggingId={draggingId}
+          alsoSelected={alsoSelected}
         />
       ))}
     </div>

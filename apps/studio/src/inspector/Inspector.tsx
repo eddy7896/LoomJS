@@ -42,9 +42,11 @@ import {
   setProp,
   setStaticProp,
   setThemeToken,
+  selectedComponents,
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables, connection } from '../state/connectors';
+import { groupSelection, groupingProblem, ungroup } from '../state/grouping';
 import {
   aggregatesFor,
   dbNodeFields,
@@ -117,6 +119,10 @@ export function Inspector() {
           onChange={(e) => rename(component.id, e.target.value)}
         />
       </header>
+
+      {/* Grouping, where the selection is (G1). The keys are ⌘G and ⇧⌘G, and a button that says
+          so beats a shortcut nobody was told about. */}
+      <GroupSection component={component} />
 
       <PositionSection component={component} parent={parent} />
       <LayoutSection component={component} />
@@ -844,6 +850,48 @@ function FlowInspector({ flowId }: { flowId: string }) {
         <button onClick={() => removeFlow(flow.id)}>Delete flow</button>
       </section>
     </aside>
+  );
+}
+
+
+/**
+ * Group and ungroup (G1).
+ *
+ * A group is a Frame, so ungroup is offered on any frame with something in it — including one a
+ * designer built by hand and now wants opened up. Group says *why* it cannot run rather than
+ * greying out: "why is this disabled" is the question a disabled button always raises and never
+ * answers.
+ */
+function GroupSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  // Subscribed one field at a time. A selector returning a fresh array each call hands the store
+  // a new reference every render, which is a re-render loop rather than a subscription.
+  const selection = useEditor((s) => s.selection);
+  const also = useEditor((s) => s.also);
+
+  const ids =
+    selection?.kind === 'component' ? [selection.id, ...also] : [];
+  const problem = groupingProblem(snapshot, ids);
+  const canUngroup = (component.children ?? []).length > 0;
+
+  if (!canUngroup && ids.length < 2) return null;
+
+  return (
+    <section className="field-group">
+      <div className="row-actions">
+        {ids.length >= 2 ? (
+          <button data-testid="group" disabled={Boolean(problem)} onClick={() => groupSelection()}>
+            Group {ids.length}
+          </button>
+        ) : null}
+        {canUngroup ? (
+          <button data-testid="ungroup" onClick={() => ungroup(component.id)}>
+            Ungroup
+          </button>
+        ) : null}
+      </div>
+      {problem && ids.length >= 2 ? <p className="panel__hint">{problem}</p> : null}
+    </section>
   );
 }
 

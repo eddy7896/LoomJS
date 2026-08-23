@@ -131,12 +131,27 @@ describe('editing ops', () => {
     expect(next.components[rootOf(s)]!.layout).toMatchObject({ gap: 4, direction: 'column' });
   });
 
-  it('setLayout refuses a component that is not a container', () => {
+  it('setLayout gives a component with no layout the default one first', () => {
+    // This used to refuse, on the grounds that layout belongs to containers. That stopped being
+    // true when elements gained sizes — a Shape carries a layout to hold one — and the refusal
+    // was reachable from the canvas, where dragging a Text's resize handle threw instead of
+    // resizing it.
     const s = base();
     const textId = s.components[rootOf(s)]!.children![0]!;
-    expect(() => applyOp(s, { type: 'setLayout', componentId: textId, layout: { gap: 4 } })).toThrow(
-      /not a container/,
-    );
+    const next = applyOp(s, {
+      type: 'setLayout',
+      componentId: textId,
+      layout: { size: { width: { mode: 'fixed', px: 80 }, height: { mode: 'fixed', px: 24 } } },
+    });
+
+    expect(next.components[textId]!.layout).toMatchObject({
+      direction: 'column',
+      size: { width: { mode: 'fixed', px: 80 } },
+    });
+    // A component that does not exist is still a mistake worth refusing.
+    expect(() =>
+      applyOp(s, { type: 'setLayout', componentId: 'cp_nope', layout: { gap: 4 } }),
+    ).toThrow(/unknown component/);
   });
 
   it('moveComponent reparents and reorders without duplicating', () => {

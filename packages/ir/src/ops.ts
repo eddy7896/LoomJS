@@ -1,3 +1,4 @@
+import { DEFAULT_LAYOUT } from './schema';
 import type {
   Artboard,
   Component,
@@ -114,10 +115,15 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
     case 'setLayout': {
       const component = next.components[op.componentId];
       if (!component) throw new Error(`setLayout: unknown component ${op.componentId}`);
-      if (!component.layout) {
-        throw new Error(`setLayout: component ${op.componentId} is not a container`);
-      }
-      component.layout = { ...component.layout, ...op.layout };
+      /**
+       * A component with no layout gets the default one first.
+       *
+       * This used to refuse, on the grounds that layout belongs to containers — but that stopped
+       * being true when elements gained sizes: a Shape or a Table is not a container and carries
+       * a layout to hold its size. The refusal was reachable from the canvas, where dragging the
+       * resize handle of a Text threw rather than resizing it.
+       */
+      component.layout = { ...(component.layout ?? DEFAULT_LAYOUT), ...op.layout };
       return next;
     }
 

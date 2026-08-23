@@ -213,6 +213,22 @@ export const LayoutSchema = z.object({
 });
 export type Layout = z.infer<typeof LayoutSchema>;
 
+/**
+ * The layout a component gets when it needs one and has none.
+ *
+ * A leaf element carries a layout as soon as it carries a size — a Shape or a Table is not a
+ * container and has one — so this is what "give it a box" starts from. `@loom/components` builds
+ * its own defaults on top of this rather than beside it, so there is one answer to what a fresh
+ * layout is.
+ */
+export const DEFAULT_LAYOUT: Layout = {
+  direction: 'column',
+  gap: 16,
+  padding: 16,
+  align: 'stretch',
+  justify: 'start',
+};
+
 // ---------------------------------------------------------------------------
 // AUTO provenance (M5) — nodes loom generated and keeps in sync
 // ---------------------------------------------------------------------------

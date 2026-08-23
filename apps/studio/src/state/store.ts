@@ -92,6 +92,15 @@ export interface EditorState {
    */
   collapsedLayers: ReadonlySet<Id>;
   selection: Selection;
+  /**
+   * The rest of a multiple selection (G1).
+   *
+   * `selection` stays the one thing the inspector edits and the overlay follows; this is what
+   * *else* is picked, and it only ever holds components. Making the whole selection a list would
+   * have meant asking "which one do I edit?" at every panel, and the honest answer — the one you
+   * clicked last — is exactly what `selection` already means.
+   */
+  also: Id[];
   /** The artboard the canvas is working in — where new components land. */
   activeArtboardId: Id;
   past: Snapshot[];
@@ -125,6 +134,7 @@ function freshState(): EditorState {
     hiddenInEditor: new Set<Id>(),
     collapsedLayers: new Set<Id>(),
     selection: undefined,
+    also: [],
     activeArtboardId: artboardId,
     past: [],
     future: [],
@@ -202,7 +212,42 @@ export function dispatchAll(ops: Op[]): void {
 }
 
 export function select(selection: Selection): void {
-  set({ ...state, selection });
+  set({ ...state, selection, also: [] });
+}
+
+/**
+ * Add or remove one component from the selection (G1).
+ *
+ * Shift-click, in the tree or on the canvas. Clicking the one that is already primary with more
+ * behind it promotes the next in line rather than clearing everything: a shift-click that emptied
+ * the selection would undo work rather than adjust it.
+ */
+export function extendSelection(id: Id): void {
+  if (state.selection?.kind !== 'component') {
+    selectComponent(id);
+    return;
+  }
+
+  const primary = state.selection.id;
+  if (id === primary) {
+    const [next, ...rest] = state.also;
+    if (!next) return;
+    set({ ...state, selection: { kind: 'component', id: next }, also: rest });
+    return;
+  }
+
+  if (state.also.includes(id)) {
+    set({ ...state, also: state.also.filter((entry) => entry !== id) });
+    return;
+  }
+
+  set({ ...state, also: [...state.also, id] });
+}
+
+/** Everything picked, primary first — the order Group uses to decide what wraps what. */
+export function selectedComponents(): Id[] {
+  if (state.selection?.kind !== 'component') return [];
+  return [state.selection.id, ...state.also];
 }
 
 export function selectComponent(id: Id | undefined): void {
@@ -215,7 +260,7 @@ export function selectComponent(id: Id | undefined): void {
   for (let cursor = parentOf(state.snapshot, id); cursor; cursor = parentOf(state.snapshot, cursor.id)) {
     opened.delete(cursor.id);
   }
-  set({ ...state, collapsedLayers: opened, selection: { kind: 'component', id } });
+  set({ ...state, collapsedLayers: opened, selection: { kind: 'component', id }, also: [] });
 }
 
 /** Fold one branch shut, or open it. */
@@ -242,7 +287,7 @@ export function selectedComponentId(s: EditorState = state): Id | undefined {
 }
 
 export function setActiveArtboard(id: Id): void {
-  set({ ...state, activeArtboardId: id, selection: { kind: 'artboard', id } });
+  set({ ...state, activeArtboardId: id, selection: { kind: 'artboard', id }, also: [] });
 }
 
 const SELECTION_TABLES = {
@@ -301,6 +346,7 @@ export function undo(): void {
     past: state.past.slice(0, -1),
     future: [state.snapshot, ...state.future],
     selection: stillExists(previous, state.selection),
+    also: state.also.filter((id) => previous.components[id]),
     activeArtboardId: previous.artboards[state.activeArtboardId]
       ? state.activeArtboardId
       : Object.keys(previous.artboards)[0]!,
@@ -316,6 +362,7 @@ export function redo(): void {
     past: [...state.past, state.snapshot],
     future: state.future.slice(1),
     selection: stillExists(next, state.selection),
+    also: state.also.filter((id) => next.components[id]),
     activeArtboardId: next.artboards[state.activeArtboardId]
       ? state.activeArtboardId
       : Object.keys(next.artboards)[0]!,
@@ -765,6 +812,7 @@ export function loadSnapshot(snapshot: Snapshot): void {
     hiddenInEditor: new Set<Id>(),
     collapsedLayers: new Set<Id>(),
     selection: undefined,
+    also: [],
     activeArtboardId: artboardId,
     past: [],
     future: [],

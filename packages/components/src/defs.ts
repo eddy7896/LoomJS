@@ -59,13 +59,8 @@ export interface ComponentDef {
   defaultSize?: { width: number; height: number };
 }
 
-export const DEFAULT_LAYOUT: Layout = {
-  direction: 'column',
-  gap: 16,
-  padding: 16,
-  align: 'stretch',
-  justify: 'start',
-};
+export { DEFAULT_LAYOUT } from '@loom/ir';
+import { DEFAULT_LAYOUT } from '@loom/ir';
 
 export const FRAME_DEF: ComponentDef = {
   type: 'Frame',

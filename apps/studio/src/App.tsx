@@ -10,6 +10,7 @@ import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewWindow } from './preview/PreviewWindow';
 import { getState, redo, removeArtboard, removeComponent, removeFlow, undo } from './state/store';
+import { groupSelection, ungroup } from './state/grouping';
 import { removeNode, removeWire } from './state/graph';
 import { useEditor } from './state/useEditor';
 import type { AutosaveHandle } from './state/persistence';
@@ -29,6 +30,18 @@ export default function App({
     const onKey = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null;
       const typing = target?.tagName === 'INPUT' || target?.tagName === 'SELECT';
+
+      // Group and ungroup, on the keys every design tool uses.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') {
+        event.preventDefault();
+        const { selection } = getState();
+        if (event.shiftKey) {
+          if (selection?.kind === 'component') ungroup(selection.id);
+        } else {
+          groupSelection();
+        }
+        return;
+      }
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault();

@@ -8,6 +8,7 @@ import {
   moveComponent,
   parentOf,
   removeComponent,
+  extendSelection,
   selectComponent,
   setActiveArtboard,
   toggleAllLayers,
@@ -44,6 +45,7 @@ function contains(snapshot: Snapshot, ancestor: Id, candidate: Id): boolean {
 export function LayersPanel() {
   const snapshot = useEditor((s) => s.snapshot);
   const selection = useEditor((s) => s.selection);
+  const also = useEditor((s) => s.also);
   const activeArtboardId = useEditor((s) => s.activeArtboardId);
   const hidden = useEditor((s) => s.hiddenInEditor);
   // Collapse lives in the store so that selecting something opens the rows above it, whether or
@@ -165,6 +167,7 @@ export function LayersPanel() {
                     id={childId}
                     depth={1}
                     selectedId={selectedComponentId}
+                    alsoSelected={also}
                     rootId={artboard.root}
                     hidden={hidden}
                     collapsed={collapsed}
@@ -188,6 +191,8 @@ interface RowProps {
   id: Id;
   depth: number;
   selectedId: Id | undefined;
+  /** The rest of a multiple selection, so every picked row is marked (G1). */
+  alsoSelected: Id[];
   rootId: Id;
   hidden: ReadonlySet<Id>;
   collapsed: ReadonlySet<Id>;
@@ -200,7 +205,7 @@ interface RowProps {
 }
 
 function Row(props: RowProps) {
-  const { snapshot, id, depth, selectedId, rootId, hidden, collapsed, over } = props;
+  const { snapshot, id, depth, selectedId, alsoSelected, rootId, hidden, collapsed, over } = props;
   const component = snapshot.components[id];
   if (!component) return null;
 
@@ -225,8 +230,8 @@ function Row(props: RowProps) {
     <>
       <div
         className={`layer ${selectedId === id ? 'is-selected' : ''} ${
-          isHidden ? 'is-hidden' : ''
-        } ${isOver ? `is-over is-over--${over.at}` : ''}`}
+          alsoSelected.includes(id) ? 'is-also' : ''
+        } ${isHidden ? 'is-hidden' : ''} ${isOver ? `is-over is-over--${over.at}` : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         data-testid={`layer-${id}`}
         // The artboard root stays put: an artboard with no tree is not a thing.
@@ -254,7 +259,12 @@ function Row(props: RowProps) {
           event.stopPropagation();
           props.onDrop(id, dropAt);
         }}
-        onClick={() => selectComponent(id)}
+        onClick={(event) => {
+          // Shift adds to the selection, here as on the canvas: the tree is where a designer
+          // picks several small things without hunting for them (G1).
+          if (event.shiftKey) extendSelection(id);
+          else selectComponent(id);
+        }}
       >
         {children.length > 0 ? (
           <button

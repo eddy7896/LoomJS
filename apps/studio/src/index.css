@@ -2145,3 +2145,14 @@ input[type='color'] {
   background: color-mix(in srgb, #2f7de1 14%, transparent);
   color: #2f7de1;
 }
+
+/* G1: everything else that is picked, marked more quietly than the one being edited. */
+.layer.is-also {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+[data-loom-id][data-also='true'] {
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
