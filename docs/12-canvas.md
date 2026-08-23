@@ -57,11 +57,16 @@ primitives prove the emission.
 
 ## C0 — The blank canvas ✅
 
-- **Goal:** a new project opens on an empty screen, not on a sample heading.
-- **Build:** drop the seeded "Hello loomJS" Text. One empty root frame, and a canvas centred on
-  it.
-- **Why:** the seed exists because the first compiler needed something to emit. It is now the
-  first thing every designer deletes, and a blank page is the invitation.
+- **Goal:** a new project opens on **nothing** — not a sample heading, and not one empty screen.
+- **Build:** the seeded Text went first, then the seeded screen. A new project is an empty canvas
+  with a toolbar under it and a line saying to draw a frame; the first frame drawn becomes the
+  first screen, and it is called Home because that is the one the app opens on.
+- **Why:** a seeded screen decides someone's size, name and count before they have said anything,
+  and drawing a frame is how every screen after it gets made anyway. An empty canvas says "draw"
+  more clearly than a rectangle nobody asked for.
+- **What it took:** a project with no screens has to be a *state*, not a failure. The compiler
+  still refuses to emit an app with no screens — correctly — so the studio recognises the empty
+  project and says "nothing to run yet" instead of showing a build error.
 
 ## C1 — The floating toolbar ✅
 

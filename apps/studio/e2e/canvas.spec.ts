@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { firstScreen, nameInput } from './canvas';
 
 /**
  * The canvas as a design tool (`docs/12-canvas.md`).
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 /**
@@ -60,6 +60,33 @@ test('a new project opens on a blank canvas with the tools on it', async ({ page
   await expect(page.locator('.artboard span')).toHaveCount(0);
   await expect(page.getByTestId('toolbelt')).toBeVisible();
   await expect(page.getByTestId('tool-move')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a project with nothing in it invites the first frame', async ({ page }) => {
+  // Not even a screen: the empty state is the whole project, and the Preview says so rather than
+  // calling it a failure.
+  // Through the door a person would use: New throws the project away, and what is left is what a
+  // new project looks like. (Clearing storage by hand races the autosave that is about to write.)
+  page.on('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('reset-project').click();
+
+  await expect(page.getByTestId('canvas-empty')).toBeVisible();
+  await expect(page.locator('.artboard')).toHaveCount(0);
+  await expect(page.getByTestId('preview-empty')).toBeVisible();
+  await expect(page.locator('.preview__state')).not.toHaveText('build error');
+  await expect(page.locator('.problem')).toHaveCount(0);
+
+  // Drawing one is how a screen gets made, here as everywhere else — and the first is Home.
+  await page.getByTestId('tool-Frame').click();
+  const canvas = (await page.locator('.canvas').boundingBox())!;
+  await page.mouse.move(canvas.x + 240, canvas.y + 160);
+  await page.mouse.down();
+  await page.mouse.move(canvas.x + 560, canvas.y + 520, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(page.locator('.layer--artboard', { hasText: 'Home' })).toBeVisible();
+  await expect(page.getByTestId('canvas-empty')).toHaveCount(0);
+  await expect(page.locator('.preview__state')).toHaveText('live');
 });
 
 test('a rectangle drawn on the canvas reaches the running app', async ({ page }) => {
@@ -302,9 +329,10 @@ test('anything on the canvas can be resized by its handles', async ({ page }) =>
   await page.mouse.move(handle.x + 124, handle.y + 84, { steps: 10 });
   await page.mouse.up();
 
-  const after = (await shape.boundingBox())!;
-  expect(after.width).toBeGreaterThan(before.width + 80);
-  expect(after.height).toBeGreaterThan(before.height + 50);
+  await expect.poll(async () => (await shape.boundingBox())!.width).toBeGreaterThan(
+    before.width + 80,
+  );
+  expect((await shape.boundingBox())!.height).toBeGreaterThan(before.height + 50);
 
   // It reaches the running app as a size, not as a drawing the editor kept to itself.
   await expect(page.locator('.preview__state')).toHaveText('live');
@@ -331,10 +359,13 @@ test('a top-left handle moves the box as well as sizing it', async ({ page }) =>
   await page.mouse.move(handle.x - 60, handle.y - 40, { steps: 8 });
   await page.mouse.up();
 
-  const after = (await shape.boundingBox())!;
-  // The edge that moved took the origin with it: bigger, and further up and to the left.
-  expect(after.width).toBeGreaterThan(before.width + 30);
-  expect(after.x).toBeLessThan(before.x - 30);
+  // Polled rather than sampled: the box is measured from the DOM, which is a render behind the
+  // gesture that changed it.
+  await expect.poll(async () => (await shape.boundingBox())!.width).toBeGreaterThan(
+    before.width + 30,
+  );
+  // The edge that moved took the origin with it.
+  expect((await shape.boundingBox())!.x).toBeLessThan(before.x - 30);
 });
 
 test('the canvas draws a component the way the app does, not the way the studio does', async ({

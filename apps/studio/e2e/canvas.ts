@@ -106,3 +106,17 @@ export async function pickColor(page: Page, testId: string, token: string): Prom
   await page.getByTestId(`${testId}-swatch`).click();
   await page.getByTestId(`${testId}-token-${token}`).click();
 }
+
+/**
+ * Make sure there is a screen to work on.
+ *
+ * A new project is empty — not one empty screen, but nothing at all — so a spec about anything
+ * else starts by making one, exactly as a designer would. The first screen of a project is called
+ * Home, which is what these specs refer to it by.
+ */
+export async function firstScreen(page: Page): Promise<void> {
+  if ((await page.locator('.artboard').count()) === 0) {
+    await page.getByRole('button', { name: '+ Screen', exact: true }).click();
+  }
+  await expect(page.locator('.artboard').first()).toBeVisible();
+}

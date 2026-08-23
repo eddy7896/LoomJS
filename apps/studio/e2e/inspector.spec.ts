@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { firstScreen, nameInput } from './canvas';
 
 /**
  * The inspector as a design panel (`docs/13-inspector.md`).
@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 /** Draw a rectangle, which is the simplest thing with a position, a size and a fill. */
@@ -64,7 +64,7 @@ test('a section stays collapsed, across selections and reloads', async ({ page }
   await expect(page.getByTestId('effect-0')).toHaveCount(0);
 
   await page.reload();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
   await page.locator('.layer', { hasText: 'Rectangle' }).first().click();
   await expect(page.getByTestId('effect-0')).toHaveCount(0);
 

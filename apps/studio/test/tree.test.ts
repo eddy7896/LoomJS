@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  __resetStore,
   addComponent,
   getState,
   isHiddenInEditor,
@@ -11,6 +10,7 @@ import {
   toggleEditorVisibility,
   undo,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 
 /**
  * The elements tree (S2, `docs/11-editor-shell.md`).
@@ -32,7 +32,7 @@ function place(type: string, into?: string): string {
 }
 
 describe('reparenting from the tree', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('moves a component into a different frame', () => {
     const frame = place('Frame');
@@ -82,7 +82,7 @@ describe('reparenting from the tree', () => {
 });
 
 describe('hiding while designing', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('never touches the document', () => {
     const text = place('Text');
@@ -116,7 +116,7 @@ describe('hiding while designing', () => {
   it('starts over with the project', () => {
     const text = place('Text');
     toggleEditorVisibility(text);
-    __resetStore();
+    resetWithScreen();
     expect(getState().hiddenInEditor.size).toBe(0);
   });
 });

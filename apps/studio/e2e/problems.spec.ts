@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput } from './canvas';
 
 /**
  * P2's gate: three distinct problems appear in the panel, and clicking one selects the offending
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('an empty project has nothing to report', async ({ page }) => {

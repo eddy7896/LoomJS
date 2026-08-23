@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  __resetStore,
   addArtboard,
   addComponent,
   getState,
@@ -9,6 +8,7 @@ import {
   selectedComponentId,
   setArtboardGuard,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import { addGraphNode } from '../src/state/graph';
 import { actionsFor, addAction, variableChoices } from '../src/state/actions';
 
@@ -29,7 +29,7 @@ function place(type: string): string {
 }
 
 describe('a sign-in step arrives already wired', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('guesses the two fields on the screen, because that is what a sign-in form is', () => {
     const email = place('TextField');
@@ -68,7 +68,7 @@ describe('a sign-in step arrives already wired', () => {
 });
 
 describe('the current user is not a variable', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('is never offered as something to set', () => {
     // It is app state, and it is nobody's to write: signing in is what writes it.
@@ -79,7 +79,7 @@ describe('the current user is not a variable', () => {
 });
 
 describe('who can open a screen', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('keeps the guard as the absence of a key when anyone may open it', () => {
     const second = addArtboard();

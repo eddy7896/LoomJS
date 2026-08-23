@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * P5's done-when: the app signs someone up, signs them in, shows who they are, and bounces a
@@ -27,7 +27,7 @@ test.beforeEach(async ({ page, request }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 /** Signing in needs somewhere to sign in to, so every one of these starts connected. */

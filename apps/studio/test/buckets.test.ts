@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
-  __resetStore,
   addArtboard,
   addComponent,
   getState,
@@ -10,6 +9,7 @@ import {
   selectedComponentId,
   setActiveArtboard,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import {
   addGlobalNode,
   addGraphNode,
@@ -65,7 +65,7 @@ function buildCalculator(operators: string[]): { bucketId: string; outputId: str
 }
 
 describe('a calculator built through the editor', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('keeps every operation wired into the bucket', () => {
     const { bucketId } = buildCalculator(['add', 'subtract', 'multiply', 'divide']);
@@ -122,7 +122,7 @@ describe('a calculator built through the editor', () => {
  * compiles.
  */
 describe('a global variable built through the editor', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('shares one value between the screen that fills it and the screen that shows it', () => {
     const { bucketId } = buildCalculator(['add']);

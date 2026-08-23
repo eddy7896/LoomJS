@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import { newConnectorId } from '@loom/ir';
 import {
-  __resetStore,
   addComponent,
   dispatch,
   getState,
@@ -12,6 +11,7 @@ import {
   selectedComponentId,
   undo,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import {
   acceptAuto,
   autoGroups,
@@ -68,7 +68,7 @@ function drawForm(): { frameId: string; titleId: string; buttonId: string } {
 }
 
 beforeEach(() => {
-  __resetStore();
+  resetWithScreen();
 });
 
 describe('what the inspector may offer', () => {

@@ -413,7 +413,14 @@ Recorded here because they constrain everything downstream. Each was taken at th
 - **[C] The pen is deferred until a path can be edited after it is drawn.** A point model plus
   on-canvas handles is the work; three primitives prove the emission first, and a curve nobody can
   adjust afterwards is worse than no pen.
-- **[C] A new project opens blank.** The seeded sample heading existed because the first compiler
+- **[C] A new project has nothing in it — not even a screen.** A seeded screen decides someone's
+  size, name and count before they have said anything, and drawing a frame is how every screen
+  after it is made. An empty project is a state rather than a failure: the compiler still refuses
+  to emit an app with no screens, and the studio says "nothing to run yet" instead of showing that
+  refusal as an error.
+- **[C] The selection chrome cannot depend on a ref alone.** Writing a ref does not re-render, so
+  the overlay drew only when something else happened to re-render right after the node arrived —
+  and when nothing did, a freshly drawn component had no handles at all. The seeded sample heading existed because the first compiler
   needed something to emit, and it had become the first thing every designer deletes.
 - **[C] The Preview remounts once on its first build.** A hot update only reaches a page already
   listening, and the Preview's page loads while that first build is still being written — so the

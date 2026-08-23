@@ -102,24 +102,17 @@ type Listener = () => void;
 
 const HISTORY_LIMIT = 100;
 
+/**
+ * A new project is **empty** — not one empty screen, but nothing at all
+ * (`docs/12-canvas.md` C0).
+ *
+ * A seeded screen is a decision made on someone's behalf before they have said anything: its
+ * size, its name, that there is one of it. Drawing the first frame is already how every screen
+ * after it gets made, so the first one is no different, and an empty canvas with a toolbar under
+ * it says "draw" more clearly than a rectangle nobody asked for.
+ */
 function initialSnapshot(): { snapshot: Snapshot; artboardId: Id } {
-  const rootId = newComponentId();
-  const artboardId = newArtboardId();
-  const root = createComponent('Frame', rootId);
-  root.name = 'Root';
-  // The first screen is a drawing board like every screen after it (`docs/12-canvas.md`).
-  root.layout = { ...(root.layout ?? DEFAULT_LAYOUT), mode: 'free' };
-
-  const withArtboard = applyOp(createEmptyProject('Untitled'), {
-    type: 'addArtboard',
-    artboard: { id: artboardId, name: 'Home', root: rootId },
-    root,
-  });
-
-  // A blank canvas, deliberately (`docs/12-canvas.md` C0). The sample heading that used to be
-  // seeded here existed because the first compiler needed something to emit; it became the first
-  // thing every designer deletes.
-  return { snapshot: withArtboard, artboardId };
+  return { snapshot: createEmptyProject('Untitled'), artboardId: '' };
 }
 
 function freshState(): EditorState {
@@ -338,10 +331,9 @@ export function entryArtboardId(snapshot: Snapshot): Id {
 }
 
 /** Root component of the artboard currently being edited. */
+/** The root of the screen being worked on. Empty when the project has no screens yet. */
 export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArtboardId): Id {
-  return (
-    snapshot.artboards[artboardId]?.root ?? snapshot.artboards[entryArtboardId(snapshot)]!.root
-  );
+  return snapshot.artboards[artboardId]?.root ?? snapshot.artboards[entryArtboardId(snapshot)]?.root ?? '';
 }
 
 export function parentOf(snapshot: Snapshot, id: Id): Component | undefined {
@@ -372,8 +364,12 @@ function insertionParent(snapshot: Snapshot, selection: Selection): Id {
 }
 
 export function addComponent(type: string): void {
-  const component = createComponent(type, newComponentId());
   const parentId = insertionParent(state.snapshot, state.selection);
+  // Nowhere to put it: a project with no screens has nothing to place into, and the canvas says
+  // so rather than the studio throwing.
+  if (!parentId) return;
+
+  const component = createComponent(type, newComponentId());
   if (type === 'Frame') {
     component.layout = { ...(component.layout ?? DEFAULT_LAYOUT), mode: 'free' };
   }
@@ -597,7 +593,8 @@ export function setLayoutMode(componentId: Id, mode: 'stack' | 'free'): void {
  */
 export function placeScreen(size?: { width: number; height: number; preset?: string }): Id {
   const count = Object.keys(state.snapshot.artboards).length;
-  const id = addArtboard(`Screen ${count + 1}`);
+  // The first screen of a project is the one the app opens on, and "Home" is what that is called.
+  const id = addArtboard(count === 0 ? 'Home' : `Screen ${count + 1}`);
   if (size) {
     setArtboardSize(id, {
       width: Math.round(size.width),

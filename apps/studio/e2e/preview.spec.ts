@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { firstScreen } from './canvas';
 
 /**
  * The Preview as a floating window (`docs/12-canvas.md`).
@@ -19,7 +20,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('it floats over the canvas instead of taking a column from it', async ({ page }) => {
@@ -61,7 +62,7 @@ test('it can be moved, and remembers where it was left', async ({ page }) => {
 
   // A reload puts it back where it was put, not back in the corner.
   await page.reload();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
   const restored = (await page.getByTestId('preview-window').boundingBox())!;
   expect(Math.abs(restored.x - after.x)).toBeLessThan(4);
 });

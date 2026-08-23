@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput, pickColor } from './canvas';
+import { firstScreen, nameInput, pickColor } from './canvas';
 
 /**
  * P1's gate: something on the screen appears, disappears and restyles because of state. The
@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 /** A checkbox and a Text. No wiring: a condition can read a checkbox the moment it is drawn. */

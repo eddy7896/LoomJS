@@ -7,7 +7,6 @@ import {
   type ProjectStore,
 } from '../src/state/persistence';
 import {
-  __resetStore,
   addComponent,
   getState,
   loadSnapshot,
@@ -15,6 +14,7 @@ import {
   resetProject,
   selectedComponentId,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 
 /** An in-memory stand-in for local storage, so the tests do not depend on a browser. */
 function memoryStore(initial?: string): ProjectStore & { value: string | undefined } {
@@ -33,7 +33,7 @@ function memoryStore(initial?: string): ProjectStore & { value: string | undefin
 }
 
 beforeEach(() => {
-  __resetStore();
+  resetWithScreen();
 });
 
 describe('restoring a saved project', () => {
@@ -150,6 +150,8 @@ describe('opening and discarding', () => {
     clearProject(store);
     resetProject();
     expect(store.value).toBeUndefined();
-    expect(Object.keys(getState().snapshot.artboards)).toHaveLength(1);
+    // Starting over lands where a new project lands: nothing drawn yet, not one empty screen
+    // somebody has to delete (`docs/12-canvas.md` C0).
+    expect(Object.keys(getState().snapshot.artboards)).toHaveLength(0);
   });
 });

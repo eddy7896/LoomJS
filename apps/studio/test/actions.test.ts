@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { actionsOf } from '@loom/ir';
 import {
-  __resetStore,
   addArtboard,
   dispatch,
   addComponent,
@@ -11,6 +10,7 @@ import {
   selectComponent,
   selectedComponentId,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import { addGraphNode, connect, ensureMirror, removeNode, removeWire } from '../src/state/graph';
 import {
   actionsFor,
@@ -49,7 +49,7 @@ function setup(): { button: string; field: string; api: string } {
 }
 
 describe('the wire and the step are one fact', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('drawing a trigger wire appends a step', () => {
     const { button, api } = setup();
@@ -115,7 +115,7 @@ describe('the wire and the step are one fact', () => {
 });
 
 describe('editing a sequence', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('adds a step that already points at something real', () => {
     // A row that says "choose a thing" is a row that compiles to an error.
@@ -176,7 +176,7 @@ describe('editing a sequence', () => {
 });
 
 describe('documents written before sequences existed', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('read a bare handler as a one-step sequence', () => {
     const button = place('Button');

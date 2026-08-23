@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { firstScreen, nameInput } from './canvas';
 
 /**
  * P0's gate: a reload stops losing the project. Everything here goes through the real editor and
@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('work survives a reload', async ({ page }) => {
@@ -38,7 +38,7 @@ test('work survives a reload', async ({ page }) => {
   await expect(page.getByTestId('save-status')).toHaveText('saved');
 
   await page.reload();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 
   await expect(page.locator('.layer', { hasText: 'Survivor' })).toHaveCount(1);
   await expect(page.locator('.artboard__label .chip--mono').first()).toContainText('390 x 844');
@@ -60,7 +60,7 @@ test('undo does not walk back into the previous session', async ({ page }) => {
   await expect(page.getByTestId('save-status')).toHaveText('saved');
 
   await page.reload();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 
   // History starts empty on open: the button placed before the reload is not undoable now.
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
@@ -77,7 +77,7 @@ test('New starts over, and the reload agrees', async ({ page }) => {
   await expect(page.locator('.layer', { hasText: 'Gone soon' })).toHaveCount(0);
 
   await page.reload();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
   await expect(page.locator('.layer', { hasText: 'Gone soon' })).toHaveCount(0);
 });
 
@@ -92,5 +92,5 @@ test('a document this build cannot read is refused, not half-loaded', async ({ p
 
   await expect(page.getByTestId('save-status')).toHaveText('could not open saved project');
   // The editor still works, on a fresh project rather than a broken one.
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });

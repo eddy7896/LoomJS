@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
-  __resetStore,
   setArtboardSize,
   addArtboard,
   addComponent,
@@ -25,6 +24,7 @@ import {
   setStaticProp,
   undo,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 
 const snapshot = () => getState().snapshot;
 const root = () => rootComponentId(snapshot());
@@ -40,7 +40,7 @@ function place(type: string): string {
   return selectedComponentId()!;
 }
 
-beforeEach(() => __resetStore());
+beforeEach(() => resetWithScreen());
 
 describe('editor store', () => {
   it('starts with one screen and an empty canvas', () => {
@@ -223,20 +223,20 @@ describe('editor -> compiler (M2 routing)', () => {
 
 describe('screen sizes', () => {
   it('starts with no size of its own, so the canvas uses the default frame', () => {
-    __resetStore();
+    resetWithScreen();
     const id = getState().activeArtboardId;
     expect(snapshot().artboards[id]!.size).toBeUndefined();
   });
 
   it('records a size and the preset it came from', () => {
-    __resetStore();
+    resetWithScreen();
     const id = getState().activeArtboardId;
     setArtboardSize(id, { width: 390, height: 844, preset: 'phone-sm' });
     expect(snapshot().artboards[id]!.size).toEqual({ width: 390, height: 844, preset: 'phone-sm' });
   });
 
   it('is one undo, and changes nothing the compiler emits', () => {
-    __resetStore();
+    resetWithScreen();
     const id = getState().activeArtboardId;
     const before = JSON.stringify(compile(snapshot()).files);
 

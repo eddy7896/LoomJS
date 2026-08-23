@@ -38,6 +38,19 @@ export function notePreviewLoaded(): void {
   loadedAt = Date.now();
 }
 
+/**
+ * Whether there is a frame at all.
+ *
+ * With the Preview closed, folded, or not yet opened, a build reaches nobody *and that is fine* —
+ * whatever appears next will fetch the current files. Chasing delivery there would end in a
+ * "missed" that reloads a page later, in the middle of something.
+ */
+let mounted = false;
+
+export function notePreviewMounted(present: boolean): void {
+  mounted = present;
+}
+
 interface PostResult {
   ok: boolean;
   error?: string;
@@ -85,6 +98,14 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
     setStatus((s) => ({ ...s, syncing: true }));
 
     timer.current = setTimeout(() => {
+      // A project with no screens is not a broken project; it is one nobody has drawn on. The
+      // compiler is right to refuse it and the studio is wrong to call that an error.
+      if (Object.keys(snapshot.artboards).length === 0) {
+        setBuildResult(null);
+        setStatus((s) => ({ ...s, syncing: false, error: undefined, entityId: undefined }));
+        return;
+      }
+
       let files;
       try {
         files = compile(snapshot).files;
@@ -131,9 +152,10 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
       .then((r) => r.json() as Promise<PostResult>)
       .then((body) => {
         const fresh = Date.now() - loadedAt < FRESH_MS;
-        // Heard, unless this build landed while the page was still settling — in which case say
-        // it again once anyway, rather than trusting a count that cannot see a stale socket.
-        const heard = (body.clients ?? 0) > 0 && !(fresh && attempt === 0);
+        // Nothing to reach, so nothing to chase. Otherwise: heard, unless this build landed while
+        // the page was still settling — in which case say it again once anyway, rather than
+        // trusting a count that cannot see a socket belonging to a page that has closed.
+        const heard = !mounted || ((body.clients ?? 0) > 0 && !(fresh && attempt === 0));
         const gaveUp = !heard && attempt >= REDELIVERIES;
 
         setStatus((s) => ({

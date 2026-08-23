@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent } from 'react';
+import { useCallback, type CSSProperties, type PointerEvent } from 'react';
 import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
 import { componentStyle, styleToCss } from '@loom/compiler';
 
@@ -47,6 +47,10 @@ export function ComponentView({
   hidden,
   placed,
 }: Props) {
+  const attach = useCallback(
+    (node: HTMLElement | null) => registerNode(id, node),
+    [id, registerNode],
+  );
   const component = snapshot.components[id];
   if (!component) return null;
   // Hidden while designing (S2): editor-only, and gone from the canvas rather than dimmed —
@@ -54,6 +58,11 @@ export function ComponentView({
   // stays, so it can always be brought back.
   if (hidden?.has(id)) return null;
 
+  /**
+   * One stable callback, so React attaches it once instead of detaching and re-attaching on every
+   * render. An inline arrow here made the canvas hand the same node back constantly, which is the
+   * kind of churn the selection overlay cannot tell from a real change.
+   */
   const shared = {
     'data-loom-id': id,
     onClick: (event: React.MouseEvent) => {
@@ -86,7 +95,7 @@ export function ComponentView({
     return (
       <span
         {...shared}
-        ref={(node) => registerNode(id, node)}
+        ref={attach}
         style={{ cursor: 'default', ...leafStyle }}
       >
         {textContent(component, 'content')}
@@ -98,7 +107,7 @@ export function ComponentView({
     return (
       <button
         {...shared}
-        ref={(node) => registerNode(id, node)}
+        ref={attach}
         type="button"
         style={leafStyle}
         // Clicks select in the editor; the emitted app is where the handler actually runs.
@@ -115,7 +124,7 @@ export function ComponentView({
     return (
       <input
         {...shared}
-        ref={(node) => registerNode(id, node)}
+        ref={attach}
         type={component.type === 'NumberField' ? 'number' : 'text'}
         readOnly
         value={textContent(component, 'value')}
@@ -142,7 +151,7 @@ export function ComponentView({
     return (
       <svg
         {...shared}
-        ref={(node) => registerNode(id, node as unknown as HTMLElement | null)}
+        ref={attach as unknown as (node: SVGSVGElement | null) => void}
         style={{ ...style, display: 'block', overflow: 'visible', minHeight: undefined }}
       >
         {kind === 'ellipse' ? (
@@ -186,7 +195,7 @@ export function ComponentView({
     return (
       <label
         {...shared}
-        ref={(node) => registerNode(id, node)}
+        ref={attach}
         style={{ display: 'flex', alignItems: 'center', gap: 6, ...leafStyle }}
       >
         <input type="checkbox" readOnly checked={booleanProp(component, 'value')} />
@@ -203,7 +212,7 @@ export function ComponentView({
     return (
       <select
         {...shared}
-        ref={(node) => registerNode(id, node)}
+        ref={attach}
         value={options[0] ?? ''}
         disabled
         style={leafStyle}
@@ -220,7 +229,7 @@ export function ComponentView({
   return (
     <div
       {...shared}
-      ref={(node) => registerNode(id, node)}
+      ref={attach}
       style={{ ...style, minHeight: component.children?.length ? undefined : 48 }}
     >
       {(component.children ?? []).map((childId) => (

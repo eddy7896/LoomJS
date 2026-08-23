@@ -89,7 +89,13 @@ export function LayersPanel() {
         </button>
         {/* Named the same as it was in the toolbar: adding a screen is the same act wherever the
             button lives, and the tree is where screens are. */}
-        <button onClick={() => addArtboard(`Screen ${artboards.length + 1}`)}>+ Screen</button>
+        <button
+          onClick={() =>
+            addArtboard(artboards.length === 0 ? 'Home' : `Screen ${artboards.length + 1}`)
+          }
+        >
+          + Screen
+        </button>
       </div>
 
       {artboards.map((artboard) => {

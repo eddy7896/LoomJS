@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M4's gate: connect a Supabase-shaped project, introspect a table, list its rows in the Preview
@@ -39,7 +39,7 @@ test.beforeEach(async ({ page, request }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('connecting introspects the schema and shows its tables', async ({ page }) => {

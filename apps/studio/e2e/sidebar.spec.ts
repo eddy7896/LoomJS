@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { firstScreen, nameInput } from './canvas';
 
 /**
  * S0/S1's gate: one left column holding the tree and the palette, an icon rail beside it, and no
@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('the toolbar no longer carries components', async ({ page }) => {
@@ -78,7 +78,7 @@ test('the rail switches what the column shows, and Nodes swaps the canvas', asyn
   await expect(page.locator('.react-flow')).toBeVisible();
 
   await page.getByTestId('rail-design').click();
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('problems stay visible in every section', async ({ page }) => {

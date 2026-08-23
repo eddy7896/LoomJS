@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput } from './canvas';
+import { firstScreen, nameInput } from './canvas';
 
 /**
  * The loop these specs protect: an edit in the editor must reach the Preview, and the Preview
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('an edit in the editor shows up in the Preview', async ({ page }) => {

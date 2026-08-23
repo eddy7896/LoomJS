@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M3's gate: a button in the Preview calls the emitted serverless function and shows the result.
@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('a wired graph calls the emitted function and shows its result', async ({ page }) => {

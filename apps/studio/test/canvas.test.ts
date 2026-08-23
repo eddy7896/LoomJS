@@ -16,6 +16,7 @@ import {
   setTool,
   toolPlaces,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 
 /**
  * The canvas as a design tool (`docs/12-canvas.md`).
@@ -29,12 +30,33 @@ const snapshot = () => getState().snapshot;
 const root = () => rootComponentId(snapshot());
 const children = () => snapshot().components[root()]!.children ?? [];
 
-beforeEach(() => __resetStore());
+beforeEach(() => resetWithScreen());
 
 describe('a new project', () => {
-  it('opens on a blank canvas', () => {
-    // The sample heading that used to live here existed because the first compiler needed
-    // something to emit, and it became the first thing every designer deletes.
+  it('has nothing on it at all — not even a screen', () => {
+    // A seeded screen is a decision made on someone's behalf: its size, its name, that there is
+    // one of it. Drawing the first frame is how every screen after it gets made anyway.
+    __resetStore();
+    expect(Object.keys(snapshot().artboards)).toHaveLength(0);
+  });
+
+  it('places nothing while there is nowhere to place it', () => {
+    __resetStore();
+    addComponent('Text');
+    expect(Object.keys(snapshot().components)).toHaveLength(0);
+  });
+
+  it('calls the first screen Home, because that is the one the app opens on', () => {
+    __resetStore();
+    const id = placeScreen();
+    expect(snapshot().artboards[id]?.name).toBe('Home');
+    expect(snapshot().entryArtboard).toBe(id);
+    // And the one after it is not.
+    const second = placeScreen();
+    expect(snapshot().artboards[second]?.name).toBe('Screen 2');
+  });
+
+  it('opens a drawn screen on a blank canvas', () => {
     expect(children()).toHaveLength(0);
   });
 });

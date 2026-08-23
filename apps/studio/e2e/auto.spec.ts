@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * M5's gate: draw a form, ask for a backend, and get a working one — Validate, a POST route, a
@@ -61,7 +61,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 test('the inspector explains what it would build, and why it cannot', async ({ page }) => {

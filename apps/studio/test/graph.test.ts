@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
-  __resetStore,
   addComponent,
   getState,
   rootComponentId,
@@ -9,6 +8,7 @@ import {
   selectedComponentId,
   setStaticProp,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import {
   addBodyStep,
   addGraphNode,
@@ -54,7 +54,7 @@ function buildPipeline(): { apiId: string; fieldId: string; buttonId: string; ou
   return { apiId, fieldId, buttonId, outputId };
 }
 
-beforeEach(() => __resetStore());
+beforeEach(() => resetWithScreen());
 
 describe('nodes-mode graph', () => {
   it('materialises a mirror only once, and only when wired', () => {

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { compile } from '@loom/compiler';
 import {
-  __resetStore,
   addComponent,
   getState,
   rename,
@@ -9,6 +8,7 @@ import {
   selectComponent,
   selectedComponentId,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import {
   addConditionalStyle,
   conditionFromKey,
@@ -35,7 +35,7 @@ function drawCheckboxAndText(): { checkboxId: string; textId: string } {
 }
 
 beforeEach(() => {
-  __resetStore();
+  resetWithScreen();
 });
 
 describe('what a condition may read', () => {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { nameInput, pickColor } from './canvas';
+import { firstScreen, nameInput, pickColor } from './canvas';
 
 /**
  * The design-system loop: style a component from the token scale, watch it land in the running
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 /** The canvas starts blank, so these place the heading they are about to style. */

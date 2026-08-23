@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { drag, graphNode, handle, nameInput, openPreview } from './canvas';
+import { drag, firstScreen, graphNode, handle, nameInput, openPreview } from './canvas';
 
 /**
  * The calculator: two number fields, two operation buttons, **one** answer.
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.locator('.artboard').first()).toBeVisible();
+  await firstScreen(page);
 });
 
 async function place(page: Page, button: string, name: string, label?: string): Promise<void> {

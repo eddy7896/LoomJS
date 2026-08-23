@@ -118,9 +118,19 @@ export function Canvas() {
   // With a tool armed, a press draws instead of selecting (`docs/12-canvas.md` C2).
   const drawPlace = useDrawPlace(snapshot, tool, scale, chrome);
 
+  /**
+   * The DOM node behind each component, for the selection chrome to measure.
+   *
+   * Writing a ref does not re-render, so the overlay used to draw only if something else happened
+   * to re-render right after the node arrived — and when nothing did, a freshly drawn component
+   * had no handles at all. The counter is what turns "the node is here now" into a render.
+   */
+  const [attached, setAttached] = useState(0);
   const registerNode = useCallback((id: Id, node: HTMLElement | null): void => {
+    const had = nodes.current.get(id);
     if (node) nodes.current.set(id, node);
     else nodes.current.delete(id);
+    if (had !== node) setAttached((count) => count + 1);
   }, []);
 
   // Artboards are laid out in a row by the canvas itself; the boxes feed the arrow layer.
@@ -352,7 +362,7 @@ export function Canvas() {
             id={selectedComponent.id}
             target={nodes.current.get(selectedComponent.id)}
             container={layerRef.current}
-            deps={snapshot}
+            deps={[snapshot, attached]}
             scale={scale}
             label={selectedComponent.name ?? selectedComponent.type}
             variant="selected"
@@ -392,6 +402,17 @@ export function Canvas() {
             height: drawPlace.draw.rect.height,
           }}
         />
+      ) : null}
+
+      {artboards.length === 0 ? (
+        <div className="canvas__empty" data-testid="canvas-empty">
+          <p>
+            <strong>Draw a frame to make your first screen.</strong>
+          </p>
+          <p className="panel__hint">
+            Press <kbd>F</kbd> and drag anywhere here, or pick a device size from the frame tool.
+          </p>
+        </div>
       ) : null}
 
       {chrome.rulers ? (

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { diagnose, type Problem } from '@loom/compiler';
 import {
-  __resetStore,
   addArtboard,
   addComponent,
   getState,
@@ -11,6 +10,7 @@ import {
   setActiveArtboard,
   setMode,
 } from '../src/state/store';
+import { resetWithScreen } from './helpers';
 import { addGraphNode, connect, ensureMirror, removeNode } from '../src/state/graph';
 import { revealProblem } from '../src/state/problems';
 import { setVisibleWhen } from '../src/state/conditions';
@@ -46,7 +46,7 @@ function unwrittenVariable(): { bucket: string; output: string } {
 }
 
 describe('clicking a problem', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('switches to Nodes mode and selects the node', () => {
     const { bucket } = unwrittenVariable();
@@ -120,7 +120,7 @@ describe('clicking a problem', () => {
 });
 
 describe('the editor does not leave references behind', () => {
-  beforeEach(() => __resetStore());
+  beforeEach(() => resetWithScreen());
 
   it('clears a condition when the node it reads is deleted', () => {
     const checkbox = place('Checkbox');

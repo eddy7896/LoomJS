@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_SCREEN, SCREEN_PRESETS, screenPreset } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { selectComponent } from '../state/store';
-import { notePreviewLoaded, usePreviewSync } from './usePreviewSync';
+import { notePreviewLoaded, notePreviewMounted, usePreviewSync } from './usePreviewSync';
 
 /**
  * The Preview, as a floating window (`docs/12-canvas.md`).
@@ -171,6 +171,7 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
   // A stable callback, so it runs when the frame really mounts rather than on every render.
   const corrections = useRef(0);
   const mountFrame = useCallback((node: HTMLIFrameElement | null) => {
+    notePreviewMounted(Boolean(node));
     if (!node) return;
     startedAt.current = missedNow.current;
     corrections.current = 0;
@@ -361,7 +362,11 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
           {/* Nothing is loaded until the first build exists: until then the preview directory
               holds the bare seed app, and showing that would be showing someone else's project.
               The build a page missed while loading is caught by the reload above. */}
-          {status.url && status.builds > 0 ? (
+          {Object.keys(snapshot.artboards).length === 0 ? (
+            <div className="preview__booting" data-testid="preview-empty">
+              Nothing to run yet — draw a screen.
+            </div>
+          ) : status.url && status.builds > 0 ? (
             <div className="preview__stage" ref={stageRef}>
               <div
                 className={`preview__device-frame ${chrome ? `is-${chrome}` : ''}`}
