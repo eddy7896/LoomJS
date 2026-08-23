@@ -17,9 +17,11 @@ import {
   disconnect,
   hasEnv,
   readServerEnv,
+  schemaEditing,
   type ServerEnv,
 } from '../state/connectors';
 import { SchemaList } from './SchemaTable';
+import { NewTable } from './SchemaEditor';
 
 /**
  * Connections live here. The panel can write credentials and prove they work; it can never read
@@ -44,6 +46,10 @@ export function DataPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [serverEnv, setServerEnv] = useState<ServerEnv>({ names: [], values: {} });
+  const [making, setMaking] = useState(false);
+
+  // Schema editing needs a connection that can run statements; Firestore keeps a shape instead.
+  const editing = schemaEditing(snapshot, serverEnv.names);
 
   useEffect(() => {
     void readServerEnv().then(setServerEnv);
@@ -126,7 +132,29 @@ export function DataPanel() {
                   ? 'Service role key held by the dev server; the project keeps only its name.'
                   : 'No service role key — reads and writes will fail until you reconnect.'}
           </p>
-          <SchemaList tables={tables} />
+          {editing === 'sql' || editing === 'shape' ? (
+            <div className="row-actions">
+              <button data-testid="new-table" onClick={() => setMaking((value) => !value)}>
+                + {editing === 'shape' ? 'Collection' : 'Table'}
+              </button>
+            </div>
+          ) : null}
+
+          {editing === 'needs-connection-string' ? (
+            <p className="panel__hint">
+              To make tables from here, loom needs this project's Postgres connection string —
+              PostgREST cannot change a schema. Add it as DATABASE_URL in .env.local.
+            </p>
+          ) : null}
+
+          {making && (editing === 'sql' || editing === 'shape') ? (
+            <NewTable shape={editing === 'shape'} onDone={() => setMaking(false)} />
+          ) : null}
+
+          <SchemaList
+            tables={tables}
+            editing={editing === 'sql' || editing === 'shape' ? editing : undefined}
+          />
         </>
       ) : null}
 

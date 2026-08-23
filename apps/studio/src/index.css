@@ -2077,3 +2077,57 @@ input[type='color'] {
   color: inherit;
   cursor: pointer;
 }
+
+/* D5: making the data structure. Dense rows, because a table is a list of small decisions. */
+.schema-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 10px;
+}
+
+.schema-edit__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.schema-edit__row input[type='text'],
+.schema-edit__row input:not([type]) {
+  flex: 1 1 90px;
+  min-width: 0;
+}
+
+.schema-edit__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.schema-edit__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+/* A drop says what it destroys, and asks for the name to be typed. */
+.schema-edit__danger {
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--line));
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-edit__danger p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}

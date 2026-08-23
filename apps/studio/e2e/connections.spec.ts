@@ -207,3 +207,105 @@ test('a comparison Firestore cannot make is not on the menu', async ({ page }) =
   const operators = page.getByTestId('filter-0-operator').locator('option');
   await expect(operators).toHaveText(['is', 'is not', 'is more than', 'is less than']);
 });
+
+/**
+ * Making the data structure (D5).
+ *
+ * The dev server is what holds the connection, so its answers are what this stands in for — the
+ * panel, the statements it builds and the confirmation it demands are all real. What the database
+ * would have said about a bad cast is not covered here, and cannot be without one.
+ */
+let schema = [
+  {
+    table_name: 'notes',
+    column_name: 'id',
+    data_type: 'uuid',
+    is_nullable: 'NO',
+    column_default: 'gen_random_uuid()',
+    is_primary: true,
+  },
+  {
+    table_name: 'notes',
+    column_name: 'title',
+    data_type: 'text',
+    is_nullable: 'YES',
+    column_default: null,
+    is_primary: false,
+  },
+  // `connect` above waits for both tables, so the schema this stub reports carries both.
+  {
+    table_name: 'authors',
+    column_name: 'name',
+    data_type: 'text',
+    is_nullable: 'YES',
+    column_default: null,
+    is_primary: false,
+  },
+];
+
+/** Every statement the studio asked the dev server to run. */
+async function stubSchema(page: Page): Promise<string[]> {
+  const applied: string[] = [];
+
+  await page.route('**/__loom/introspect-sql', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, rows: schema }),
+    });
+  });
+  await page.route('**/__loom/apply-schema', async (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as { statements: string[] };
+    applied.push(...body.statements);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.route('**/__loom/env', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, names: [], values: {} }),
+    });
+  });
+
+  return applied;
+}
+
+test('a table is made from the panel, in words rather than in SQL', async ({ page }) => {
+  const applied = await stubSchema(page);
+  await connect(page);
+
+  await page.getByTestId('new-table').click();
+  await page.getByTestId('new-table-name').fill('tasks');
+  await page.getByTestId('new-table-add-column').click();
+  await page.getByTestId('new-column-0-name').fill('label');
+  await page.getByTestId('new-column-0-required').check();
+  await page.getByTestId('create-table').click();
+
+  await expect.poll(() => applied).toEqual([
+    'create table "tasks" ("id" uuid primary key default gen_random_uuid(), "label" text not null)',
+  ]);
+});
+
+test('dropping a column asks for its name to be typed', async ({ page }) => {
+  const applied = await stubSchema(page);
+  await connect(page);
+
+  await page.getByTestId('table-notes').click();
+  await page.getByTestId('column-title-drop').click();
+
+  const confirm = page.getByTestId('confirm-drop');
+  await expect(confirm).toContainText('deletes what every row holds in it');
+
+  // The wrong name does not arm it.
+  await page.getByTestId('confirm-name').fill('notes');
+  await expect(page.getByTestId('confirm-drop-go')).toBeDisabled();
+
+  await page.getByTestId('confirm-name').fill('title');
+  await page.getByTestId('confirm-drop-go').click();
+
+  await expect.poll(() => applied).toEqual(['alter table "notes" drop column "title"']);
+});

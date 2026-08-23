@@ -21,6 +21,9 @@ import { createServer, type Plugin, type ViteDevServer } from 'vite';
  * it is hosting them for the Preview, not using them itself.
  */
 
+/** Kept in step with `DDL_VERBS` in `packages/connectors/src/ddl.ts`. */
+const DDL_VERBS = ['create table', 'alter table', 'drop table', 'create index', 'drop index'];
+
 /** Kept in step with `INTROSPECT_SQL.postgres` in `packages/connectors/src/sql.ts`. */
 const INTROSPECT_POSTGRES = `
   SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.column_default,
@@ -44,6 +47,28 @@ const INTROSPECT_POSTGRES = `
  * can only be described by looking, and looking costs a read per document.
  */
 const SAMPLE_DOCS = 25;
+
+/**
+ * Whether a request came from the studio itself.
+ *
+ * These endpoints hold the project's credentials and, since D5, run schema changes — and they
+ * listen on localhost, where *any* page in the same browser can reach them. A browser attaches
+ * `Origin` to every cross-origin request it makes, so a mismatch is refused. Requiring JSON is the
+ * second half: a cross-origin JSON POST needs a preflight, and nothing here answers one.
+ *
+ * A request with no Origin at all is a non-browser client — curl, a test, the studio's own
+ * server-side code — and is allowed, because the threat being closed is a page the user did not
+ * open on purpose.
+ */
+function fromStudio(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === (req.headers.host ?? '');
+  } catch {
+    return false;
+  }
+}
 
 /** A written-out newline, as it arrives inside a private key that travelled through an env var. */
 const BACKSLASH_N = String.fromCharCode(92) + 'n';
@@ -263,6 +288,7 @@ export function loomPreview(): Plugin {
           return;
         }
         if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
 
         void (async () => {
           try {
@@ -297,6 +323,7 @@ export function loomPreview(): Plugin {
        */
       server.middlewares.use('/__loom/introspect', (req, res, next) => {
         if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
 
         void (async () => {
           try {
@@ -338,6 +365,7 @@ export function loomPreview(): Plugin {
        */
       server.middlewares.use('/__loom/introspect-sql', (req, res, next) => {
         if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
 
         void (async () => {
           const body = JSON.parse(await readBody(req)) as {
@@ -383,6 +411,7 @@ export function loomPreview(): Plugin {
        */
       server.middlewares.use('/__loom/introspect-firestore', (req, res, next) => {
         if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
 
         void (async () => {
           const body = JSON.parse(await readBody(req)) as { serviceAccount?: string };
@@ -452,6 +481,78 @@ export function loomPreview(): Plugin {
               };
               await admin.deleteApp(app).catch(() => undefined);
             }
+          }
+        })();
+      });
+
+      /**
+       * A schema change, run against the database the project is connected to.
+       *
+       * The statements are built in the browser (`packages/connectors/src/ddl.ts`), so this end
+       * does not assume they were built there: each one has to be a single statement beginning
+       * with a schema verb, and they run inside one transaction so a change that is two
+       * statements cannot land half-applied.
+       */
+      server.middlewares.use('/__loom/apply-schema', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        if (!fromStudio(req)) return json(res, 403, { ok: false, error: 'Not from the studio.' });
+
+        void (async () => {
+          const body = JSON.parse(await readBody(req)) as { statements?: string[] };
+          const statements = (body.statements ?? []).filter(
+            (statement) => typeof statement === 'string' && statement.trim() !== '',
+          );
+          const connectionString = process.env.DATABASE_URL || '';
+
+          if (statements.length === 0) {
+            return json(res, 200, { ok: false, error: 'Nothing to apply.' });
+          }
+          if (!connectionString) {
+            return json(res, 200, {
+              ok: false,
+              error:
+                'No DATABASE_URL on the dev server. Schema changes are made over a database ' +
+                'connection, so connect one first.',
+            });
+          }
+
+          for (const statement of statements) {
+            const text = statement.trim().toLowerCase();
+            if (!DDL_VERBS.some((verb) => text.startsWith(verb))) {
+              return json(res, 200, { ok: false, error: 'That is not a schema change.' });
+            }
+            if (statement.replace(/'(?:[^']|'')*'/g, "''").includes(';')) {
+              return json(res, 200, { ok: false, error: 'A schema change is one statement.' });
+            }
+          }
+
+          let pool:
+            | {
+                query: (text: string, values?: unknown[]) => Promise<unknown>;
+                end: () => Promise<void>;
+              }
+            | undefined;
+          try {
+            const { Pool } = (await import('pg')) as unknown as {
+              Pool: new (config: Record<string, unknown>) => NonNullable<typeof pool>;
+            };
+            pool = new Pool({ connectionString, max: 1, connectionTimeoutMillis: 10_000 });
+
+            // All of it, or none of it.
+            await pool.query('begin');
+            try {
+              for (const statement of statements) await pool.query(statement);
+              await pool.query('commit');
+            } catch (error) {
+              await pool.query('rollback').catch(() => undefined);
+              throw error;
+            }
+
+            json(res, 200, { ok: true });
+          } catch (error) {
+            json(res, 200, { ok: false, error: scrub((error as Error).message, connectionString) });
+          } finally {
+            await pool?.end().catch(() => undefined);
           }
         })();
       });

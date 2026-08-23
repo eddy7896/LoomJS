@@ -2,16 +2,21 @@ import { newConnectorId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
   checkConnectionString,
   checkServiceAccount,
+  columnFromSpec,
   createDbNode,
   createQueryNode,
   dbNodePorts,
+  isDocumentStore,
   parseColumnRows,
   parseSampledDocs,
+  planChange,
   queryNodePorts,
   speaksSql,
   supabaseConnector,
   type ColumnRow,
+  type ColumnSpec,
   type SampledDoc,
+  type SchemaChange,
   type DbFilter,
   type DbNodeConfig,
   type DbOperation,
@@ -559,10 +564,198 @@ export function setDbFilters(nodeId: Id, filters: DbFilter[]): void {
   if (route) retypeRoute(route);
 }
 
+/**
+ * Make a schema change (`docs/15-schema.md`).
+ *
+ * The statements are built here, where the checks live, and run on the dev server — a browser
+ * cannot open a database connection, and DDL is not something to trust a round trip about. What
+ * comes back is whether it worked; what happens next is a re-read, because the cached schema is
+ * now wrong.
+ */
+export async function applySchemaChange(change: SchemaChange): Promise<{ ok: boolean; error?: string }> {
+  const connector = connection(getState().snapshot);
+  if (!connector) return { ok: false, error: 'No connection to change.' };
+
+  // A document store has no schema to alter: the shape is loom's own, so it is edited in the
+  // document rather than sent anywhere.
+  if (isDocumentStore(connector.moduleId)) return applyToShape(change);
+
+  let statements: string[];
+  try {
+    statements = planChange(change);
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  try {
+    const response = await fetch('/__loom/apply-schema', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ statements }),
+    });
+    const payload = (await response.json()) as { ok?: boolean; error?: string };
+    if (!payload.ok) return { ok: false, error: payload.error ?? 'The change did not apply.' };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  await refreshSchema();
+  return { ok: true };
+}
+
+/**
+ * The same change, against a shape loom keeps itself.
+ *
+ * Firestore has no DDL, and writing a placeholder document to "create" a collection would be loom
+ * putting junk in someone's database. So the shape is a record of what the designer says a
+ * collection holds — real enough to type ports and build forms from, and honest that the database
+ * enforces none of it.
+ */
+function applyToShape(change: SchemaChange): { ok: boolean; error?: string } {
+  const connector = connection(getState().snapshot);
+  if (!connector) return { ok: false, error: 'No connection to change.' };
+
+  const config = (connector.config ?? {}) as { schema?: { tables?: TableSchema[] } };
+  const tables = [...(config.schema?.tables ?? [])];
+  const indexOf = (name: string): number => tables.findIndex((table) => table.name === name);
+
+  const edit = (name: string, change: (table: TableSchema) => TableSchema): void => {
+    const at = indexOf(name);
+    if (at >= 0) tables[at] = change(tables[at]!);
+  };
+
+  switch (change.kind) {
+    case 'createTable':
+      if (indexOf(change.table.name) >= 0) {
+        return { ok: false, error: `There is already a collection called ${change.table.name}.` };
+      }
+      tables.push({
+        name: change.table.name,
+        columns: [
+          { name: 'id', type: { kind: 'text' }, required: false, primaryKey: true, generated: true },
+          ...change.table.columns.map(columnFromSpec),
+        ],
+      });
+      break;
+
+    case 'addColumn':
+      edit(change.table, (table) => ({
+        ...table,
+        columns: [...table.columns, columnFromSpec(change.column)],
+      }));
+      break;
+
+    case 'renameColumn':
+      edit(change.table, (table) => ({
+        ...table,
+        columns: table.columns.map((column) =>
+          column.name === change.from ? { ...column, name: change.to } : column,
+        ),
+      }));
+      break;
+
+    case 'dropColumn':
+      edit(change.table, (table) => ({
+        ...table,
+        columns: table.columns.filter((column) => column.name !== change.column),
+      }));
+      break;
+
+    case 'renameTable':
+      edit(change.from, (table) => ({ ...table, name: change.to }));
+      break;
+
+    case 'dropTable': {
+      const at = indexOf(change.table);
+      if (at >= 0) tables.splice(at, 1);
+      break;
+    }
+
+    default:
+      // Types, defaults, requirements and uniqueness are rules a database enforces, and this one
+      // does not. Saying so beats keeping a flag that means nothing.
+      return {
+        ok: false,
+        error: 'Firestore stores whatever a document holds, so that is not something loom can set.',
+      };
+  }
+
+  dispatch({
+    type: 'setConnectorConfig',
+    connectorId: connector.id,
+    config: { ...(connector.config as Record<string, unknown>), schema: { tables } },
+  });
+  retypeAgainstSchema();
+  return { ok: true };
+}
+
+/** Read the schema again, and retype everything standing on it. */
+export async function refreshSchema(): Promise<void> {
+  const connector = connection(getState().snapshot);
+  if (!connector) return;
+
+  const config = (connector.config ?? {}) as { schemaName?: string };
+  if (connector.moduleId === 'postgres') {
+    await connectPostgres({ connectionString: '', schema: config.schemaName });
+  } else if (connector.moduleId === 'supabase') {
+    const url = connectionUrl(getState().snapshot) ?? '';
+    await connectSupabase({ url, anonKey: '', serviceKey: '' });
+  }
+
+  retypeAgainstSchema();
+}
+
+/**
+ * Bring every database node back in line with the schema.
+ *
+ * A column that no longer exists must not survive as a port: the emitted code would reference a
+ * column the database does not have, which is a failed write at best and a silent one at worst.
+ * Routes are retyped with their steps, because a route's inputs *are* its body's shape.
+ */
+export function retypeAgainstSchema(): void {
+  const snapshot = getState().snapshot;
+
+  for (const node of Object.values(snapshot.nodes)) {
+    if (node.category !== 'db' || node.kind === 'query') continue;
+    const config = (node.config ?? {}) as Partial<DbNodeConfig>;
+    const table = connectedTables(snapshot).find((candidate) => candidate.name === config.table);
+    if (!table) continue;
+
+    dispatch({
+      type: 'setNodeConfig',
+      nodeId: node.id,
+      config: config as unknown as Record<string, unknown>,
+      ports: dbNodePorts(table, (config.operation ?? node.kind) as DbOperation, config.filters ?? []),
+    });
+  }
+
+  for (const node of Object.values(getState().snapshot.nodes)) {
+    if (node.category === 'api') retypeRoute(node.id);
+  }
+}
+
 /** The columns of the table a database node reads or writes, for the inspector to offer. */
 export function columnsOf(snapshot: Snapshot, nodeId: Id): TableSchema['columns'] {
   const node = snapshot.nodes[nodeId];
   const config = (node?.config ?? {}) as Partial<DbNodeConfig>;
   const table = connectedTables(snapshot).find((candidate) => candidate.name === config.table);
   return table?.columns ?? [];
+}
+
+/**
+ * How this project can change its schema (`docs/15-schema.md`).
+ *
+ * `sql` means DDL over a real connection. `shape` means Firestore, where loom keeps the shape and
+ * the database enforces none of it. `needs-connection-string` is the Supabase case: PostgREST
+ * cannot run DDL, so schema editing waits for the project's Postgres URL rather than pretending
+ * the buttons will work.
+ */
+export type SchemaEditing = 'sql' | 'shape' | 'needs-connection-string' | 'none';
+
+export function schemaEditing(snapshot: Snapshot, serverNames: readonly string[]): SchemaEditing {
+  const connector = connection(snapshot);
+  if (!connector) return 'none';
+  if (isDocumentStore(connector.moduleId)) return 'shape';
+  if (connector.moduleId === 'postgres') return 'sql';
+  return serverNames.includes('DATABASE_URL') ? 'sql' : 'needs-connection-string';
 }

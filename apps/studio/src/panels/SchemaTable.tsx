@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { TableSchema } from '@loom/connectors';
+import { TableEditor } from './SchemaEditor';
 
 /**
  * A table's columns, as a table.
@@ -51,8 +52,17 @@ export function SchemaTable({ table }: { table: TableSchema }) {
   );
 }
 
-/** The connected tables, each one opening to show its columns. */
-export function SchemaList({ tables }: { tables: readonly TableSchema[] }) {
+/**
+ * The connected tables, each one opening to show its columns — and, where the connection allows
+ * it, to change them (`docs/15-schema.md`).
+ */
+export function SchemaList({
+  tables,
+  editing,
+}: {
+  tables: readonly TableSchema[];
+  editing?: 'sql' | 'shape';
+}) {
   const [open, setOpen] = useState<string | undefined>();
 
   return (
@@ -71,7 +81,12 @@ export function SchemaList({ tables }: { tables: readonly TableSchema[] }) {
             </span>
             <span className="mono id">{table.columns.length} cols</span>
           </button>
-          {open === table.name ? <SchemaTable table={table} /> : null}
+          {open === table.name ? (
+            <>
+              <SchemaTable table={table} />
+              {editing ? <TableEditor table={table} shape={editing === 'shape'} /> : null}
+            </>
+          ) : null}
         </li>
       ))}
     </ul>
