@@ -1,14 +1,17 @@
 import { newConnectorId, newNodeId, type Id, type Snapshot } from '@loom/ir';
 import {
   checkConnectionString,
+  checkServiceAccount,
   createDbNode,
   createQueryNode,
   dbNodePorts,
   parseColumnRows,
+  parseSampledDocs,
   queryNodePorts,
   speaksSql,
   supabaseConnector,
   type ColumnRow,
+  type SampledDoc,
   type DbFilter,
   type DbNodeConfig,
   type DbOperation,
@@ -281,6 +284,73 @@ export async function connectPostgres(input: PostgresInput): Promise<ConnectResu
   return { ok: true, connectorId, tables };
 }
 
+export interface FirestoreInput {
+  /** The whole key file. Empty means "use the one the dev server already holds". */
+  serviceAccount: string;
+}
+
+/**
+ * Connect to a Firestore project.
+ *
+ * There is no schema to read, so connecting *samples* documents: the dev server lists the
+ * collections and reads the first few of each, and what comes back is the fields those documents
+ * happened to carry. That is the honest description of a schemaless store, and the panel says how
+ * many documents it looked at rather than implying it found a schema.
+ */
+export async function connectFirestore(input: FirestoreInput): Promise<ConnectResult> {
+  const serviceAccount = input.serviceAccount.trim();
+  let projectId = '';
+
+  if (serviceAccount) {
+    try {
+      projectId = checkServiceAccount(serviceAccount).projectId;
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  }
+
+  let tables: TableSchema[];
+  try {
+    const response = await fetch('/__loom/introspect-firestore', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ serviceAccount }),
+    });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      docs?: SampledDoc[];
+      projectId?: string;
+      error?: string;
+    };
+    if (!payload.ok) return { ok: false, error: payload.error ?? 'Could not read the project.' };
+    tables = parseSampledDocs(payload.docs ?? []);
+    projectId = projectId || String(payload.projectId ?? '');
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+
+  // The key holds a private key, so it goes to the server and nowhere else. What the document
+  // keeps is the project id and the sampled shape, neither of which is secret.
+  if (serviceAccount) await sendToServer({ FIREBASE_SERVICE_ACCOUNT: serviceAccount });
+
+  const existing = Object.values(getState().snapshot.connectors).find(
+    (connector) => connector.moduleId === 'firestore',
+  );
+  const connectorId = existing?.id ?? newConnectorId();
+  const config = { schema: { tables }, projectId };
+
+  if (existing) {
+    dispatch({ type: 'setConnectorConfig', connectorId, config });
+  } else {
+    dispatch({
+      type: 'addConnector',
+      connector: { id: connectorId, moduleId: 'firestore', config, credentialRef: 'default' },
+    });
+  }
+
+  return { ok: true, connectorId, tables };
+}
+
 export function supabaseConnection(snapshot: Snapshot) {
   return Object.values(snapshot.connectors).find((c) => c.moduleId === 'supabase');
 }
@@ -305,8 +375,15 @@ export function connectedTables(snapshot: Snapshot): TableSchema[] {
 export function connectionUrl(snapshot: Snapshot): string | undefined {
   const connector = connection(snapshot);
   if (!connector) return undefined;
-  const config = (connector.config ?? {}) as { url?: string; schemaName?: string };
-  return config.url ?? `${config.schemaName ?? 'public'} schema`;
+  const config = (connector.config ?? {}) as {
+    url?: string;
+    schemaName?: string;
+    projectId?: string;
+  };
+  if (config.url) return config.url;
+  return connector.moduleId === 'firestore'
+    ? (config.projectId ?? 'Firestore project')
+    : `${config.schemaName ?? 'public'} schema`;
 }
 
 export function disconnect(): void {

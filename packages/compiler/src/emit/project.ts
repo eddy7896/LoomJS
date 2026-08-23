@@ -36,6 +36,8 @@ export interface ScaffoldOptions {
   usesDatabase?: boolean;
   /** Adds the Postgres driver, for a project that talks to a database directly. */
   usesSql?: boolean;
+  /** Adds the Firebase admin SDK, for a project whose data lives in Firestore. */
+  usesFirestore?: boolean;
   /** The project's token overrides, emitted into its stylesheet. */
   theme?: ThemeOverrides;
 }
@@ -63,6 +65,7 @@ export function scaffoldFiles(
       // Only what this project actually reaches for: a Supabase app never installs a driver it
       // does not open, and a Postgres app never carries a REST client it does not call.
       ...(options.usesSql ? { pg: '^8.13.1' } : {}),
+      ...(options.usesFirestore ? { 'firebase-admin': '^13.0.0' } : {}),
     },
     devDependencies: { ...TARGET_DEV_DEPS, ...sqlTypes },
   };

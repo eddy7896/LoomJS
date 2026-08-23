@@ -7,8 +7,9 @@ import {
 } from '@loom/components';
 import { FILTER_OPS, type DbFilter, type DbNodeConfig, type FilterOp } from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
-import { dialectOf, moduleFor } from '@loom/connectors';
+import { dialectOf, isDocumentStore, moduleFor } from '@loom/connectors';
 import { CompileError, type EmittedFile } from '../types';
+import { firestorePrelude, firestoreStep } from './firestore';
 import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
 
@@ -94,8 +95,8 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   if (node.kind === 'query') {
     if (!dialect) {
       throw new CompileError(
-        `A query is written in SQL, and "${connector.moduleId}" is reached over HTTP rather than ` +
-          `by SQL. Use the read, insert, update and delete nodes with that connection.`,
+        `A query is written in SQL, and "${connector.moduleId}" does not run statements. Use ` +
+          `the read, insert, update and delete nodes with that connection.`,
         node.id,
       );
     }
@@ -104,6 +105,8 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
 
   const table = String(config.table ?? '');
   if (!table) throw new CompileError('Database node has no table selected.', node.id);
+
+  if (isDocumentStore(connector.moduleId)) return firestoreStep(node, table);
 
   if (dialect) {
     return sqlStep(node, dialect, table, primaryKeyName(node, snapshot, table));
@@ -526,6 +529,9 @@ export function emitApiFunction(
   const sqlNode = plan.body.find(
     (node) => node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId),
   );
+  const documentNode = plan.body.find(
+    (node) => node.category === 'db' && isDocumentStore(connectorFor(node, snapshot).moduleId),
+  );
 
   // A serverless route talks REST, so it takes Supabase's REST client rather than the full
   // supabase-js: the umbrella package builds a realtime client on import, which needs Node 22's
@@ -588,6 +594,8 @@ const slot = (index: number): string => '$' + index;
 
   const dbPrelude = !usesDb
     ? ''
+    : documentNode
+    ? firestorePrelude(steps)
     : sqlNode
     ? sqlPrelude
     : auth

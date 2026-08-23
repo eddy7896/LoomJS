@@ -37,6 +37,17 @@ const INTROSPECT_POSTGRES = `
   ORDER BY c.table_name, c.ordinal_position
 `;
 
+/**
+ * How many documents are read per collection to work out what it holds.
+ *
+ * Kept in step with `SAMPLE_SIZE` in `packages/connectors/src/firestore.ts`. A schemaless store
+ * can only be described by looking, and looking costs a read per document.
+ */
+const SAMPLE_DOCS = 25;
+
+/** A written-out newline, as it arrives inside a private key that travelled through an env var. */
+const BACKSLASH_N = String.fromCharCode(92) + 'n';
+
 /** Preferred port; the child server falls back if it is taken, and reports its real URL. */
 export const PREVIEW_PORT = 5174;
 
@@ -59,7 +70,7 @@ const CLIENT_SCOPED = new Set(['SUPABASE_URL', 'SUPABASE_ANON_KEY']);
  * a connection string carries its own password, so the studio may learn that one exists and never
  * what it is (`docs/specs/connector-credentials.md`).
  */
-const HELD = /^(SUPABASE_|DATABASE_URL$)/;
+const HELD = /^(SUPABASE_|DATABASE_URL$|FIREBASE_SERVICE_ACCOUNT$)/;
 
 /**
  * A connection string, scrubbed out of whatever a driver said.
@@ -358,6 +369,89 @@ export function loomPreview(): Plugin {
           } finally {
             // A studio that connects five times in a row should not leave five pools open.
             await pool?.end().catch(() => undefined);
+          }
+        })();
+      });
+
+      /**
+       * What a Firestore project holds, learnt by reading it.
+       *
+       * There is no schema to ask for, so this lists the collections and reads the first few
+       * documents of each — which is also why it runs here: the service account holds a private
+       * key, and a browser could not open the connection anyway. Only field names and sampled
+       * values come back, and the key stays in this process.
+       */
+      server.middlewares.use('/__loom/introspect-firestore', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+
+        void (async () => {
+          const body = JSON.parse(await readBody(req)) as { serviceAccount?: string };
+          // An empty string means "use what you already hold", the same as the SQL endpoint.
+          const raw = body.serviceAccount || process.env.FIREBASE_SERVICE_ACCOUNT || '';
+          if (!raw) {
+            return json(res, 200, {
+              ok: false,
+              error: 'No service account key, and no FIREBASE_SERVICE_ACCOUNT on the dev server.',
+            });
+          }
+
+          let app: { name: string } | undefined;
+          try {
+            const key = JSON.parse(raw) as Record<string, string>;
+            const admin = (await import('firebase-admin/app')) as unknown as {
+              cert: (account: Record<string, string>) => unknown;
+              initializeApp: (options: Record<string, unknown>, name: string) => { name: string };
+              deleteApp: (app: { name: string }) => Promise<void>;
+            };
+            const store = (await import('firebase-admin/firestore')) as unknown as {
+              getFirestore: (app: { name: string }) => {
+                listCollections: () => Promise<
+                  {
+                    id: string;
+                    limit: (n: number) => {
+                      get: () => Promise<{
+                        docs: { id: string; data: () => Record<string, unknown> }[];
+                      }>;
+                    };
+                  }[]
+                >;
+              };
+            };
+
+            // A named app per attempt: connecting twice with different keys must not reuse the
+            // first one, and the default app would.
+            app = admin.initializeApp(
+              {
+                credential: admin.cert({
+                  projectId: key.project_id ?? key.projectId ?? '',
+                  clientEmail: key.client_email ?? key.clientEmail ?? '',
+                  privateKey: (key.private_key ?? key.privateKey ?? '').split(BACKSLASH_N).join(NEWLINE),
+                }),
+              },
+              `loom-introspect-${Date.now()}`,
+            );
+
+            const db = store.getFirestore(app);
+            const collections = (await db.listCollections()).slice(0, 50);
+            const docs: { collection: string; id: string; fields: Record<string, unknown> }[] = [];
+
+            for (const collection of collections) {
+              const page = await collection.limit(SAMPLE_DOCS).get();
+              for (const doc of page.docs) {
+                docs.push({ collection: collection.id, id: doc.id, fields: doc.data() });
+              }
+            }
+
+            json(res, 200, { ok: true, docs, projectId: key.project_id ?? key.projectId ?? '' });
+          } catch (error) {
+            json(res, 200, { ok: false, error: scrub((error as Error).message, raw) });
+          } finally {
+            if (app) {
+              const admin = (await import('firebase-admin/app')) as unknown as {
+                deleteApp: (app: { name: string }) => Promise<void>;
+              };
+              await admin.deleteApp(app).catch(() => undefined);
+            }
           }
         })();
       });

@@ -5,7 +5,13 @@ import {
   CURRENT_USER_DEF,
 } from '@loom/components';
 import { inferBackend } from '@loom/inference';
-import { columnPortId, createDbNode, dbNodePorts, filterPortId } from '@loom/connectors';
+import {
+  columnPortId,
+  createDbNode,
+  dbNodePorts,
+  filterPortId,
+  type TableSchema,
+} from '@loom/connectors';
 import {
   applyOps,
   SCHEMA_VERSION,
@@ -1501,6 +1507,96 @@ export function postgresOperationsSnapshot(): Snapshot {
       parentId: 'cp_root000001',
       component: {
         id: `cp_show_${step.operation}`,
+        type: 'Text',
+        name: `The ${step.operation}`,
+        props: { content: { kind: 'bound', source: { nodeId: routeId, portId: 'pt_result' } } },
+      },
+    });
+  }
+
+  return applyOps(base, ops);
+}
+
+/**
+ * The same project again, with its data in Firestore.
+ *
+ * The collection is called `notes` and its documents carry a `title`, so the graph above needs no
+ * changes — which is the whole claim being checked: a node says the same thing whichever
+ * connection is under it, even when the connection underneath is a different kind of database.
+ */
+export function firestoreSnapshot(): Snapshot {
+  const base = supabaseSnapshot();
+  return {
+    ...base,
+    connectors: {
+      ...base.connectors,
+      cn_supabase: {
+        ...base.connectors.cn_supabase!,
+        moduleId: 'firestore',
+        config: {
+          projectId: 'demo-app',
+          schema: {
+            tables: [
+              {
+                name: 'notes',
+                columns: [
+                  { name: 'id', type: { kind: 'text' }, required: false, primaryKey: true, generated: true },
+                  { name: 'title', type: { kind: 'text' }, required: false, primaryKey: false, generated: false },
+                  { name: 'weight', type: { kind: 'number' }, required: false, primaryKey: false, generated: false },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
+ * A Firestore project exercising every operation it can do, one route each.
+ *
+ * `min` and `max` are absent on purpose: Firestore aggregates are count, sum and average, and the
+ * compiler refuses the other two rather than emitting something that fails when it runs.
+ */
+export function firestoreOperationsSnapshot(): Snapshot {
+  const base = firestoreSnapshot();
+  const table = (base.connectors.cn_supabase!.config as {
+    schema: { tables: TableSchema[] };
+  }).schema.tables[0]!;
+  const ops: Op[] = [];
+
+  const steps = [
+    { id: 'nd_fcount', operation: 'count' as const, config: {} },
+    { id: 'nd_fsave', operation: 'upsert' as const, config: {} },
+    { id: 'nd_ftotal', operation: 'aggregate' as const, config: { fn: 'sum', column: 'weight' } },
+    { id: 'nd_fedit', operation: 'update' as const, config: {} },
+    { id: 'nd_fdrop', operation: 'delete' as const, config: {} },
+  ];
+
+  for (const step of steps) {
+    const made = createDbNode(step.id, { x: 0, y: 600 }, 'cn_supabase', table, step.operation);
+    const node = { ...made, config: { ...made.config, ...step.config } };
+    const routeId = `nd_fr_${step.operation}`;
+
+    ops.push({ type: 'addNode', node });
+    ops.push({
+      type: 'addNode',
+      node: {
+        id: routeId,
+        category: 'api',
+        kind: 'route',
+        name: `${step.operation} notes`,
+        position: { x: 320, y: 600 },
+        config: { method: 'POST', path: `${step.operation}notes`, body: [step.id] },
+        ports: apiPortsFromBody([node]),
+      },
+    });
+    ops.push({
+      type: 'addComponent',
+      parentId: 'cp_root000001',
+      component: {
+        id: `cp_fshow_${step.operation}`,
         type: 'Text',
         name: `The ${step.operation}`,
         props: { content: { kind: 'bound', source: { nodeId: routeId, portId: 'pt_result' } } },

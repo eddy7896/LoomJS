@@ -148,7 +148,7 @@ describe('a statement the designer wrote', () => {
         config: { method: 'POST', path: 'notes', body: ['nd_q'] },
       },
     ]);
-    expect(() => compile(overRest)).toThrow(/reached over HTTP/);
+    expect(() => compile(overRest)).toThrow(/does not run statements/);
   });
 });
 

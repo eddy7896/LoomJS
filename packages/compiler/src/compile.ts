@@ -7,7 +7,7 @@ import { emitApiFunction } from './emit/server';
 import { scaffoldFiles } from './emit/project';
 import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
-import { dialectOf } from '@loom/connectors';
+import { dialectOf, isDocumentStore } from '@loom/connectors';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
   AUTH_MODULE_PATH,
@@ -56,11 +56,13 @@ export function compile(snapshot: Snapshot): CompileResult {
       .filter((id): id is string => Boolean(id)),
   );
   const usesSql = [...modules].some((id) => dialectOf(id));
-  const usesDatabase = dbNodes.length > 0 && !usesSql;
+  const usesFirestore = [...modules].some((id) => isDocumentStore(id));
+  const usesDatabase = dbNodes.length > 0 && !usesSql && !usesFirestore;
 
   const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, {
     usesDatabase,
     usesSql,
+    usesFirestore,
     theme: snapshot.theme,
   });
 
@@ -101,7 +103,11 @@ export function compile(snapshot: Snapshot): CompileResult {
     files.push({ path: MESSAGES_MODULE_PATH, content: emitMessagesModule() });
   }
 
-  if (usesSql) {
+  if (usesFirestore) {
+    // The whole key file, as one value: it holds a private key, so it is a name here and a value
+    // only in the deployment (`docs/specs/connector-credentials.md`).
+    files.push({ path: '.env.example', content: `FIREBASE_SERVICE_ACCOUNT=${NEWLINE}` });
+  } else if (usesSql) {
     // One name, and it carries the password in the middle of it — which is exactly why it is a
     // name here and a value only in the deployment (`docs/specs/connector-credentials.md`).
     files.push({ path: '.env.example', content: `DATABASE_URL=${NEWLINE}` });

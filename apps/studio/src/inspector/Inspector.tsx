@@ -44,9 +44,11 @@ import {
   setThemeToken,
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
-import { connectedTables } from '../state/connectors';
+import { connectedTables, connection } from '../state/connectors';
 import {
+  aggregatesFor,
   dbNodeFields,
+  filterOpsFor,
   FILTER_OPS,
   type DbFilter,
   type DbOperation,
@@ -872,6 +874,11 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
           dbNodeFields(
             node.kind as DbOperation,
             connectedTables(snapshot).find((table) => table.name === config.table),
+          ).map((entry) =>
+            // A document store totals and averages; it has no min or max.
+            entry.key === 'fn'
+              ? { ...entry, options: aggregatesFor(connection(snapshot)?.moduleId ?? '') }
+              : entry,
           )
       : node.kind === 'math'
         ? (def?.fields ?? []).filter((entry) => applicable.has(entry.key))
@@ -1081,9 +1088,11 @@ function FiltersSection({ nodeId }: { nodeId: string }) {
               value={filter.operator}
               onChange={(event) => patch(index, { operator: event.target.value as FilterOp })}
             >
-              {Object.entries(FILTER_OPS).map(([key, op]) => (
+              {/* Only the comparisons this connection can actually make: offering one that
+                  compiles to a refusal is a dead end the designer cannot see coming. */}
+              {filterOpsFor(connection(snapshot)?.moduleId ?? '').map((key) => (
                 <option key={key} value={key}>
-                  {op.label}
+                  {FILTER_OPS[key].label}
                 </option>
               ))}
             </select>

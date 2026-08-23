@@ -13,6 +13,7 @@ import {
   conditionalSnapshot,
   crudSnapshot,
   everyComponentSnapshot,
+  firestoreOperationsSnapshot,
   operatorPipelineSnapshot,
   triggeredMathSnapshot,
   inferredSnapshot,
@@ -234,6 +235,33 @@ describe('emitted app builds for real', () => {
     expect(await readFile(join(dir, 'api', 'countnotes.ts'), 'utf8')).toContain('SELECT COUNT(*)');
     expect(await readFile(join(dir, 'api', 'upsertnotes.ts'), 'utf8')).toContain('ON CONFLICT');
     expect(await readFile(join(dir, 'api', 'aggregatenotes.ts'), 'utf8')).toContain('SUM(');
+  });
+
+  it('type-checks an app whose data lives in a document store', async () => {
+    // The Firestore admin SDK is heavily typed, and the emitted code uses its query builder
+    // rather than strings — so `tsc` here checks the mapping itself, not just the syntax.
+    const dir = await emitProject(firestoreOperationsSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const counted = await readFile(join(dir, 'api', 'countnotes.ts'), 'utf8');
+    expect(counted).toContain("import { cert, getApps, initializeApp } from 'firebase-admin/app'");
+    expect(counted).toContain('query.count().get()');
+
+    // The document id is the row's identity, added on the way out and never stored as a field.
+    const read = await readFile(join(dir, 'api', 'notes.ts'), 'utf8');
+    expect(read).toContain('found.docs.map((doc) => ({ id: doc.id, ...doc.data() }))');
+
+    const totalled = await readFile(join(dir, 'api', 'aggregatenotes.ts'), 'utf8');
+    expect(totalled).toContain('AggregateField.sum("weight")');
+
+    const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['firebase-admin']).toBeDefined();
+    expect(pkg.dependencies.pg).toBeUndefined();
+    expect(await readFile(join(dir, '.env.example'), 'utf8')).toBe(
+      'FIREBASE_SERVICE_ACCOUNT=\n',
+    );
   });
 });
 

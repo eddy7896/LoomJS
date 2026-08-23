@@ -11,10 +11,12 @@ this one, update that one, remove it. The connector decides how the app *reaches
 PostgREST request over HTTP, or a socket to the database itself — and nothing about the node,
 its ports, or the screen bound to it changes when you swap which.
 
-That claim is the reason the connector list can grow without the vocabulary growing with it. It
-also draws the line: a store that cannot be described as tables with typed columns and a primary
-key would need its own nodes, and that is a decision to make on purpose rather than an
-integration to slip in.
+That claim is the reason the connector list can grow without the vocabulary growing with it — and
+Firestore is where it was tested, because a document store is genuinely a different model rather
+than another way to reach the same one. It is **mapped**, and the mapping is written down below.
+What the mapping cannot cover is refused at compile time rather than approximated, which is the
+line: a connector may be a different shape underneath, but it may not quietly do something other
+than what the node says.
 
 ## The phases
 
@@ -23,8 +25,8 @@ integration to slip in.
 | **D1** | Postgres emission — statements, parameters, the pool, the driver, the env | done  |
 | **D2** | The studio side — connect, introspect, the schema table, the query editor | done  |
 | **D3** | More of what a database can do: count, save, total                        | done  |
-| **D4** | MySQL emission, once writes can be done honestly                          | next  |
-| **D5** | Firestore, or the decision not to                                         | open  |
+| **D4** | Firestore — the mapping, and the two things it will not pretend to do      | done  |
+| **D5** | MySQL emission, once writes can be done honestly                          | next  |
 
 ## What is emitted
 
@@ -117,3 +119,36 @@ invalidation: a screen that counted itself into re-reading itself would be a loo
 call in it. Total is refused on a connection reached over HTTP, with what to do instead, because
 PostgREST can do it only where the server was set up for it and a node that compiles against one
 project and fails against the next is worse than one that says so.
+
+## Firestore
+
+The mapping, in full:
+
+| loom            | Firestore                                                          |
+| --------------- | ------------------------------------------------------------------ |
+| table           | collection                                                          |
+| row             | document                                                            |
+| primary key     | the document **id**, which is not a field inside the document       |
+| column          | a field, learnt by **sampling** the first 25 documents              |
+| required column | nothing — a document store has no field that must be present        |
+
+The id is added to every row on the way out and taken back off on the way in. Writing it into the
+document as a field would make a second id that disagrees with the first the moment a document is
+copied.
+
+Sampling is the honest weak point, and the panel says so rather than implying a schema was read: a
+field no sampled document happened to carry is a column loom does not know about. Nothing is
+marked required, because there is no such thing to be right about.
+
+**Two things it will not pretend to do.** There is no substring match in a Firestore query, so
+`contains` is refused — faking it means reading the whole collection into the function and
+filtering there, which is a search box that costs a full collection read per keystroke. And
+Firestore's aggregates are `count`, `sum` and `average` (verified against its documentation), so
+`min` and `max` are refused too. Both are also *removed from the menus* when a Firestore
+connection is attached: offering a choice that compiles to a refusal is a dead end the designer
+cannot see coming, and the compile-time refusal stays as the backstop.
+
+The service account key is a whole credential — it carries a private key — so it follows the same
+rule as a connection string: straight to the dev server, never into the env bucket, never into the
+document. The emitted app starts the admin SDK once per module, because a function is reused
+between requests and `initializeApp` throws on the second call.

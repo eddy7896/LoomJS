@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { __resetStore, getState } from '../src/state/store';
+import { aggregatesFor, filterOpsFor } from '@loom/connectors';
 import {
   addQueryStep,
   canRunSql,
+  connectFirestore,
+  connection,
   connectPostgres,
   connectedTables,
   connectionUrl,
@@ -11,11 +14,12 @@ import {
 import { addGraphNode } from '../src/state/graph';
 
 /**
- * Connecting to a database from a studio that runs in a browser.
+ * Connecting a project to data, from a studio that runs in a browser.
  *
- * The browser cannot open a database socket, so the read happens on loom's dev server — and the
- * connection string is the whole credential, password included. These cover the seam that keeps
- * the schema visible and the string out of everything that gets saved, shared or reloaded.
+ * A browser can open neither a database socket nor a Firestore connection, so the read happens on
+ * loom's dev server — and what it is handed is a whole credential either way: a connection string
+ * carries a password, a service account carries a private key. These cover the seam that keeps
+ * the schema visible and the credential out of everything that gets saved, shared or reloaded.
  */
 
 const ROWS = [
@@ -197,5 +201,72 @@ describe('a statement the designer writes', () => {
     // Editing the text afterwards does not quietly reset that choice.
     setQuerySql(query, 'SELECT * FROM notes WHERE id = :id LIMIT 1');
     expect((getState().snapshot.nodes[query]!.config as { returns?: string }).returns).toBe('one');
+  });
+});
+
+describe('connecting to a document store', () => {
+  const DOCS = [
+    { collection: 'notes', id: 'a', fields: { title: 'One', weight: 2 } },
+    { collection: 'notes', id: 'b', fields: { title: 'Two' } },
+  ];
+  const KEY = JSON.stringify({
+    type: 'service_account',
+    project_id: 'demo-app',
+    client_email: 'x@demo-app.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nsecretsecret\n-----END PRIVATE KEY-----\n',
+  });
+
+  it('samples documents and keeps what it found, not the key', async () => {
+    __resetStore();
+    const calls = record((url) =>
+      url.includes('introspect-firestore') ? { ok: true, docs: DOCS, projectId: 'demo-app' } : {},
+    );
+
+    const result = await connectFirestore({ serviceAccount: KEY });
+    expect(result.ok).toBe(true);
+
+    const snapshot = getState().snapshot;
+    expect(Object.values(snapshot.connectors)[0]?.moduleId).toBe('firestore');
+    // The id is a column even though no document carries it as a field.
+    expect(connectedTables(snapshot)[0]?.columns.map((column) => column.name)).toEqual([
+      'id',
+      'title',
+      'weight',
+    ]);
+    expect(connectionUrl(snapshot)).toBe('demo-app');
+
+    expect(JSON.stringify(localStorage)).not.toContain('secretsecret');
+    expect(JSON.stringify(snapshot)).not.toContain('secretsecret');
+    expect(calls.find((call) => call.url === '/__loom/env')!.body).toContain('secretsecret');
+  });
+
+  it('refuses something that is not a key file, before opening anything', async () => {
+    __resetStore();
+    const calls = record(() => ({ ok: true, docs: DOCS }));
+
+    expect((await connectFirestore({ serviceAccount: 'demo-app' })).error).toMatch(
+      /not the JSON key file/,
+    );
+    expect((await connectFirestore({ serviceAccount: '{"project_id":"x"}' })).error).toMatch(
+      /private_key/,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('offers only the comparisons and totals this connection can make', async () => {
+    __resetStore();
+    record(() => ({ ok: true, docs: DOCS, projectId: 'demo-app' }));
+    await connectFirestore({ serviceAccount: KEY });
+
+    const moduleId = connection(getState().snapshot)!.moduleId;
+    expect(filterOpsFor(moduleId)).not.toContain('contains');
+    expect(aggregatesFor(moduleId)).toEqual(['sum', 'avg']);
+  });
+
+  it('leaves a statement out of reach, because there is none to run', async () => {
+    __resetStore();
+    record(() => ({ ok: true, docs: DOCS }));
+    await connectFirestore({ serviceAccount: KEY });
+    expect(canRunSql(getState().snapshot)).toBe(false);
   });
 });
