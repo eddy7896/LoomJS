@@ -11,7 +11,13 @@ import {
   type PortRef,
   type Snapshot,
 } from '@loom/ir';
-import { acceptsManyWires, createNode, defForNode, mirrorPortsFor } from '@loom/components';
+import {
+  acceptsManyWires,
+  canMirror,
+  createNode,
+  defForNode,
+  mirrorPortsFor,
+} from '@loom/components';
 import { canConnect } from '@loom/typesys';
 import { artboardOf, dispatch, dispatchAll, getState, select } from './store';
 import { actionsFor } from './actions';
@@ -45,7 +51,7 @@ export function ensureMirror(componentId: Id, position: { x: number; y: number }
   const component = snapshot.components[componentId];
   if (!component) return undefined;
 
-  const ports = mirrorPortsFor(component.type);
+  const ports = mirrorPortsFor(component);
   if (ports.length === 0) return undefined;
 
   const id = newNodeId();
@@ -279,14 +285,25 @@ export function connect(from: PortRef, to: PortRef): ConnectResult {
     }
   }
 
-  // A data wire into a Text mirror is a binding on the real component.
+  // A data wire into a mirror's input is a binding on the real component.
+  //
+  // The key comes from the port's `propKey`, never from its name. Those are two different strings
+  // with two different owners — the name is what a person reads on the canvas, the key is what the
+  // emitter looks up — and while this used the name, an Image's `source` port and a Link's
+  // `address` port each wrote a property their template never read, so the wire drew and nothing
+  // happened (`packages/components/src/defs.ts`, `MirrorPort`).
   if (toNode.mirrorOf && toPort.portKind === 'data' && toPort.direction === 'in') {
-    ops.push({
-      type: 'setProp',
-      componentId: toNode.mirrorOf,
-      key: toPort.name === 'content' ? 'content' : toPort.name,
-      value: { kind: 'bound', source: from },
-    });
+    const target = mirrorPortsFor(snapshot.components[toNode.mirrorOf]!).find(
+      (candidate) => candidate.id === toPort.id,
+    );
+    if (target) {
+      ops.push({
+        type: 'setProp',
+        componentId: toNode.mirrorOf,
+        key: target.propKey,
+        value: { kind: 'bound', source: from },
+      });
+    }
   }
 
   dispatchAll(ops);
@@ -302,7 +319,7 @@ export function mirrorableComponents(snapshot: Snapshot, artboardId: Id): Id[] {
   const walk = (id: Id): void => {
     const component = snapshot.components[id];
     if (!component) return;
-    if (mirrorPortsFor(component.type).length > 0) out.push(id);
+    if (canMirror(component.type)) out.push(id);
     for (const child of component.children ?? []) walk(child);
   };
   walk(root);

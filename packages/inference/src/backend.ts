@@ -167,7 +167,7 @@ export function inferBackend(snapshot: Snapshot, options: InferenceOptions): Inf
     }
     const component = snapshot.components[componentId];
     if (!component) continue;
-    const ports = mirrorPortsFor(component.type);
+    const ports = mirrorPortsFor(component);
     if (ports.length === 0) continue;
 
     const id = newNodeId();

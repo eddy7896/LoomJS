@@ -1,4 +1,4 @@
-import type { Component, Layout, PropertyValue } from '@loom/ir';
+import type { Component, Layout, Port, PropertyValue, TypeRef } from '@loom/ir';
 import { ICON_NAMES } from './icons';
 import type { VariantAxis } from './variants';
 
@@ -36,10 +36,110 @@ export const COMPONENT_CATEGORIES: readonly { id: ComponentCategory; label: stri
   { id: 'input', label: 'Input forms' },
 ];
 
+/**
+ * One port an element exposes when it is mirrored into Nodes mode.
+ *
+ * `propKey` is the whole reason this type exists. The bridge between the two modes is that drawing
+ * a data wire into a mirror's `in` port writes a binding onto the real component
+ * (`apps/studio/src/state/graph.ts`) — and until this field existed, the key it wrote was the
+ * *port's name*. Two elements had already drifted: an Image's port was called `source` while its
+ * emitter read `src`, and a Link's was called `address` while its emitter read `href`, so wiring
+ * either one set a property nothing rendered. The port name belongs to the person reading the
+ * graph; the prop key belongs to the emitter; they are not the same string and pretending they
+ * were cost two silent bugs.
+ */
+export interface MirrorPort extends Port {
+  /** The component property this port binds. Not the port's name — see above. */
+  propKey: string;
+}
+
+/**
+ * An element's face in Nodes mode: what it can send, what it can receive, and where its value
+ * lives (`docs/V1-COMPLETION.md` §3).
+ *
+ * Three separate lists used to answer these questions — a switch for the ports, a set for the
+ * field state, a boolean for the per-row rendering — and nothing kept them in agreement. Charts
+ * declared they rendered per row and had no port to receive rows; upload fields held state the
+ * studio did not know about. One declaration, beside the element it describes, is the fix.
+ */
+export interface NodeFace {
+  /**
+   * Ports this element exposes, derived from its **static props**, so a Select types its port as
+   * an enum of the options someone actually typed rather than as bare text.
+   */
+  ports: (props: Record<string, unknown>) => readonly MirrorPort[];
+  /** Its value lives in local state in the emitted app — the inputs, and the upload fields. */
+  fieldState?: boolean;
+  /** It renders its template once per row of a bound list. */
+  perRow?: boolean;
+}
+
+const mirrorPort = (
+  id: string,
+  name: string,
+  propKey: string,
+  direction: Port['direction'],
+  portKind: Port['portKind'],
+  type: TypeRef,
+): MirrorPort => ({ id, name, propKey, direction, portKind, type });
+
+/** A value the element receives — the binding target. */
+const takes = (id: string, name: string, propKey: string, type: TypeRef): MirrorPort =>
+  mirrorPort(id, name, propKey, 'in', 'data', type);
+
+/** A value the element produces — what someone typed, picked or uploaded. */
+const gives = (id: string, name: string, propKey: string, type: TypeRef): MirrorPort =>
+  mirrorPort(id, name, propKey, 'out', 'data', type);
+
+/** Something that happened to the element, which a pipeline can hang off. */
+const fires = (id: string, name: string, propKey: string): MirrorPort =>
+  mirrorPort(id, name, propKey, 'out', 'trigger', { kind: 'trigger' });
+
+/** Rows in. The one shape a List, a Table, a chart, a calendar and a chat all share. */
+const takesRows = (): readonly MirrorPort[] => [
+  takes('pt_items', 'items', 'items', { kind: 'list', of: { kind: 'record' } }),
+];
+
+/** An address in — every media element receives one, and every one of them reads `src`. */
+const takesSource = (): readonly MirrorPort[] => [
+  takes('pt_src', 'source', 'src', { kind: 'text' }),
+];
+
+/**
+ * A chosen value out, typed by the options when there are any.
+ *
+ * A Select whose options are "Draft, Sent, Paid" produces one of exactly those three, and saying
+ * so is what lets the checker refuse wiring it somewhere that wants a number. Falling back to
+ * `text` when the options are bound or empty is honest rather than lossy: the type is genuinely
+ * unknown until the app runs.
+ */
+const givesChoice = (props: Record<string, unknown>): readonly MirrorPort[] => {
+  const raw = typeof props.options === 'string' ? props.options : '';
+  const values = raw
+    .split(',')
+    .map((option) => option.trim())
+    .filter(Boolean);
+  return [
+    gives(
+      'pt_value',
+      'value',
+      'value',
+      values.length > 0 ? { kind: 'enum', values } : { kind: 'text' },
+    ),
+  ];
+};
+
 export interface ComponentDef {
   type: string;
   label: string;
   category: ComponentCategory;
+  /**
+   * What this element is in Nodes mode. **Required**, and `null` is a real answer — a Shape is
+   * decoration and genuinely has nothing to send. Making it required is the point: an element
+   * added without answering the question is the defect this field was introduced to end, so the
+   * absence has to be a type error rather than an empty switch case nobody notices.
+   */
+  node: NodeFace | null;
   /**
    * Words someone might search for that are not in the label — the names this control has in
    * other tools. "Dropdown" has to find Select, or the palette only helps people who already know
@@ -60,8 +160,6 @@ export interface ComponentDef {
   variants?: readonly VariantAxis[];
   /** True when the type can start a flow from a click (its `onClick` accepts a navigate handler). */
   acceptsClickFlow?: boolean;
-  /** True when the type renders its template once per row of a bound list. */
-  acceptsItems?: boolean;
   defaultLayout?: Layout;
   /**
    * A fixed starting size, in px, for a type with no content to size itself from. Drawing the
@@ -96,6 +194,7 @@ const FIELD_STYLE_AXIS: VariantAxis = {
 
 export const FRAME_DEF: ComponentDef = {
   type: 'Frame',
+  node: null, // Structure. A frame arranges what is inside it and has nothing of its own to send.
   label: 'Frame',
   category: 'container',
   keywords: ['group', 'div', 'box', 'stack', 'container'],
@@ -120,6 +219,7 @@ export const FRAME_DEF: ComponentDef = {
  */
 export const BUTTON_DEF: ComponentDef = {
   type: 'Button',
+  node: { ports: () => [fires('pt_click', 'onClick', 'onClick')] },
   label: 'Button',
   category: 'visual',
   keywords: ['click', 'submit', 'action'],
@@ -142,6 +242,7 @@ export const BUTTON_DEF: ComponentDef = {
 
 export const TEXT_DEF: ComponentDef = {
   type: 'Text',
+  node: { ports: () => [takes('pt_content', 'content', 'content', { kind: 'any' })] },
   label: 'Text',
   category: 'visual',
   keywords: ['label', 'paragraph', 'heading', 'copy'],
@@ -160,7 +261,13 @@ export const TEXT_DEF: ComponentDef = {
 
 /** The layout fields the inspector shows for any container. */
 export const LAYOUT_FIELDS: readonly FieldDef[] = [
-  { key: 'direction', label: 'Direction', control: 'select', options: ['column', 'row'], default: 'column' },
+  {
+    key: 'direction',
+    label: 'Direction',
+    control: 'select',
+    options: ['column', 'row'],
+    default: 'column',
+  },
   { key: 'gap', label: 'Gap', control: 'number', default: 16 },
   { key: 'padding', label: 'Padding', control: 'number', default: 16 },
   {
@@ -182,6 +289,7 @@ export const LAYOUT_FIELDS: readonly FieldDef[] = [
 /** A text input: the usual source of data flowing into a pipeline (spec 4). */
 export const TEXT_FIELD_DEF: ComponentDef = {
   type: 'TextField',
+  node: { ports: () => [gives('pt_value', 'value', 'value', { kind: 'text' })], fieldState: true },
   label: 'Text field',
   category: 'input',
   keywords: ['input', 'textbox', 'string'],
@@ -200,6 +308,7 @@ export const TEXT_FIELD_DEF: ComponentDef = {
  */
 export const LIST_DEF: ComponentDef = {
   type: 'List',
+  node: { ports: takesRows, perRow: true },
   label: 'List',
   category: 'container',
   keywords: ['repeating group', 'rows', 'each', 'loop'],
@@ -214,13 +323,15 @@ export const LIST_DEF: ComponentDef = {
     { key: 'variant', label: 'Rows', options: ['plain', 'divided', 'cards'], default: 'plain' },
   ],
   defaultLayout: { direction: 'column', gap: 8, padding: 0, align: 'stretch', justify: 'start' },
-  acceptsItems: true,
 };
-
 
 /** A number input. Its state is a number, so a numeric column takes it without a cast. */
 export const NUMBER_FIELD_DEF: ComponentDef = {
   type: 'NumberField',
+  node: {
+    ports: () => [gives('pt_value', 'value', 'value', { kind: 'number' })],
+    fieldState: true,
+  },
   label: 'Number field',
   category: 'input',
   keywords: ['number', 'numeric', 'quantity', 'amount'],
@@ -235,6 +346,10 @@ export const NUMBER_FIELD_DEF: ComponentDef = {
 /** A checkbox: the one component whose value is a boolean, and the source of most Gate inputs. */
 export const CHECKBOX_DEF: ComponentDef = {
   type: 'Checkbox',
+  node: {
+    ports: () => [gives('pt_value', 'checked', 'value', { kind: 'boolean' })],
+    fieldState: true,
+  },
   label: 'Checkbox',
   category: 'input',
   keywords: ['boolean', 'toggle', 'switch', 'tick'],
@@ -258,6 +373,7 @@ export const CHECKBOX_DEF: ComponentDef = {
  */
 export const SELECT_DEF: ComponentDef = {
   type: 'Select',
+  node: { ports: givesChoice, fieldState: true },
   label: 'Select',
   category: 'input',
   keywords: ['dropdown', 'options', 'picker', 'choice'],
@@ -278,6 +394,7 @@ export const SELECT_DEF: ComponentDef = {
  */
 export const IMAGE_DEF: ComponentDef = {
   type: 'Image',
+  node: { ports: () => takesSource() }, // `src`, not `source` — see MirrorPort.
   label: 'Image',
   category: 'visual',
   keywords: ['picture', 'photo', 'img', 'graphic', 'logo'],
@@ -311,6 +428,7 @@ export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
 export const SHAPE_DEF: ComponentDef = {
   type: 'Shape',
+  node: null, // Decoration. A rectangle carries no value and receives none.
   label: 'Shape',
   category: 'visual',
   keywords: ['rectangle', 'square', 'ellipse', 'circle', 'oval', 'line', 'vector', 'draw', 'box'],
@@ -333,6 +451,7 @@ export const SHAPE_DEF: ComponentDef = {
  */
 export const LINK_DEF: ComponentDef = {
   type: 'Link',
+  node: { ports: () => [takes('pt_href', 'address', 'href', { kind: 'text' })] }, // `href`, not `address`: the emitter reads the former.
   label: 'Link',
   category: 'visual',
   keywords: ['anchor', 'href', 'url', 'hyperlink'],
@@ -346,7 +465,12 @@ export const LINK_DEF: ComponentDef = {
     { key: 'newTab', label: 'Open in a new tab', control: 'boolean', default: false },
   ],
   variants: [
-    { key: 'variant', label: 'Style', options: ['default', 'subtle', 'button'], default: 'default' },
+    {
+      key: 'variant',
+      label: 'Style',
+      options: ['default', 'subtle', 'button'],
+      default: 'default',
+    },
   ],
 };
 
@@ -356,6 +480,7 @@ export const LINK_DEF: ComponentDef = {
  */
 export const ICON_DEF: ComponentDef = {
   type: 'Icon',
+  node: { ports: () => [takes('pt_name', 'name', 'name', { kind: 'text' })] }, // A glyph that changes with status.
   label: 'Icon',
   category: 'visual',
   keywords: ['symbol', 'glyph', 'svg', 'pictogram'],
@@ -377,6 +502,7 @@ export const ICON_DEF: ComponentDef = {
 /** A textarea. Not expressible as a Text field: the difference is the shape of the answer. */
 export const MULTILINE_FIELD_DEF: ComponentDef = {
   type: 'MultilineField',
+  node: { ports: () => [gives('pt_value', 'value', 'value', { kind: 'text' })], fieldState: true },
   label: 'Multiline field',
   category: 'input',
   keywords: ['textarea', 'long text', 'paragraph', 'notes', 'description'],
@@ -392,6 +518,7 @@ export const MULTILINE_FIELD_DEF: ComponentDef = {
 /** Radio buttons. A Select with three options is the wrong control for three options. */
 export const RADIO_GROUP_DEF: ComponentDef = {
   type: 'RadioGroup',
+  node: { ports: givesChoice, fieldState: true },
   label: 'Radio buttons',
   category: 'input',
   keywords: ['choice', 'options', 'one of', 'pick'],
@@ -404,7 +531,12 @@ export const RADIO_GROUP_DEF: ComponentDef = {
   // Cards make each choice a target the size of a row rather than a 16px circle — on a phone that
   // is the difference between a control people hit and one they miss.
   variants: [
-    { key: 'variant', label: 'Layout', options: ['stacked', 'inline', 'cards'], default: 'stacked' },
+    {
+      key: 'variant',
+      label: 'Layout',
+      options: ['stacked', 'inline', 'cards'],
+      default: 'stacked',
+    },
   ],
 };
 
@@ -415,6 +547,7 @@ export const RADIO_GROUP_DEF: ComponentDef = {
  */
 export const DATE_FIELD_DEF: ComponentDef = {
   type: 'DateField',
+  node: { ports: () => [gives('pt_value', 'value', 'value', { kind: 'text' })], fieldState: true },
   label: 'Date field',
   category: 'input',
   keywords: ['calendar', 'day', 'when', 'picker', 'datetime'],
@@ -430,6 +563,10 @@ export const DATE_FIELD_DEF: ComponentDef = {
 /** A slider — the right control for a bounded number, and cheap. */
 export const SLIDER_DEF: ComponentDef = {
   type: 'Slider',
+  node: {
+    ports: () => [gives('pt_value', 'value', 'value', { kind: 'number' })],
+    fieldState: true,
+  },
   label: 'Slider',
   category: 'input',
   keywords: ['range', 'number', 'scale', 'amount'],
@@ -453,6 +590,7 @@ export const SLIDER_DEF: ComponentDef = {
  */
 export const TABLE_DEF: ComponentDef = {
   type: 'Table',
+  node: { ports: takesRows, perRow: true },
   label: 'Table',
   category: 'container',
   keywords: ['grid', 'rows', 'columns', 'data table', 'spreadsheet'],
@@ -466,10 +604,8 @@ export const TABLE_DEF: ComponentDef = {
   variants: [
     { key: 'variant', label: 'Rows', options: ['plain', 'striped', 'bordered'], default: 'plain' },
   ],
-  acceptsItems: true,
   defaultSize: { width: 420, height: 200 },
 };
-
 
 /**
  * Media (`docs/28-media.md`).
@@ -484,6 +620,7 @@ export const TABLE_DEF: ComponentDef = {
 
 export const VIDEO_DEF: ComponentDef = {
   type: 'Video',
+  node: { ports: () => takesSource() },
   label: 'Video',
   category: 'media',
   keywords: ['player', 'movie', 'clip', 'mp4', 'film', 'media'],
@@ -509,6 +646,7 @@ export const VIDEO_DEF: ComponentDef = {
 
 export const AUDIO_DEF: ComponentDef = {
   type: 'Audio',
+  node: { ports: () => takesSource() },
   label: 'Audio',
   category: 'media',
   keywords: ['sound', 'music', 'player', 'mp3', 'podcast', 'track'],
@@ -533,6 +671,7 @@ export const AUDIO_DEF: ComponentDef = {
  */
 export const CAROUSEL_DEF: ComponentDef = {
   type: 'Carousel',
+  node: { ports: takesRows, perRow: true },
   label: 'Carousel',
   category: 'media',
   keywords: ['slider', 'gallery', 'slideshow', 'images', 'swipe'],
@@ -563,6 +702,7 @@ export const CAROUSEL_DEF: ComponentDef = {
  */
 export const TILES_DEF: ComponentDef = {
   type: 'Tiles',
+  node: null, // A grid over its children, like a Frame. The children carry the data, not the grid.
   label: 'Tiles',
   category: 'media',
   keywords: ['grid', 'gallery', 'masonry', 'cards', 'mosaic', 'thumbnails'],
@@ -586,6 +726,9 @@ export const TILES_DEF: ComponentDef = {
  */
 export const AVATAR_DEF: ComponentDef = {
   type: 'Avatar',
+  node: {
+    ports: () => [...takesSource(), takes('pt_name', 'name', 'name', { kind: 'text' })],
+  },
   label: 'Avatar',
   category: 'media',
   keywords: ['profile', 'user', 'photo', 'face', 'initials', 'picture'],
@@ -609,6 +752,7 @@ export const AVATAR_DEF: ComponentDef = {
  */
 export const EMBED_DEF: ComponentDef = {
   type: 'Embed',
+  node: { ports: () => takesSource() },
   label: 'Embed',
   category: 'media',
   keywords: ['iframe', 'youtube', 'map', 'vimeo', 'form', 'widget', 'external'],
@@ -626,7 +770,6 @@ export const EMBED_DEF: ComponentDef = {
   defaultSize: { width: 480, height: 270 },
 };
 
-
 /**
  * Uploads (`docs/29-storage.md`).
  *
@@ -642,6 +785,7 @@ export const EMBED_DEF: ComponentDef = {
 
 export const FILE_FIELD_DEF: ComponentDef = {
   type: 'FileField',
+  node: { ports: () => [gives('pt_value', 'value', 'value', { kind: 'text' })], fieldState: true },
   label: 'File upload',
   category: 'input',
   keywords: ['upload', 'attachment', 'document', 'pdf', 'browse', 'choose file'],
@@ -666,6 +810,7 @@ export const FILE_FIELD_DEF: ComponentDef = {
 
 export const IMAGE_FIELD_DEF: ComponentDef = {
   type: 'ImageField',
+  node: { ports: () => [gives('pt_value', 'value', 'value', { kind: 'text' })], fieldState: true },
   label: 'Image upload',
   category: 'input',
   keywords: ['upload', 'picture', 'photo', 'avatar', 'logo', 'browse'],
@@ -681,7 +826,6 @@ export const IMAGE_FIELD_DEF: ComponentDef = {
     SIZE_AXIS,
   ],
 };
-
 
 /**
  * Charts (`docs/30-charts.md`).
@@ -720,6 +864,7 @@ const CHART_SURFACE: VariantAxis = {
 
 export const BAR_CHART_DEF: ComponentDef = {
   type: 'BarChart',
+  node: { ports: takesRows, perRow: true },
   label: 'Bar chart',
   category: 'chart',
   keywords: ['graph', 'column', 'histogram', 'compare', 'chart'],
@@ -729,12 +874,12 @@ export const BAR_CHART_DEF: ComponentDef = {
     { key: 'variant', label: 'Bars', options: ['vertical', 'horizontal'], default: 'vertical' },
     CHART_SURFACE,
   ],
-  acceptsItems: true,
   defaultSize: { width: 420, height: 260 },
 };
 
 export const LINE_CHART_DEF: ComponentDef = {
   type: 'LineChart',
+  node: { ports: takesRows, perRow: true },
   label: 'Line chart',
   category: 'chart',
   keywords: ['graph', 'trend', 'time', 'series', 'area', 'chart'],
@@ -745,12 +890,12 @@ export const LINE_CHART_DEF: ComponentDef = {
     { key: 'variant', label: 'Shape', options: ['line', 'smooth', 'area'], default: 'line' },
     CHART_SURFACE,
   ],
-  acceptsItems: true,
   defaultSize: { width: 420, height: 260 },
 };
 
 export const PIE_CHART_DEF: ComponentDef = {
   type: 'PieChart',
+  node: { ports: takesRows, perRow: true },
   label: 'Pie chart',
   category: 'chart',
   keywords: ['donut', 'doughnut', 'share', 'proportion', 'split', 'chart'],
@@ -760,7 +905,6 @@ export const PIE_CHART_DEF: ComponentDef = {
     { key: 'variant', label: 'Shape', options: ['pie', 'donut'], default: 'pie' },
     CHART_SURFACE,
   ],
-  acceptsItems: true,
   defaultSize: { width: 300, height: 260 },
 };
 
@@ -772,6 +916,7 @@ export const PIE_CHART_DEF: ComponentDef = {
  */
 export const STAT_DEF: ComponentDef = {
   type: 'Stat',
+  node: { ports: () => [takes('pt_value', 'value', 'value', { kind: 'number' })] }, // The number at the top of every dashboard.
   label: 'Stat',
   category: 'chart',
   keywords: ['metric', 'kpi', 'number', 'total', 'count', 'big number'],
@@ -787,7 +932,6 @@ export const STAT_DEF: ComponentDef = {
   ],
 };
 
-
 /**
  * Calendar and chat (`docs/31-calendar-chat.md`).
  *
@@ -799,6 +943,10 @@ export const STAT_DEF: ComponentDef = {
 
 export const CALENDAR_DEF: ComponentDef = {
   type: 'Calendar',
+  node: {
+    ports: () => [...takesRows(), fires('pt_day', 'dayPicked', 'onDayPicked')],
+    perRow: true,
+  },
   label: 'Calendar',
   category: 'chart',
   keywords: ['month', 'schedule', 'events', 'agenda', 'dates', 'booking', 'diary'],
@@ -820,12 +968,15 @@ export const CALENDAR_DEF: ComponentDef = {
     { key: 'variant', label: 'Shape', options: ['month', 'agenda'], default: 'month' },
     { key: 'surface', label: 'Surface', options: ['plain', 'card'], default: 'card' },
   ],
-  acceptsItems: true,
   defaultSize: { width: 460, height: 380 },
 };
 
 export const CHAT_DEF: ComponentDef = {
   type: 'Chat',
+  node: {
+    ports: () => [...takesRows(), fires('pt_sent', 'sent', 'onSend')],
+    perRow: true,
+  },
   label: 'Chat',
   category: 'chart',
   keywords: ['messages', 'messaging', 'conversation', 'thread', 'comments', 'inbox'],
@@ -849,7 +1000,6 @@ export const CHAT_DEF: ComponentDef = {
     { key: 'variant', label: 'Style', options: ['bubbles', 'plain'], default: 'bubbles' },
     { key: 'surface', label: 'Surface', options: ['plain', 'card'], default: 'card' },
   ],
-  acceptsItems: true,
   defaultSize: { width: 380, height: 420 },
 };
 
@@ -896,6 +1046,21 @@ export function defFor(type: string): ComponentDef | undefined {
   return BY_TYPE.get(type);
 }
 
+/**
+ * The props a node face may read when it types its ports.
+ *
+ * **Static only**, and that is the honest answer rather than a limitation: a bound prop has no
+ * value until the app runs, so a Select whose options arrive from a query cannot be typed as an
+ * enum of them at design time. Those fall back to `text`, which is what they genuinely are here.
+ */
+export function staticProps(component: Pick<Component, 'props'>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(component.props)) {
+    if (value.kind === 'static') out[key] = value.value;
+  }
+  return out;
+}
+
 /** Build a new component of `type` with its schema defaults applied. */
 export function createComponent(type: string, id: string): Component {
   const def = defFor(type);
@@ -933,7 +1098,12 @@ export function createComponent(type: string, id: string): Component {
      */
     ...(def.isContainer ? { children: [] } : {}),
     ...(def.isContainer || size
-      ? { layout: { ...(def.isContainer ? (def.defaultLayout ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT), ...(size ?? {}) } }
+      ? {
+          layout: {
+            ...(def.isContainer ? (def.defaultLayout ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT),
+            ...(size ?? {}),
+          },
+        }
       : {}),
   };
 }

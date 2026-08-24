@@ -218,7 +218,7 @@ test('a comparison Firestore cannot make is not on the menu', async ({ page }) =
  * panel, the statements it builds and the confirmation it demands are all real. What the database
  * would have said about a bad cast is not covered here, and cannot be without one.
  */
-let schema = [
+const schema = [
   {
     table_name: 'notes',
     column_name: 'id',

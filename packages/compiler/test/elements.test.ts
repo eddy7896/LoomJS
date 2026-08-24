@@ -152,11 +152,12 @@ describe('the new inputs hold the right type', () => {
   });
 
   it('each new input carries its type into the graph', () => {
-    expect(mirrorPortsFor('MultilineField')[0]!.type).toEqual({ kind: 'text' });
-    expect(mirrorPortsFor('Slider')[0]!.type).toEqual({ kind: 'number' });
-    expect(mirrorPortsFor('RadioGroup')[0]!.type).toEqual({ kind: 'text' });
+    expect(portsOf('MultilineField')[0]!.type).toEqual({ kind: 'text' });
+    expect(portsOf('Slider')[0]!.type).toEqual({ kind: 'number' });
+    // Typed by the options it carries, rather than as bare text (N0).
+    expect(portsOf('RadioGroup')[0]!.type).toEqual({ kind: 'enum', values: ['One', 'Two'] });
     // The browser hands back `YYYY-MM-DD`; typing it `date` would promise a conversion nothing does.
-    expect(mirrorPortsFor('DateField')[0]!.type).toEqual({ kind: 'text' });
+    expect(portsOf('DateField')[0]!.type).toEqual({ kind: 'text' });
   });
 
   it('knows which of the new elements own a value', () => {
@@ -169,9 +170,17 @@ describe('the new inputs hold the right type', () => {
   });
 });
 
+/**
+ * A fresh component of `type`, and the ports it shows in Nodes mode.
+ *
+ * Ports depend on the element's static props now — a Select types its port by the options it
+ * actually carries — so this builds the real thing rather than asking about a bare type string.
+ */
+const portsOf = (type: string) => mirrorPortsFor(createComponent(type, 'cp_probe'));
+
 describe('the visual elements can be bound', () => {
   it('an image source and a link address take a wire', () => {
-    expect(mirrorPortsFor('Image')[0]!.id).toBe('pt_src');
-    expect(mirrorPortsFor('Link')[0]!.id).toBe('pt_href');
+    expect(portsOf('Image')[0]!.id).toBe('pt_src');
+    expect(portsOf('Link')[0]!.id).toBe('pt_href');
   });
 });

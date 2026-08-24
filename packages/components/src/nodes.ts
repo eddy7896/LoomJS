@@ -1,5 +1,5 @@
-import type { Id, Node, NodeCategory, Port, TypeRef } from '@loom/ir';
-import type { FieldDef } from './defs';
+import type { Component, Id, Node, NodeCategory, Port, TypeRef } from '@loom/ir';
+import { defFor, staticProps, type FieldDef, type MirrorPort } from './defs';
 
 /**
  * The Nodes-mode vocabulary: one definition per node kind, shared by the studio (palette +
@@ -76,7 +76,13 @@ export const API_ROUTE_DEF: NodeDef = {
   isContainer: true,
   defaultConfig: { method: 'POST', path: 'run' },
   fields: [
-    { key: 'method', label: 'Method', control: 'select', options: ['POST', 'GET'], default: 'POST' },
+    {
+      key: 'method',
+      label: 'Method',
+      control: 'select',
+      options: ['POST', 'GET'],
+      default: 'POST',
+    },
     { key: 'path', label: 'Path', control: 'text', default: 'run' },
   ],
   ports: () => [
@@ -134,7 +140,6 @@ export const CODE_DEF: NodeDef = {
     port('pt_result', 'result', 'out', 'data', { kind: 'any' }),
   ],
 };
-
 
 /** One field a Validate node checks, mirroring the form input it came from. */
 export interface ValidationField {
@@ -235,7 +240,6 @@ export const STATE_WRITE_DEF: NodeDef = {
   ],
 };
 
-
 /**
  * Current user — the app's own signed-in person (spec 10), read in the browser.
  *
@@ -268,7 +272,7 @@ export const CURRENT_USER_DEF: NodeDef = {
  * A variable, as opposed to the other thing in the `state` category.
  *
  * Everything that means "a bucket someone writes into" has to ask this rather than the category:
-  * the Current user is app state too, and it is nobody's to set.
+ * the Current user is app state too, and it is nobody's to set.
  */
 export function isVariable(node: Node): boolean {
   return node.category === 'state' && node.kind === 'write';
@@ -346,7 +350,6 @@ export function gateMessage(config: Partial<GateConfig>): string {
   return `${subject} ${condition.label}${comparand} is required.`;
 }
 
-
 /**
  * Operator nodes: Math, Compare, Logic.
  *
@@ -372,7 +375,13 @@ export interface OperandConfig {
 
 const operandFields = (rightLabel: string): readonly FieldDef[] => [
   { key: 'left', label: 'Left', control: 'text', default: '' },
-  { key: 'rightKind', label: 'Right is', control: 'select', options: ['value', 'field'], default: 'value' },
+  {
+    key: 'rightKind',
+    label: 'Right is',
+    control: 'select',
+    options: ['value', 'field'],
+    default: 'value',
+  },
   { key: 'right', label: rightLabel, control: 'text', default: '' },
   { key: 'into', label: 'Write to', control: 'text', default: '' },
 ];
@@ -599,40 +608,19 @@ export function apiPortsFromBody(body: Node[]): Port[] {
 /**
  * Ports a UI component exposes when mirrored into Nodes mode. The component stays on the
  * artboard — the mirror is a view of it, never a second copy (guardrail 13).
+ *
+ * This used to be a hand-written switch over the type string, and it was the single chokepoint the
+ * whole two-mode bridge hung on: an element with no case could not enter Nodes mode at all, and
+ * seventeen of them had none. It now reads the element's own declaration
+ * (`ComponentDef.node`), so the question is answered beside the element rather than in a list
+ * somewhere else that nobody remembers to update (`docs/V1-COMPLETION.md` §3).
+ *
+ * It takes the **component**, not its type, because a port's type can depend on how the element is
+ * configured — a Select's value is one of the options someone typed, not bare text.
  */
-export function mirrorPortsFor(componentType: string): Port[] {
-  switch (componentType) {
-    case 'Button':
-      return [port('pt_click', 'onClick', 'out', 'trigger', { kind: 'trigger' })];
-    case 'TextField':
-    case 'MultilineField':
-      return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
-    case 'NumberField':
-    case 'Slider':
-      return [port('pt_value', 'value', 'out', 'data', { kind: 'number' })];
-    case 'Checkbox':
-      return [port('pt_value', 'checked', 'out', 'data', { kind: 'boolean' })];
-    case 'Select':
-    case 'RadioGroup':
-      // `text` rather than an enum of the options: typing it would need the mirror to read the
-      // component's config, which is a wider change than this vocabulary needs.
-      return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
-    case 'DateField':
-      // The browser hands back `YYYY-MM-DD`, and that string is exactly what a date column
-      // accepts. Typing this `date` would promise a conversion nothing performs.
-      return [port('pt_value', 'value', 'out', 'data', { kind: 'text' })];
-    case 'Text':
-      return [port('pt_content', 'content', 'in', 'data', { kind: 'any' })];
-    case 'Image':
-      return [port('pt_src', 'source', 'in', 'data', { kind: 'text' })];
-    case 'Link':
-      return [port('pt_href', 'address', 'in', 'data', { kind: 'text' })];
-    case 'List':
-    case 'Table':
-      return [port('pt_items', 'items', 'in', 'data', { kind: 'list', of: { kind: 'record' } })];
-    default:
-      return [];
-  }
+export function mirrorPortsFor(component: Pick<Component, 'type' | 'props'>): MirrorPort[] {
+  const face = defFor(component.type)?.node;
+  return face ? [...face.ports(staticProps(component))] : [];
 }
 
 /**
@@ -683,24 +671,29 @@ export function acceptsManyWires(node: Node, portId: Id): boolean {
 }
 
 /**
- * Component types whose value lives in local state in the emitted app — the inputs. A binding
- * pointing at one of these mirrors reads what the person typed, with no pipeline in between.
+ * Component types whose value lives in local state in the emitted app — the inputs, and the upload
+ * fields. A binding pointing at one of these mirrors reads what the person typed or uploaded, with
+ * no pipeline in between.
+ *
+ * Read from the element's own declaration rather than from a second list beside it. The two had
+ * already disagreed: `templates/upload.ts` calls `requireFieldState` for a File field, so the
+ * emitted app held the uploaded URL in state, and the studio believed it had none.
  */
-const FIELD_STATE_TYPES = new Set([
-  'TextField',
-  'MultilineField',
-  'NumberField',
-  'Checkbox',
-  'Select',
-  'RadioGroup',
-  'DateField',
-  'Slider',
-]);
-
 export function hasFieldState(componentType: string): boolean {
-  return FIELD_STATE_TYPES.has(componentType);
+  return defFor(componentType)?.node?.fieldState === true;
 }
 
+/** Does this element render its template once per row of a bound list? */
+export function rendersPerRow(componentType: string): boolean {
+  return defFor(componentType)?.node?.perRow === true;
+}
+
+/**
+ * Can this element appear in Nodes mode at all?
+ *
+ * `node: null` is a deliberate answer — a Shape has nothing to send — and it is what this
+ * distinguishes from an element whose ports simply depend on config.
+ */
 export function canMirror(componentType: string): boolean {
-  return mirrorPortsFor(componentType).length > 0;
+  return defFor(componentType)?.node != null;
 }

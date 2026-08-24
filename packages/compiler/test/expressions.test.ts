@@ -54,14 +54,25 @@ describe('typed inputs', () => {
   });
 
   it('a select whose value is not among its options starts on the first', () => {
-    expect(withInput('Select', { options: 'Low, High', value: 'Gone' })).toContain('useState("Low")');
+    expect(withInput('Select', { options: 'Low, High', value: 'Gone' })).toContain(
+      'useState("Low")',
+    );
   });
 
+  /**
+   * A fresh component of `type`, and the ports it shows in Nodes mode.
+   *
+   * Ports depend on the element's static props now — a Select types its port by the options it
+   * actually carries — so this builds the real thing rather than asking about a bare type string.
+   */
+  const portsOf = (type: string) => mirrorPortsFor(createComponent(type, 'cp_probe'));
+
   it('mirrors carry each input type into the graph', () => {
-    expect(mirrorPortsFor('NumberField')[0]!.type).toEqual({ kind: 'number' });
-    expect(mirrorPortsFor('Checkbox')[0]!.type).toEqual({ kind: 'boolean' });
-    expect(mirrorPortsFor('Checkbox')[0]!.name).toBe('checked');
-    expect(mirrorPortsFor('Select')[0]!.type).toEqual({ kind: 'text' });
+    expect(portsOf('NumberField')[0]!.type).toEqual({ kind: 'number' });
+    expect(portsOf('Checkbox')[0]!.type).toEqual({ kind: 'boolean' });
+    expect(portsOf('Checkbox')[0]!.name).toBe('checked');
+    // A Select produces one of its own options, not bare text (N0).
+    expect(portsOf('Select')[0]!.type).toEqual({ kind: 'enum', values: ['One', 'Two'] });
   });
 });
 
@@ -78,7 +89,13 @@ function withGate(config: Record<string, unknown>): string {
     name: 'Gate',
     ports: [
       { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
-      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+      {
+        id: 'pt_result',
+        name: 'result',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'any' },
+      },
     ],
     position: { x: 0, y: 0 },
     config,
@@ -101,7 +118,9 @@ function withGate(config: Record<string, unknown>): string {
 describe('Gate — the conditional', () => {
   it('stops the pipeline before the write when the condition does not hold', () => {
     const api = withGate({ field: 'title', condition: 'isFilled', value: '', message: '' });
-    expect(api).toContain('const subject: unknown = ((value ?? {}) as Record<string, unknown>)["title"]');
+    expect(api).toContain(
+      'const subject: unknown = ((value ?? {}) as Record<string, unknown>)["title"]',
+    );
     expect(api).toContain("if (!(subject !== undefined && subject !== null && subject !== ''))");
     // Order matters: a Gate that ran after the insert would be a comment, not a condition.
     expect(api.indexOf('const subject')).toBeLessThan(api.indexOf('.insert(row)'));
@@ -123,9 +142,9 @@ describe('Gate — the conditional', () => {
   });
 
   it('carries a message a person can read, written or generated', () => {
-    expect(withGate({ field: 'title', condition: 'isFilled', message: 'Give it a title.' })).toContain(
-      '"Give it a title."',
-    );
+    expect(
+      withGate({ field: 'title', condition: 'isFilled', message: 'Give it a title.' }),
+    ).toContain('"Give it a title."');
     expect(gateMessage({ field: 'count', condition: 'greaterThan', value: '3' })).toBe(
       'count is greater than 3 is required.',
     );
@@ -150,8 +169,20 @@ describe('booleans and queries', () => {
           category: 'fn',
           kind: 'compute',
           ports: [
-            { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'boolean' } },
-            { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'boolean' } },
+            {
+              id: 'pt_input',
+              name: 'input',
+              direction: 'in',
+              portKind: 'data',
+              type: { kind: 'boolean' },
+            },
+            {
+              id: 'pt_result',
+              name: 'result',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'boolean' },
+            },
           ],
           position: { x: 0, y: 0 },
           config: { op: 'not' },
@@ -175,7 +206,13 @@ describe('booleans and queries', () => {
     const asRead = applyOp(snapshot, {
       type: 'setNodeConfig',
       nodeId: insert.id,
-      config: { ...(insert.config as object), operation: 'select', limit: 5, orderBy: 'created_at', descending: true },
+      config: {
+        ...(insert.config as object),
+        operation: 'select',
+        limit: 5,
+        orderBy: 'created_at',
+        descending: true,
+      },
     });
 
     const api = compile(asRead).files.find((f) => f.path === 'api/createnotes.ts')!.content;
@@ -198,7 +235,13 @@ function withStep(kind: string, config: Record<string, unknown>): string {
     name: kind,
     ports: [
       { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
-      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+      {
+        id: 'pt_result',
+        name: 'result',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'any' },
+      },
     ],
     position: { x: 0, y: 0 },
     config,
@@ -232,28 +275,44 @@ describe('Math', () => {
   });
 
   it('takes a typed value on the right, and replaces the whole value when no field is named', () => {
-    const api = withStep('math', { left: 'count', operator: 'add', rightKind: 'value', right: '10', into: '' });
+    const api = withStep('math', {
+      left: 'count',
+      operator: 'add',
+      rightKind: 'value',
+      right: '10',
+      into: '',
+    });
     expect(api).toContain('const right = Number("10");');
     expect(api).toContain('value = answer;');
   });
 
   it('refuses to divide by zero rather than writing Infinity into a column', () => {
-    const api = withStep('math', { left: 'total', operator: 'divide', rightKind: 'field', right: 'people' });
+    const api = withStep('math', {
+      left: 'total',
+      operator: 'divide',
+      rightKind: 'field',
+      right: 'people',
+    });
     expect(api).toContain('if (right === 0) throw new Error("Cannot divide total by zero.");');
   });
 
   it('names the fields that were not numbers', () => {
-    const api = withStep('math', { left: 'price', operator: 'add', rightKind: 'field', right: 'quantity' });
+    const api = withStep('math', {
+      left: 'price',
+      operator: 'add',
+      rightKind: 'field',
+      right: 'quantity',
+    });
     expect(api).toContain('"price and quantity must both be numbers."');
   });
 
   it('offers smaller-of and larger-of without a branch', () => {
-    expect(withStep('math', { left: 'a', operator: 'min', rightKind: 'field', right: 'b' })).toContain(
-      'Math.min(left, right)',
-    );
-    expect(withStep('math', { left: 'a', operator: 'max', rightKind: 'value', right: '5' })).toContain(
-      'Math.max(left, right)',
-    );
+    expect(
+      withStep('math', { left: 'a', operator: 'min', rightKind: 'field', right: 'b' }),
+    ).toContain('Math.min(left, right)');
+    expect(
+      withStep('math', { left: 'a', operator: 'max', rightKind: 'value', right: '5' }),
+    ).toContain('Math.max(left, right)');
   });
 
   it('refuses an operation it cannot emit', () => {
@@ -281,7 +340,12 @@ describe('Compare and Logic', () => {
   });
 
   it('where a Gate stops, a Compare hands the answer on', () => {
-    const api = withStep('compare', { left: 'count', operator: 'greaterThan', rightKind: 'value', right: '0' });
+    const api = withStep('compare', {
+      left: 'count',
+      operator: 'greaterThan',
+      rightKind: 'value',
+      right: '0',
+    });
     // No throw: the boolean travels down the pipeline instead of ending it.
     expect(api).toContain('Number(left) > Number(right)');
     expect(api).not.toContain('Cannot');
@@ -300,9 +364,9 @@ describe('Compare and Logic', () => {
   });
 
   it('supports or, and refuses anything else', () => {
-    expect(withStep('logic', { left: 'a', operator: 'or', rightKind: 'field', right: 'b' })).toContain(
-      'left || right',
-    );
+    expect(
+      withStep('logic', { left: 'a', operator: 'or', rightKind: 'field', right: 'b' }),
+    ).toContain('left || right');
     expect(() => withStep('logic', { operator: 'nand' })).toThrow(/unknown operation/);
   });
 });
@@ -349,7 +413,13 @@ function derivedSnapshot(op = 'length', extra: Op[] = []): Snapshot {
         kind: 'compute',
         name: 'Compute',
         ports: [
-          { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
+          {
+            id: 'pt_input',
+            name: 'input',
+            direction: 'in',
+            portKind: 'data',
+            type: { kind: 'text' },
+          },
           // Ports follow the operation, exactly as the editor derives them.
           {
             id: 'pt_result',
@@ -405,8 +475,20 @@ describe('function nodes outside an API route run in the browser', () => {
           kind: 'compute',
           name: 'Compute',
           ports: [
-            { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
-            { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+            {
+              id: 'pt_input',
+              name: 'input',
+              direction: 'in',
+              portKind: 'data',
+              type: { kind: 'text' },
+            },
+            {
+              id: 'pt_result',
+              name: 'result',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'text' },
+            },
           ],
           position: { x: 0, y: 0 },
           config: { op: 'uppercase' },
@@ -459,11 +541,13 @@ describe('function nodes outside an API route run in the browser', () => {
 });
 
 /** A canvas Math node folding N wired operands, optionally fired by a button. */
-function mathSnapshot(options: {
-  operator?: string;
-  inputs?: number;
-  triggered?: boolean;
-} = {}): Snapshot {
+function mathSnapshot(
+  options: {
+    operator?: string;
+    inputs?: number;
+    triggered?: boolean;
+  } = {},
+): Snapshot {
   const inputs = options.inputs ?? 2;
   const base = formSnapshot();
 
@@ -487,7 +571,13 @@ function mathSnapshot(options: {
       kind: 'mirror',
       mirrorOf: componentId,
       ports: [
-        { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+        {
+          id: 'pt_value',
+          name: 'value',
+          direction: 'out',
+          portKind: 'data',
+          type: { kind: 'number' },
+        },
       ],
       position: { x: 0, y: 0 },
     },
@@ -554,7 +644,13 @@ function mathSnapshot(options: {
         kind: 'math',
         name: 'Math',
         ports: [
-          { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
+          {
+            id: 'pt_run',
+            name: 'run',
+            direction: 'in',
+            portKind: 'trigger',
+            type: { kind: 'trigger' },
+          },
           ...numberFields.map((_, index) => ({
             id: `pt_in_${index}`,
             name: `input ${index + 1}`,
@@ -562,7 +658,13 @@ function mathSnapshot(options: {
             portKind: 'data' as const,
             type: { kind: 'number' as const },
           })),
-          { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+          {
+            id: 'pt_result',
+            name: 'result',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'number' },
+          },
         ],
         position: { x: 0, y: 0 },
         config: { operator: options.operator ?? 'add', inputs },
@@ -601,12 +703,16 @@ describe('Math on the canvas takes its operands from wires', () => {
 
   it('divides through a helper, so a zero divisor is visibly wrong rather than Infinity', () => {
     const code = home(mathSnapshot({ operator: 'divide', inputs: 3 }));
-    expect(code).toContain('safeDivide(safeDivide(Number(field_cp_n0), Number(field_cp_n1)), Number(field_cp_n2))');
+    expect(code).toContain(
+      'safeDivide(safeDivide(Number(field_cp_n0), Number(field_cp_n1)), Number(field_cp_n2))',
+    );
     expect(code).toContain('return right === 0 ? Number.NaN : left / right;');
   });
 
   it('names which input is missing a wire', () => {
-    const missing = applyOps(mathSnapshot({ inputs: 3 }), [{ type: 'removeWire', wireId: 'wr_in2' }]);
+    const missing = applyOps(mathSnapshot({ inputs: 3 }), [
+      { type: 'removeWire', wireId: 'wr_in2' },
+    ]);
     expect(() => compile(missing)).toThrow(/input 3 of "Math" has nothing wired into it/);
   });
 });
@@ -649,7 +755,13 @@ describe('a Text wired straight to a field shows what the person typed', () => {
           kind: 'mirror',
           mirrorOf: inputId,
           ports: [
-            { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: type } as never },
+            {
+              id: 'pt_value',
+              name: 'value',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: type } as never,
+            },
           ],
           position: { x: 0, y: 0 },
         },
@@ -685,7 +797,13 @@ describe('a Text wired straight to a field shows what the person typed', () => {
           kind: 'mirror',
           mirrorOf: 'cp_save',
           ports: [
-            { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+            {
+              id: 'pt_value',
+              name: 'value',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'text' },
+            },
           ],
           position: { x: 0, y: 0 },
         },

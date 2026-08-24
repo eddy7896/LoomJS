@@ -466,7 +466,7 @@ deleting a `LayoutDefinition` must clear `layoutId` on every artboard using it.
 Within a track, phases are ordered; across tracks, they parallelize. Every phase ends with a
 **runnable artifact and a gate that can fail** — the rule from `09` and `10`.
 
-### N0 — Unify the component↔node registry _(before every element below)_
+### N0 — Unify the component↔node registry ✅ _(done)_
 
 Per §3.3. Move the node face onto `ComponentDef`, make `ports` config-aware, collapse the three
 lists into one, add the drift test, and close the gaps in §4.2.
@@ -474,6 +474,20 @@ lists into one, add the drift test, and close the gaps in §4.2.
 into an insert; and adding an element without a node declaration fails a test.
 **Why first:** R1's `Instance` and Q4's money field are both blocked on the config-aware signature,
 and every element after this inherits the checklist instead of the defect.
+
+**Landed.** `ComponentDef.node` is required and `null` is a real answer, so an element added
+without deciding is a type error. `mirrorPortsFor` takes the component rather than its type and
+reads the declaration. All 31 elements answer: 26 have a face, 3 declare none (`Frame`, `Shape`,
+`Tiles`), and the 17 that had no node presence now do. `FIELD_STATE_TYPES` and `acceptsItems` are
+gone — the latter was read by nothing.
+
+Two live bugs fell out of writing it down, both from the port *name* being used as the property
+key: an Image's `source` port wrote `props.source` while `templates/media.ts` read `props.src`, and
+a Link's `address` port wrote `props.address` while its emitter read `props.href`. Wiring either
+drew a wire and changed nothing. `MirrorPort.propKey` separates the two strings.
+
+Gate: `packages/components/test/nodeFace.test.ts`, six rules, each one a shape that had already
+shipped broken. Verified red by reintroducing the Image bug.
 
 ### Track R — Structure _(the 10/10 unlock)_
 

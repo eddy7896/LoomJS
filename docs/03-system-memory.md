@@ -110,6 +110,39 @@ STATUS ∈ SETTLED · DEFERRED · OPEN.
 - **[DEFERRED] Supabase auto-provisioning (create project for user).** Billing/region/data
   implications; users create their own project deliberately.
 
+## Reversed by the V1 completion plan
+
+The target widened from one acceptance app to ten classes of app — school management, ERP,
+ecommerce, CRM, dashboards, messaging, B2B SaaS, websites, finance, fitness
+(`docs/V1-COMPLETION.md`). Six of the deferrals above were written against the narrower target and
+do not survive the wider one. Each is reversed deliberately here rather than quietly built past.
+
+- **[REVERSED] Role-based access in generated apps.** Blocks nine of the ten classes: a school has
+  admins, teachers, students and parents, and signed-in-or-not is one bit. Built as *surfacing
+  Supabase RLS*, never as a parallel authorization model — the same rule `10` set for privacy
+  rules. Phases O2/O3.
+- **[REVERSED] App-shell / nested layouts.** Blocks all ten. Redrawing a sidebar on forty screens
+  is not a product, and the deferral assumed apps of five screens. Phase R2.
+- **[REVERSED — narrowly] Responsive breakpoints.** Two breakpoints (`sm` and the base) as style
+  and layout overrides, not a breakpoint system. Websites and fitness apps are phone-first. A
+  `free`-placed frame still will not reflow, and now says so. Phase L3.
+- **[REVERSED] Runtime error boundaries in generated apps.** A forty-screen app that whitescreens
+  on one bad row is unshippable. One boundary per route, one per List item. Phase L1.
+- **[REVERSED — after the UI half] Reusable sub-graphs.** Forty screens duplicate pipelines, not
+  just UI. Reassessed at R4, once R1 has proved the instance model on components.
+- **[STILL DEFERRED] Next.js / RSC target.** Crawlable HTML for public pages is a real need
+  (websites, product pages), and a second emitter target doubles the compiler. Build-time
+  prerender of the SPA's public routes answers it instead. Phase L4. If that proves insufficient,
+  a second target is a v2 decision taken on evidence.
+
+**[SETTLED — N0] An element's face in Nodes mode lives on its own definition.** `ComponentDef.node`
+declares the ports (with an explicit `propKey`), whether the value lives in local state, and
+whether it renders per row; `null` is a valid answer and absence is a type error. It replaced a
+hand-written switch plus two parallel lists that nothing kept in agreement — seventeen of
+thirty-one elements had no node face, charts declared they rendered per row with no port to receive
+rows, and an Image's port wrote a property its template never read. A drift test in
+`packages/components/test/nodeFace.test.ts` now fails on each of those shapes.
+
 ## Open (needs a decision before/at build)
 
 - **[OPEN] Preview database strategy:** dev branch/seeded project vs. writing to the connected

@@ -282,7 +282,7 @@ export function NodesCanvas() {
             kind: 'mirror',
             name: component.name ?? component.type,
             mirrorOf: componentId,
-            ports: mirrorPortsFor(component.type),
+            ports: mirrorPortsFor(component),
             position: { x: 0, y: 0 },
           },
           subtitle: 'mirror',
