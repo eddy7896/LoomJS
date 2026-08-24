@@ -3,6 +3,7 @@ import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
+import { CONSOLE_HOOK, clear as clearLogs, record, since } from './logBuffer';
 import { createServer, type Plugin, type ViteDevServer } from 'vite';
 
 /**
@@ -262,11 +263,12 @@ export function loomPreview(): Plugin {
       // Seed a bare app so the child server has an index.html to boot from before the first
       // compile arrives from the studio.
       await writeEmitted(seedFiles());
+      record({ source: 'build', message: 'Preview started, waiting for the first compile.' });
 
       previewServer = await createServer({
         root: PREVIEW_DIR,
         configFile: false,
-        plugins: [react(), devApi()],
+        plugins: [react(), devApi(), appConsole()],
         server: { port: PREVIEW_PORT },
         cacheDir: `${PREVIEW_DIR}/.vite`,
       });
@@ -733,6 +735,25 @@ export function loomPreview(): Plugin {
         })();
       });
 
+      /**
+       * What the app and its server have said (L1, `docs/23-logs.md`).
+       *
+       * A cursor rather than a stream: the studio asks for everything after the last line it saw,
+       * which survives a reload, a paused panel and a studio that was not open when something was
+       * logged.
+       */
+      server.middlewares.use('/__loom/logs', (req, res, next) => {
+        if (req.method === 'DELETE') {
+          clearLogs();
+          return json(res, 200, { ok: true });
+        }
+        if (req.method !== 'GET') return next();
+
+        const url = new URL(req.url ?? '/', 'http://localhost');
+        const cursor = Number(url.searchParams.get('since') ?? '0');
+        json(res, 200, since(Number.isFinite(cursor) ? cursor : 0));
+      });
+
       server.middlewares.use('/__loom/preview', (req, res, next) => {
         if (req.method === 'GET') {
           json(res, 200, { url: previewUrl });
@@ -763,6 +784,20 @@ export function loomPreview(): Plugin {
             // person had done in the running app.
             if (body.redeliver && written === 0) paths.push(...lastPaths);
             else if (written > 0) lastPaths = [...paths];
+
+            // What the Preview is actually running, in the log, because "did my edit arrive" is
+            // the question this whole delivery dance exists to answer (`docs/23-logs.md`).
+            record({
+              source: 'build',
+              message:
+                written > 0
+                  ? `Delivered ${written} file${written === 1 ? '' : 's'}${
+                      added > 0 ? `, ${added} new` : ''
+                    }`
+                  : body.redeliver
+                    ? 'Re-delivered the last build — nothing had changed'
+                    : 'Nothing changed',
+            });
             // See `writeEmitted`: a module that did not exist a moment ago cannot be hot-swapped
             // into a page that never imported it.
             //
@@ -808,6 +843,50 @@ export function loomPreview(): Plugin {
   };
 }
 
+/**
+ * The previewed app's own console, forwarded (L1, `docs/23-logs.md`).
+ *
+ * The app runs in an iframe on another port, so nothing in the studio can read its console — the
+ * same origin rule that protects every other page. So a small script is injected into its HTML
+ * which posts what it sees, and this collects it.
+ */
+function appConsole(): Plugin {
+  return {
+    name: 'loom:app-console',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace('</head>', `${CONSOLE_HOOK}</head>`);
+    },
+    configureServer(server) {
+      server.middlewares.use('/__loom/log', (req, res) => {
+        void (async () => {
+          try {
+            const body = JSON.parse(await readBody(req)) as {
+              level?: string;
+              message?: string;
+              where?: string;
+            };
+            const level =
+              body.level === 'error' ? 'error' : body.level === 'warn' ? 'warn' : 'info';
+            record({
+              source: 'app',
+              level,
+              message: String(body.message ?? ''),
+              ...(body.where ? { where: body.where } : {}),
+            });
+          } catch {
+            /* a malformed beacon is not worth a 500 */
+          }
+          // `sendBeacon` wants nothing back, and waiting for a body it will not read would hold
+          // the app up for the sake of a log line.
+          res.statusCode = 204;
+          res.end();
+        })();
+      });
+    },
+  };
+}
+
 /** Serves api/*.ts through the same handler signature Vercel uses. */
 function devApi(): Plugin {
   return {
@@ -820,13 +899,28 @@ function devApi(): Plugin {
         const name = url.slice('/api/'.length).split('?')[0];
 
         void (async () => {
+          const started = Date.now();
           try {
             const module = await server.ssrLoadModule(`/api/${name}.ts`);
             await (module.default as (req: IncomingMessage, res: ServerResponse) => Promise<void>)(
               req,
               res,
             );
+            // A route that answered 500 is not an error *here* — it answered — but it is the line
+            // a designer is looking for, so its status decides the level.
+            record({
+              source: 'route',
+              level: res.statusCode >= 500 ? 'error' : 'info',
+              message: `${req.method ?? 'GET'} /api/${name} → ${res.statusCode} in ${Date.now() - started}ms`,
+              where: `api/${name}.ts`,
+            });
           } catch (error) {
+            record({
+              source: 'route',
+              level: 'error',
+              message: (error as Error).message,
+              where: `api/${name}.ts`,
+            });
             json(res, 500, { error: (error as Error).message });
           }
         })();

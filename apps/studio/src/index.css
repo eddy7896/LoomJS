@@ -1621,13 +1621,22 @@ select {
 }
 
 /* D2: the schema, as a table — a designer builds against these names all day. */
+/**
+ * The connector tabs wrap.
+ *
+ * They did not need to at two, and at four they overflowed the rail and slid under the canvas —
+ * which then swallowed the click, so the last tab could be seen and not pressed. A row that grows
+ * with the connector list has to wrap, or every new connector is a new bug.
+ */
 .connect-form__modules {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
 .connect-form__modules button {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 72px;
 }
 
 .connect-form__modules .is-active {
@@ -2304,4 +2313,75 @@ input[type='color'] {
 .canvas-ignored__note {
   font-size: 10px;
   color: var(--ink-soft);
+}
+
+/* L1: what the running app said, in the order it said it. */
+.logs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logs__count {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.logs__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 6px;
+}
+
+.logs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logline {
+  display: grid;
+  grid-template-columns: 52px 44px 1fr;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.logline__time,
+.logline__source {
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.logline__message {
+  overflow-wrap: anywhere;
+}
+
+.logline__where {
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+/* Only the two that matter get colour: a log where every line is coloured has none. */
+.logline--error {
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.logline--error .logline__message {
+  color: var(--error);
+}
+
+.logline--warn .logline__message {
+  color: var(--busy, #a8730a);
 }

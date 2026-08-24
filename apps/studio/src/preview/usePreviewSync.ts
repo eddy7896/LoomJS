@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Snapshot } from '@loom/ir';
 import type { EmittedFile } from '@loom/compiler';
 import { CompileError, compile } from '@loom/compiler';
+import { log } from '../state/logs';
 import { setBuildResult } from '../state/build';
 
 export interface PreviewStatus {
@@ -107,17 +108,25 @@ export function usePreviewSync(snapshot: Snapshot, enabled: boolean): PreviewSta
       }
 
       let files;
+      const started = performance.now();
       try {
         files = compile(snapshot).files;
         // This is the project's only compile: the Problems panel reads the verdict rather than
         // running emission a second time on its own render path.
         setBuildResult(null);
+        // In the log as well as the panel: Problems says what is wrong *now*, and the log says
+        // that this compile happened, which is what answers "did my edit even reach it".
+        log({
+          source: 'compile',
+          message: `Compiled ${files.length} files in ${Math.round(performance.now() - started)}ms`,
+        });
       } catch (error) {
         // The Build tier: keep the last good build running and point at the offending entity.
         const message = error instanceof Error ? error.message : String(error);
         const entityId = error instanceof CompileError ? error.entityId : undefined;
         setBuildResult({ message, entityId });
         setStatus((s) => ({ ...s, syncing: false, error: message, entityId }));
+        log({ source: 'compile', level: 'error', message, where: entityId });
         return;
       }
 

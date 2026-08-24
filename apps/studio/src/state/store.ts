@@ -69,7 +69,7 @@ export const toolPlaces = (tool: Tool): { type: string; variant?: string } | und
  * (`docs/11-editor-shell.md`). Design and Nodes also swap the canvas; Data does not — connecting a
  * database should not throw away the canvas you were looking at.
  */
-export type Rail = 'design' | 'nodes' | 'data';
+export type Rail = 'design' | 'nodes' | 'data' | 'logs';
 
 export interface EditorState {
   snapshot: Snapshot;
@@ -335,7 +335,10 @@ export function setTool(tool: Tool): void {
 }
 
 export function setRail(rail: Rail): void {
-  set({ ...state, rail, mode: rail === 'data' ? state.mode : rail });
+  // Data and Logs are columns beside the canvas rather than modes of it: switching to either
+  // leaves the canvas showing whatever it was showing.
+  const keepsMode = rail === 'data' || rail === 'logs';
+  set({ ...state, rail, mode: keepsMode ? state.mode : rail });
 }
 
 export function undo(): void {
