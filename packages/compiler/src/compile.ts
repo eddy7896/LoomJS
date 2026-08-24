@@ -5,9 +5,19 @@ import { planRoutes, type RouteInfo } from './emit/routes';
 import { planPipelines, validateWires } from './emit/pipeline';
 import { emitApiFunction } from './emit/server';
 import { scaffoldFiles } from './emit/project';
+import { emitStorage, localDirectories, type BucketPlan } from './emit/storage';
+import { emitChartRuntime } from './emit/charts';
+import { emitCalendarRuntime } from './emit/calendar';
 import { emitGlobalsModule, GLOBALS_MODULE_PATH } from './emit/globals';
 import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/messages';
-import { dialectOf, isDocumentStore } from '@loom/connectors';
+import {
+  bucketCredentials,
+  bucketDependencies,
+  dialectOf,
+  isBucket,
+  isDocumentStore,
+  type BucketConfig,
+} from '@loom/connectors';
 import { migrationFile } from './emit/migrations';
 import { emitContainerFiles } from './emit/container';
 import { emitReadme } from './emit/readme';
@@ -33,6 +43,9 @@ import { emitAuthFunctions } from './emit/authServer';
  * a secret (guardrail 1), so nothing secret can reach the emitted repo.
  */
 const NEWLINE = String.fromCharCode(10);
+
+/** The elements that draw themselves from the chart runtime. */
+const CHART_TYPES = new Set(['BarChart', 'LineChart', 'PieChart', 'Stat']);
 
 export function compile(snapshot: Snapshot): CompileResult {
   const entry = resolveEntryArtboard(snapshot);
@@ -65,13 +78,48 @@ export function compile(snapshot: Snapshot): CompileResult {
   const usesFirestore = [...modules].some((id) => isDocumentStore(id));
   const usesDatabase = dbNodes.length > 0 && !usesSql && !usesFirestore;
 
+  /**
+   * The buckets this project has attached (`docs/29-storage.md`).
+   *
+   * Every one of them is emitted, whether or not a field points at it yet: a bucket is a *place*
+   * the project has, and half-emitting it would mean the upload route existed only once somebody
+   * had already drawn the field that needs it.
+   */
+  const buckets: BucketPlan[] = Object.values(snapshot.connectors)
+    .filter((connector) => isBucket(connector.moduleId))
+    .map((connector) => ({
+      id: connector.id,
+      moduleId: connector.moduleId,
+      config: (connector.config ?? {}) as BucketConfig,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
   const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, {
     usesDatabase,
     usesSql: usesSql && !usesMysql,
     usesMysql,
     usesFirestore,
     theme: snapshot.theme,
+    extraDependencies: bucketDependencies(buckets.map((bucket) => bucket.moduleId)),
   });
+
+  files.push(...emitStorage(buckets));
+
+  /**
+   * The chart arithmetic, once, when anything draws one (`docs/30-charts.md`).
+   *
+   * One module the charts import rather than a copy pasted into each artboard: a project with four
+   * charts should have one copy of the maths, and a person reading the repo one place to check what
+   * the axis does.
+   */
+  if (Object.values(snapshot.components).some((component) => CHART_TYPES.has(component.type))) {
+    files.push(emitChartRuntime());
+  }
+
+  // The same arrangement for the month arithmetic (`docs/31-calendar-chat.md`).
+  if (Object.values(snapshot.components).some((component) => component.type === 'Calendar')) {
+    files.push(emitCalendarRuntime());
+  }
 
   // One serverless function per API route node, emitted once even if several screens call it.
   const emittedRoutes = new Set<string>();
@@ -104,6 +152,8 @@ export function compile(snapshot: Snapshot): CompileResult {
   files.push(
     ...emitContainerFiles({
       routes: files.filter((file) => file.path.startsWith('api/')).map((file) => file.path),
+      // A local-disk bucket's folder is served back at /files by the server a container runs.
+      uploadFolders: localDirectories(buckets),
       usesSql,
       gotrueProviders: ownAuthServer ? ssoProvidersUsed(snapshot) : [],
       credentials: [
@@ -112,6 +162,7 @@ export function compile(snapshot: Snapshot): CompileResult {
         ...(usesDatabase ? ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : []),
         ...(auth ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] : []),
         ...toolCredentials(snapshot),
+        ...bucketCredentials(buckets.map((bucket) => bucket.moduleId)),
       ].filter((name, index, all) => all.indexOf(name) === index),
     }),
   );
@@ -169,6 +220,12 @@ export function compile(snapshot: Snapshot): CompileResult {
   // to a fashionable service does not make it a different kind (`docs/22-api-connectors.md`).
   envNames.push(...toolCredentials(snapshot));
 
+  // A bucket key is the same kind of secret again — and the one that would be worst to leak into a
+  // browser, because a bucket anyone can write to is a bucket anyone can fill (`docs/29-storage.md`).
+  for (const name of bucketCredentials(buckets.map((bucket) => bucket.moduleId))) {
+    if (!envNames.includes(name)) envNames.push(name);
+  }
+
   if (envNames.length > 0) {
     files.push({
       path: '.env.example',
@@ -196,6 +253,8 @@ export function compile(snapshot: Snapshot): CompileResult {
       migrations: (snapshot.migrations ?? []).length,
       usesSql,
       usesAuth: auth,
+      usesUploads: buckets.length > 0,
+      usesLocalUploads: buckets.some((bucket) => bucket.moduleId === 'local'),
     }),
   );
 

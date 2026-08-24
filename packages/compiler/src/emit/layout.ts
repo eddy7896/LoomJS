@@ -40,6 +40,22 @@ function sizeStyle(
   }
 }
 
+/**
+ * Just the size a component was drawn at, with none of the arrangement.
+ *
+ * A leaf has no children to arrange, so `layoutToStyle` would give it a `display: flex` it has no
+ * use for — but it does have a size, and that size was going nowhere. A Text dragged out to 320
+ * pixels on the canvas emitted a span that hugged its word, so the canvas and the running app
+ * disagreed about the shape of the screen (`docs/12-canvas.md`).
+ */
+export function layoutSizeStyle(layout: Layout | undefined): Record<string, string | number> {
+  if (!layout?.size) return {};
+  const style: Record<string, string | number> = {};
+  sizeStyle('width', layout.size.width, style);
+  sizeStyle('height', layout.size.height, style);
+  return style;
+}
+
 export function layoutToStyle(layout: Layout): Record<string, string | number> {
   // A free frame is a drawing board: it holds its children where they were put, so it is the
   // positioning context and nothing else about it is flex (`docs/12-canvas.md`).

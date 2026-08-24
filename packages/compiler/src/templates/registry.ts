@@ -13,7 +13,18 @@ import {
   sliderEmitter,
 } from './inputs2';
 import { iconEmitter, imageEmitter, linkEmitter } from './media';
+import {
+  audioEmitter,
+  avatarEmitter,
+  carouselEmitter,
+  embedEmitter,
+  tilesEmitter,
+  videoEmitter,
+} from './media2';
 import { shapeEmitter } from './shape';
+import { fileFieldEmitter, imageFieldEmitter } from './upload';
+import { barChartEmitter, lineChartEmitter, pieChartEmitter, statEmitter } from './charts';
+import { calendarEmitter, chatEmitter } from './calendar';
 
 /**
  * The component template registry: each component type owns exactly one code template
@@ -31,6 +42,12 @@ const EMITTERS: ComponentEmitter[] = [
   listEmitter,
   tableEmitter,
   imageEmitter,
+  videoEmitter,
+  audioEmitter,
+  carouselEmitter,
+  tilesEmitter,
+  avatarEmitter,
+  embedEmitter,
   linkEmitter,
   iconEmitter,
   multilineFieldEmitter,
@@ -38,6 +55,14 @@ const EMITTERS: ComponentEmitter[] = [
   dateFieldEmitter,
   sliderEmitter,
   shapeEmitter,
+  fileFieldEmitter,
+  imageFieldEmitter,
+  barChartEmitter,
+  lineChartEmitter,
+  pieChartEmitter,
+  statEmitter,
+  calendarEmitter,
+  chatEmitter,
 ];
 
 const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));

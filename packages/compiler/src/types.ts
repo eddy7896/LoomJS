@@ -88,6 +88,33 @@ export interface EmitContext {
   requireAuth: () => string;
   /** The type a property value carries, when it is knowable (bindings). */
   typeOfValue: (value: PropertyValue) => TypeRef | undefined;
+  /**
+   * Declare a `useEffect` the component needs, written out in full.
+   *
+   * A leaf emitter cannot add hooks to the module on its own, and some elements genuinely need one
+   * — a carousel that advances by itself is a timer, and a timer that is never cleared is a leak
+   * that outlives the screen. The effect is emitted after the derived values, so it may read them.
+   */
+  requireEffect: (code: string) => void;
+  /**
+   * Declare a piece of state the component owns, by name.
+   *
+   * `requireFieldState` is the *value* of an input — one per component, and what a binding reads.
+   * This is for everything else an element needs to remember: an upload knows whether it is busy
+   * and what went wrong, and neither belongs in the value that ends up in a database column.
+   */
+  requireState: (name: string, initial: unknown) => string;
+  /** Declare that this module uploads files; returns the helper's name. */
+  requireUpload: () => string;
+  /**
+   * Declare the chart helpers this module uses (`docs/30-charts.md`).
+   *
+   * By name, and only the ones actually called: the emitted app builds with `noUnusedLocals`, so an
+   * import list written to cover every chart would fail the build of a project that has one.
+   */
+  requireChart: (names: readonly string[]) => void;
+  /** The same, for the calendar arithmetic (`docs/31-calendar-chat.md`). */
+  requireCalendar: (names: readonly string[]) => void;
   /** Declare a page number for a paging List; returns its state variable name. */
   requirePageState: (componentId: Id) => string;
   /** Declare that this module needs the text coercion helper; returns its name. */

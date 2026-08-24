@@ -14,6 +14,7 @@ import {
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { QuerySection, TableSchemaSection } from './QuerySection';
+import { bucketChoices } from '../state/buckets';
 
 /** The steps a filter narrows: everything that reads rather than writes. */
 const NARROWABLE = new Set(['select', 'count', 'aggregate']);
@@ -28,6 +29,7 @@ import {
   TypeSection,
 } from './AppearanceSection';
 import { EffectsSection } from './EffectsSection';
+import { VariantSection } from './VariantSection';
 import {
   removeArtboard,
   removeFlow,
@@ -40,6 +42,7 @@ import {
   setEntryArtboard,
   setFlowPayload,
   setProp,
+  setRail,
   setStaticProp,
   setThemeToken,
   selectedComponents,
@@ -129,6 +132,10 @@ export function Inspector() {
           so beats a shortcut nobody was told about. */}
       <GroupSection component={component} />
 
+      {/* Which kind of element this is — the first decision, and the one that settles most of the
+          others (`docs/27-variants.md`). */}
+      <VariantSection component={component} />
+
       <PositionSection component={component} parent={parent} />
       <LayoutSection component={component} />
       <AppearanceSection component={component} />
@@ -176,6 +183,45 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function PropField({ component, field }: { component: Component; field: FieldDef }) {
   const snapshot = useEditor((s) => s.snapshot);
   const value = component.props[field.key];
+
+  /**
+   * Where an upload lands, chosen from what the project has attached (`docs/29-storage.md`).
+   *
+   * A text box here would mean typing a connector id, which nobody knows and nobody should have to
+   * look up. The list is the buckets under Files — and when there are none, it says so and points
+   * at the place to fix it rather than offering an empty dropdown.
+   */
+  if (field.key === 'bucket' && (component.type === 'FileField' || component.type === 'ImageField')) {
+    const choices = bucketChoices(snapshot);
+    const current = value?.kind === 'static' ? String(value.value ?? '') : '';
+
+    return (
+      <Field label={field.label}>
+        {choices.length === 0 ? (
+          <button
+            className="field__link"
+            data-testid="no-buckets"
+            onClick={() => setRail('files')}
+          >
+            Attach one under Files
+          </button>
+        ) : (
+          <select
+            value={current}
+            data-testid="bucket-choice"
+            onChange={(event) => setStaticProp(component.id, field.key, event.target.value)}
+          >
+            <option value="">— pick a bucket —</option>
+            {choices.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+    );
+  }
 
   // Inside a List, a text property can read a column of the current row instead of holding a
   // literal — the implicit map's one authoring affordance.

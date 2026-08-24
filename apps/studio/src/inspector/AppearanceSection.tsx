@@ -187,6 +187,9 @@ export function AppearanceSection({ component }: { component: Component }) {
 
   return (
     <Section name="Appearance">
+      {/* Two rows, not one. Opacity, a radius, a token picker and two icon buttons all in a line
+          left the radius cell too narrow to read its own select — it said "cus". Rounding is its
+          own decision and gets its own line. */}
       <Row>
         <Cell mark="%" title="How see-through it is">
           <input
@@ -201,7 +204,6 @@ export function AppearanceSection({ component }: { component: Component }) {
             }}
           />
         </Cell>
-        <Corners component={component} />
         <Choice
           active={!hidden}
           title={hidden ? 'Hidden while designing' : 'Visible'}
@@ -210,6 +212,10 @@ export function AppearanceSection({ component }: { component: Component }) {
         >
           <Glyph path={hidden ? EYE_OFF : EYE} />
         </Choice>
+      </Row>
+
+      <Row>
+        <Corners component={component} />
       </Row>
 
       {isFrame ? (

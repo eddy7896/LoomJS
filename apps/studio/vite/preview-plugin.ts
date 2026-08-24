@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
 import { CONSOLE_HOOK, clear as clearLogs, record, since } from './logBuffer';
+import { NAVIGATE_HOOK } from './navigate';
 import { createServer, type Plugin, type ViteDevServer } from 'vite';
 
 /**
@@ -812,11 +813,39 @@ export function loomPreview(): Plugin {
               // Say what changed rather than waiting for the file watcher to notice: a watcher
               // still settling at start-up misses these writes entirely, and the studio already
               // knows exactly which files it wrote.
+              let reached = 0;
               for (const path of paths) {
                 const modules = previewServer?.moduleGraph.getModulesByFile(
                   path.split(sep).join('/'),
                 );
-                for (const module of modules ?? []) void previewServer?.reloadModule(module);
+                for (const module of modules ?? []) {
+                  reached += 1;
+                  void previewServer?.reloadModule(module);
+                }
+              }
+
+              /**
+               * A module nobody has imported yet cannot be hot-swapped into anything.
+               *
+               * This was the last way a build could vanish. While the page is still fetching its
+               * modules it *is* connected — so the client count says somebody heard it, and the
+               * studio's own miss-detector sees nothing wrong — but the module graph is still
+               * empty, `getModulesByFile` finds nothing, and the update is sent to no one at all.
+               * The edit then never appears, and nothing anywhere notices. It reproduced about one
+               * run in three, always on the first edit after the server started.
+               *
+               * Reloading is safe precisely *because* the page is that young: it has not finished
+               * loading, so there is nothing typed into it to throw away. This deliberately does not
+               * fire when some other module resolved — a loaded page that simply has not imported
+               * one screen is a page mid-interaction, and that is the case the reload heuristic was
+               * removed for in the first place.
+               */
+              if (reached === 0 && (previewServer?.ws.clients.size ?? 0) > 0) {
+                record({
+                  source: 'build',
+                  message: 'The page had not loaded these modules yet — reloading it instead',
+                });
+                previewServer?.ws.send({ type: 'full-reload', path: '*' });
               }
             }
             // How many pages heard it. A hot update sent to nobody is a Preview that will keep
@@ -855,7 +884,7 @@ function appConsole(): Plugin {
     name: 'loom:app-console',
     apply: 'serve',
     transformIndexHtml(html) {
-      return html.replace('</head>', `${CONSOLE_HOOK}</head>`);
+      return html.replace('</head>', `${CONSOLE_HOOK}${NAVIGATE_HOOK}</head>`);
     },
     configureServer(server) {
       server.middlewares.use('/__loom/log', (req, res) => {

@@ -9,6 +9,7 @@ import {
 import type { Id, ScreenSize } from '@loom/ir';
 import { DEFAULT_SCREEN, presetForSize } from '@loom/components';
 import { themeStyle } from '@loom/ui';
+import { useVariantStylesheet } from './useVariantStylesheet';
 import { useEditor } from '../state/useEditor';
 import {
   isFree,
@@ -42,6 +43,9 @@ const MIN_SCREEN = { width: 240, height: 240 };
  * Artboards sit side by side and the flow arrows between them are the app's routes.
  */
 export function Canvas() {
+  // The variants the elements below are painted with, from the same string the project gets.
+  useVariantStylesheet();
+
   const snapshot = useEditor((s) => s.snapshot);
   const hiddenInEditor = useEditor((s) => s.hiddenInEditor);
   const alsoSelected = useEditor((s) => s.also);

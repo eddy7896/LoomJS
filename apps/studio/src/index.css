@@ -5,6 +5,8 @@
   --brand: #ec3013;
   --brand-tint: #fdece8;
   --ink: #1b1d21;
+  /* Text on a light surface is ink-2 or darker; ink-soft is for marks only. */
+  --ink-2: #4b5058;
   --ink-soft: #868d97;
   --line: #e8eaee;
   --surface: #ffffff;
@@ -36,13 +38,15 @@ button {
   color: inherit;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 10px;
+  border-radius: 7px;
+  padding: 5px 11px;
   cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 button:hover:not(:disabled) {
   border-color: var(--ink-soft);
+  background: var(--surface-sunken);
 }
 
 button:disabled {
@@ -50,20 +54,52 @@ button:disabled {
   cursor: default;
 }
 
+/* Toggled chrome is ink, never brand: red is reserved for the single primary
+   action and the FN node category (guardrails 19-20). A studio where every
+   pressed toggle is red spends the one colour that has to stay rare. */
 button.is-active {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+}
+
+button.is-active:hover:not(:disabled) {
+  background: #000;
+  border-color: #000;
+}
+
+/* Every interactive element gets a visible keyboard path (WCAG 2.2 AA). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 input,
 select {
   font: inherit;
   width: 100%;
-  padding: 4px 6px;
+  padding: 5px 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--surface);
+  transition: border-color 140ms ease;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+input::placeholder {
+  color: var(--ink-soft);
 }
 
 .mono {
@@ -80,15 +116,18 @@ select {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 12px;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
 
 .brand {
   font-weight: 700;
+  font-size: 14px;
   letter-spacing: -0.02em;
+  margin-right: 6px;
 }
 
 .brand__js {
@@ -96,7 +135,7 @@ select {
 }
 
 .toolbar__mode {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 2px 10px;
@@ -104,7 +143,15 @@ select {
 
 .toolbar__group {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+}
+
+/* The right cluster reads as status, then destructive, then view: a hairline
+   keeps the save state from looking like another button. */
+.toolbar .save {
+  margin-right: 4px;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
 }
 
 .toolbar__spacer {
@@ -116,7 +163,7 @@ select {
   min-height: 0;
   display: grid;
   /* The icon rail, then the one column the reference builds around, then the canvas. */
-  grid-template-columns: 44px 232px 1fr 260px;
+  grid-template-columns: 48px 248px 1fr 276px;
   /* The Preview floats over all of it. */
   position: relative;
 }
@@ -126,7 +173,7 @@ select {
   background: var(--surface);
   border-right: 1px solid var(--line);
   overflow: auto;
-  padding: 10px;
+  padding: 12px;
 }
 
 .inspector {
@@ -135,23 +182,27 @@ select {
 }
 
 .panel__title {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-soft);
-  margin: 4px 0 10px;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  margin: 0;
 }
 
 .panel__empty {
-  color: var(--ink-soft);
+  color: var(--ink-2);
+  line-height: 1.5;
+  max-width: 34ch;
 }
 
 .layer {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
   cursor: default;
 }
 
@@ -172,7 +223,7 @@ select {
 
 .layer__type {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .layer__actions {
@@ -210,7 +261,7 @@ select {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   margin: 0 0 8px;
 }
 
@@ -224,7 +275,7 @@ select {
 
 .id {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .field {
@@ -236,7 +287,7 @@ select {
 }
 
 .field__label {
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* ---- canvas ---- */
@@ -262,7 +313,7 @@ select {
 }
 
 .artboard__label {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   margin-bottom: 6px;
 }
 
@@ -330,12 +381,21 @@ select {
   color: var(--loom-color-ink, #1b1d21);
 }
 
-.artboard input,
-.artboard select,
-.artboard textarea,
-.artboard button,
-.artboard label,
-.artboard a {
+/**
+ * The canvas draws the *app's* elements, so the studio's own chrome is reverted off them.
+ *
+ * Anything the variant stylesheet owns is skipped: `all: revert` outranks a single class, so
+ * without this a `.loom-button` on the canvas fell back to the browser's grey rectangle while the
+ * same button in the running app was painted properly — the exact disagreement the shared
+ * stylesheet exists to prevent (`docs/27-variants.md`). An element wearing a loom class needs no
+ * reset anyway: the stylesheet already says what it looks like, top to bottom.
+ */
+.artboard input:not([class*='loom-']),
+.artboard select:not([class*='loom-']),
+.artboard textarea:not([class*='loom-']),
+.artboard button:not([class*='loom-']),
+.artboard label:not([class*='loom-']),
+.artboard a:not([class*='loom-']) {
   all: revert;
   /* The one rule the emitted app does assert over everything. */
   box-sizing: border-box;
@@ -367,7 +427,7 @@ select {
 .ruler {
   position: absolute;
   background: var(--surface);
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 9px;
   z-index: 4;
   overflow: hidden;
@@ -496,14 +556,14 @@ select {
 .canvas__chrome button.is-active {
   background: var(--surface-sunken);
   color: var(--ink);
-  border-color: var(--ink-soft);
+  border-color: var(--ink-2);
 }
 
 /* An empty project: an invitation rather than a void. */
 .canvas__empty {
   position: absolute;
-  top: 40%;
-  left: 50%;
+  top: 34%;
+  left: 30%;
   transform: translate(-50%, -50%);
   text-align: center;
   color: var(--ink);
@@ -559,7 +619,7 @@ select {
 }
 
 .toolbelt__tool.is-active {
-  background: var(--brand);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -573,7 +633,7 @@ select {
 .toolbelt__chevron {
   border: 0;
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 10px;
   padding: 0 2px;
   cursor: pointer;
@@ -596,7 +656,7 @@ select {
 }
 
 .toolbelt__dim {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 11px;
 }
 
@@ -636,7 +696,7 @@ select {
 
 .toolbelt__group-label {
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   padding: 4px 2px;
 }
 
@@ -677,7 +737,8 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  min-height: 42px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: -10px;
@@ -702,7 +763,7 @@ select {
 
 .ins {
   border-bottom: 1px solid var(--line);
-  padding: 6px 10px 10px;
+  padding: 10px 12px 12px;
 }
 
 .ins__head {
@@ -716,10 +777,16 @@ select {
   border: 0;
   background: transparent;
   padding: 4px 0;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
   cursor: pointer;
+}
+
+.ins__title:hover {
+  color: var(--ink);
 }
 
 .ins.is-closed .ins__title {
@@ -734,12 +801,20 @@ select {
 .ins__body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 2px;
+  gap: 7px;
+  padding-top: 6px;
 }
 
+/**
+ * A row wraps rather than crushing what is in it.
+ *
+ * The panel is narrow and gets narrower; a row that only ever shrank ended with a select clipped
+ * behind a number, which is a control you can see and cannot read. Wrapping costs a line and
+ * keeps every control legible at any width.
+ */
 .ins__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -747,8 +822,10 @@ select {
 /* A control with its mark in front: `X 0`, `W 382`. The mark is a label, not decoration — it is
    what makes a row of numbers readable without a column of words beside it. */
 .ins__cell {
-  flex: 1;
-  min-width: 0;
+  /* Wide enough to read a number and its mark. Below this a cell wraps to the next line instead
+     of shrinking into something unreadable. */
+  flex: 1 1 88px;
+  min-width: 88px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -756,14 +833,16 @@ select {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface);
+  /* Nothing inside a cell paints over its neighbour. */
+  overflow: hidden;
 }
 
 .ins__cell:focus-within {
-  border-color: var(--ink-soft);
+  border-color: var(--ink-2);
 }
 
 .ins__mark {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 11px;
   min-width: 10px;
   text-align: center;
@@ -778,12 +857,20 @@ select {
   width: 100%;
 }
 
+/**
+ * A select sharing a cell with an input gives way first.
+ *
+ * It used to refuse to shrink, so in a cell too narrow for both, the select won and the number
+ * was pushed out of sight — the wrong way round, since the number is the value and the select is
+ * how it was chosen.
+ */
 .ins__cell select {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 10px;
   width: auto;
-  max-width: 46px;
-  flex: 0 0 auto;
+  max-width: 68px;
+  flex: 0 1 auto;
+  min-width: 0;
   padding-left: 2px;
 }
 
@@ -806,7 +893,7 @@ select {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   cursor: pointer;
 }
 
@@ -836,7 +923,7 @@ select {
 .ins__icon {
   border: 0;
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   padding: 2px 6px;
   cursor: pointer;
 }
@@ -919,7 +1006,7 @@ select {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .picker__swatches {
@@ -966,7 +1053,7 @@ select {
   margin: 0;
   font-size: 10px;
   line-height: 1.4;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* Each effect is one composed thing, boxed so a stack of them stays readable. */
@@ -1042,7 +1129,7 @@ select {
 
 .preview__state {
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .preview__device {
@@ -1224,7 +1311,7 @@ select {
 
 .preview__size {
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* Red is the primary action and the FN category, and nothing else (`docs/05-guardrails.md`), so a
@@ -1232,7 +1319,7 @@ select {
 .preview__bar button.is-active {
   background: var(--surface-sunken);
   color: var(--ink);
-  border-color: var(--ink-soft);
+  border-color: var(--ink-2);
 }
 
 .preview__resize {
@@ -1258,7 +1345,7 @@ select {
   flex: 1;
   display: grid;
   place-items: center;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 12px;
   background: var(--surface-sunken);
 }
@@ -1279,12 +1366,30 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 10px;
 }
 
+/* Header actions stay compact so a two-word button never wraps onto a second
+   line and pushes the header out of alignment with its neighbours. */
+.panel__head button {
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+/**
+ * A hint is quieter than what it explains.
+ *
+ * These were `--ink-2`, which is nearly body-text dark, so a panel of short controls read as a
+ * wall of prose with some inputs in it. Muted is what muted is for.
+ */
 .panel__hint {
   color: var(--ink-soft);
   font-size: 11px;
+  line-height: 1.45;
   margin: 0 0 8px;
+  max-width: 40ch;
 }
 
 .field__row {
@@ -1298,7 +1403,7 @@ select {
   border-radius: 999px;
   padding: 0 6px;
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   margin-left: 6px;
 }
 
@@ -1436,7 +1541,7 @@ select {
 
 .nnode__kind {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .nnode__body {
@@ -1452,7 +1557,7 @@ select {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .nstep {
@@ -1465,14 +1570,14 @@ select {
 }
 
 .nstep__index {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 10px;
 }
 
 .nstep__op {
   margin-left: auto;
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .nnode__ports {
@@ -1497,7 +1602,7 @@ select {
 
 .nport__type {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .nhandle--trigger {
@@ -1602,7 +1707,7 @@ select {
   display: flex;
   justify-content: space-between;
   padding: 3px 0;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .table-row--button {
@@ -1654,7 +1759,7 @@ select {
 .schema th {
   text-align: left;
   font-weight: 500;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   padding: 2px 4px;
   border-bottom: 1px solid var(--line);
 }
@@ -1665,7 +1770,7 @@ select {
 }
 
 .schema__type {
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .schema__flags {
@@ -1681,7 +1786,7 @@ select {
   font-size: 9px;
   letter-spacing: 0.04em;
   background: color-mix(in srgb, var(--line) 60%, transparent);
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .schema__flag--required {
@@ -1764,7 +1869,7 @@ input[type='color'] {
 /* Whether the work is safe. Quiet when it is, loud when it is not. */
 .save {
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -1801,6 +1906,19 @@ input[type='color'] {
 
 .rail > .panel {
   border-right: none;
+  /* A panel scrolls inside itself rather than pushing what is under it off the rail. */
+  min-height: 0;
+}
+
+/**
+ * Problems is pinned to the bottom.
+ *
+ * It used to sit wherever the panel above happened to end, which put it halfway up an empty rail
+ * and moved it every time the panel's content changed — so the place you look for what is wrong
+ * was never the same place twice. `auto` here is the whole fix: the gap goes above it.
+ */
+.rail > .problems {
+  margin-top: auto;
 }
 
 /* Capped rather than free-growing: a long list of warnings must never push the screen tree off
@@ -1852,7 +1970,7 @@ input[type='color'] {
 /* Muted, because this is what half-finished work looks like and shouting at it is worse than
    saying nothing (docs/02: "muted for work-in-progress, sharp red for true breaks"). */
 .problem-row--warning {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   border-left-color: var(--line);
 }
 
@@ -1863,7 +1981,7 @@ input[type='color'] {
 
 .chip--warn {
   background: var(--surface-sunken);
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* ---- action sequences: an ordered list, never a modal ---- */
@@ -1909,8 +2027,8 @@ input[type='color'] {
 .rail-icons {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 4px;
+  gap: 4px;
+  padding: 10px 6px;
   background: var(--surface);
   border-right: 1px solid var(--line);
 }
@@ -1922,10 +2040,11 @@ input[type='color'] {
   height: 36px;
   padding: 0;
   border: none;
-  border-radius: 10px;
+  border-radius: 9px;
   background: none;
   color: var(--ink-soft);
   cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
 }
 
 .rail-icons button:hover {
@@ -1934,8 +2053,8 @@ input[type='color'] {
 }
 
 .rail-icons button.is-active {
-  background: var(--surface-sunken);
-  color: var(--ink);
+  background: var(--accent);
+  color: #fff;
 }
 
 /* ---- the element palette ---- */
@@ -1946,12 +2065,12 @@ input[type='color'] {
   flex-direction: column;
   overflow: auto;
   border-top: 1px solid var(--line);
-  padding: 8px;
+  padding: 10px;
 }
 
 .palette__search {
   width: 100%;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .palette__section {
@@ -1959,36 +2078,47 @@ input[type='color'] {
   flex-direction: column;
 }
 
+.palette__section + .palette__section {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
 .palette__head {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 8px 4px 4px;
+  padding: 8px 4px 6px;
   border: none;
   background: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
   text-align: left;
   cursor: pointer;
 }
 
+.palette__head:hover {
+  color: var(--ink);
+}
+
 .palette__caret {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 9px;
 }
 
 .palette__item {
   display: block;
   width: 100%;
-  padding: 5px 8px 5px 18px;
+  padding: 5px 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   background: none;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
 }
@@ -1998,8 +2128,8 @@ input[type='color'] {
 }
 
 .palette__select {
-  margin: 4px 0 4px 18px;
-  width: calc(100% - 18px);
+  margin: 4px 0;
+  width: 100%;
 }
 
 /* Capped so the palette always has room below it; both scroll on their own. */
@@ -2054,7 +2184,7 @@ input[type='color'] {
   padding: 0 4px;
   border: none;
   background: none;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   line-height: 18px;
   opacity: 0;
   cursor: pointer;
@@ -2113,7 +2243,7 @@ input[type='color'] {
   align-items: center;
   gap: 3px;
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 
@@ -2138,7 +2268,7 @@ input[type='color'] {
 .schema-edit__danger p {
   margin: 0;
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* D6: what a column points at, kept beside the column rather than in a diagram elsewhere. */
@@ -2147,7 +2277,7 @@ input[type='color'] {
   align-items: center;
   gap: 3px;
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .schema__flag--link {
@@ -2190,14 +2320,14 @@ input[type='color'] {
   border: 0;
   font: inherit;
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   padding: 0;
 }
 
 .ngroup__remove {
   border: 0;
   background: none;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   cursor: pointer;
   line-height: 1;
 }
@@ -2235,7 +2365,7 @@ input[type='color'] {
 
 .provider__state {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .dot--off {
@@ -2290,7 +2420,7 @@ input[type='color'] {
   padding: 8px;
   border: 1px dashed color-mix(in srgb, var(--ink-soft) 40%, transparent);
   border-radius: 8px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 11px;
   text-align: center;
 }
@@ -2312,7 +2442,7 @@ input[type='color'] {
 
 .canvas-ignored__note {
   font-size: 10px;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 /* L1: what the running app said, in the order it said it. */
@@ -2360,7 +2490,7 @@ input[type='color'] {
 
 .logline__time,
 .logline__source {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 10px;
 }
 
@@ -2369,7 +2499,7 @@ input[type='color'] {
 }
 
 .logline__where {
-  color: var(--ink-soft);
+  color: var(--ink-2);
   font-size: 10px;
 }
 
@@ -2450,7 +2580,7 @@ input[type='color'] {
 }
 
 .code__folder {
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .code__view {
@@ -2502,4 +2632,49 @@ input[type='color'] {
 .code__problem p {
   margin: 0 0 6px;
   color: var(--error);
+}
+
+/**
+ * The segmented control, for picking a variant (`docs/27-variants.md`).
+ *
+ * A dropdown would hide five of six answers behind a click, and comparing the answers is the whole
+ * task. It wraps rather than shrinks, for the same reason every other inspector row does: the panel
+ * is narrow and gets narrower, and a squashed option is one nobody can read.
+ */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+}
+
+.segmented__option {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.segmented__option:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+/* The chosen one carries the weight, so which is on is readable at a glance rather than by
+   comparing shades. */
+.segmented__option.is-on {
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 500;
 }

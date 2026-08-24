@@ -1,5 +1,6 @@
 import { actionsOf, type Component, type Id, type Node, type PortRef, type Snapshot } from '@loom/ir';
 import { isVariable, nodeTitle } from '@loom/components';
+import { isBucket } from '@loom/connectors';
 import { usesAuth } from './emit/auth';
 import { compile } from './compile';
 import { CompileError } from './types';
@@ -123,6 +124,45 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
       artboardId: entityKind === 'component' && entityId ? owner.get(entityId) : undefined,
     });
   };
+
+  // ---- Uploads: a field has to know where the file goes (`docs/29-storage.md`) ----------
+
+  const buckets = new Set(
+    Object.values(snapshot.connectors)
+      .filter((connector) => isBucket(connector.moduleId))
+      .map((connector) => connector.id),
+  );
+
+  for (const component of Object.values(snapshot.components)) {
+    if (component.type !== 'FileField' && component.type !== 'ImageField') continue;
+
+    const chosen = component.props.bucket;
+    const bucketId = chosen?.kind === 'static' ? String(chosen.value ?? '').trim() : '';
+
+    if (!bucketId) {
+      add(
+        'upload-no-bucket',
+        'error',
+        `"${componentLabel(component)}" has nowhere to put a file. Attach a bucket under Files, ` +
+          `then pick it here.`,
+        component.id,
+        'component',
+      );
+      continue;
+    }
+
+    // A bucket that was removed, or a project file opened where it never existed. The field would
+    // fail on the first upload, and finding that out from a customer is the worst way to find out.
+    if (!buckets.has(bucketId)) {
+      add(
+        'upload-missing-bucket',
+        'error',
+        `"${componentLabel(component)}" points at a bucket this project no longer has.`,
+        component.id,
+        'component',
+      );
+    }
+  }
 
   // ---- Screens: who may open them (spec 10) -------------------------------
 

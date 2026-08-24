@@ -3,6 +3,7 @@ import { DEFAULT_SCREEN, SCREEN_PRESETS, screenPreset } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import { selectComponent } from '../state/store';
 import { notePreviewLoaded, notePreviewMounted, usePreviewSync } from './usePreviewSync';
+import { navigablePath, previewRoute } from './route';
 
 /**
  * The Preview, as a floating window (`docs/12-canvas.md`).
@@ -170,12 +171,45 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
 
   // A stable callback, so it runs when the frame really mounts rather than on every render.
   const corrections = useRef(0);
+  const frame = useRef<HTMLIFrameElement | null>(null);
   const mountFrame = useCallback((node: HTMLIFrameElement | null) => {
+    frame.current = node;
     notePreviewMounted(Boolean(node));
     if (!node) return;
     startedAt.current = missedNow.current;
     corrections.current = 0;
   }, []);
+
+  /**
+   * The Preview follows the screen being designed.
+   *
+   * It used to load the app's root and stay there forever — and the root is the *entry* artboard,
+   * so a designer working on any other screen watched a preview of a different one. Elements were
+   * added, compiled and delivered, and nothing appeared: the page they were on did not have them.
+   *
+   * The frame is told to navigate rather than reloaded, because a reload would throw away whatever
+   * has been typed into the running app for no reason other than changing screens.
+   */
+  const route = previewRoute(snapshot, activeArtboardId);
+  const wanted = navigablePath(route);
+  const tellFrame = useCallback(
+    (path: string | undefined, url: string | undefined) => {
+      if (!path || !url) return;
+      try {
+        frame.current?.contentWindow?.postMessage(
+          { source: 'loom', type: 'navigate', path },
+          new URL(url).origin,
+        );
+      } catch {
+        /* a frame that has gone away is not worth an exception */
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    tellFrame(wanted, status.url);
+  }, [wanted, status.url, tellFrame]);
 
   useEffect(() => {
     if (status.missed <= heard.current) return;
@@ -413,6 +447,9 @@ export function PreviewWindow({ onClose }: { onClose: () => void }) {
                     // typed something into the app that the reload would throw away.
                     onLoad={() => {
                       notePreviewLoaded();
+                      // A reloaded page starts at the root again, so it is sent back to the screen
+                      // being designed before anyone sees the wrong one.
+                      tellFrame(wanted, status.url);
                       const behind = missedNow.current > startedAt.current;
                       startedAt.current = missedNow.current;
                       heard.current = missedNow.current;

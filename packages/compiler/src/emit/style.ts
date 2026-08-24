@@ -1,7 +1,7 @@
 import type { Component, Effect, Style, StyleValue } from '@loom/ir';
 import { tokenById, tokenVar } from '@loom/ui';
 import { CompileError, type EmitContext } from '../types';
-import { layoutToStyle } from './layout';
+import { layoutSizeStyle, layoutToStyle } from './layout';
 import { styleExpr, styleObject } from './text';
 
 /**
@@ -182,9 +182,17 @@ export function styleAttr(
   ctx: EmitContext,
   base: Record<string, string | number> = {},
 ): string {
-  // Position last: where the parent puts this is not something the component's own style block
-  // gets to argue with.
-  const own = { ...base, ...styleToCss(component), ...ctx.positionStyle(component) };
+  /**
+   * The drawn size first, so anything an emitter passes in — and the style block after it — still
+   * wins. A container's emitter already includes its whole layout; this is what carries the size of
+   * everything else, which used to be dropped on the floor.
+   */
+  const own = {
+    ...layoutSizeStyle(component.layout),
+    ...base,
+    ...styleToCss(component),
+    ...ctx.positionStyle(component),
+  };
   const conditionals = component.conditionalStyles ?? [];
 
   if (conditionals.length === 0) {

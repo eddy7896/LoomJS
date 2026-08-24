@@ -44,7 +44,7 @@ describe('backend graph -> serverless (M3)', () => {
 
   it('compiles a bound property into a read of the pipeline state', () => {
     expect(fileAt(pipelineSnapshot(), 'src/artboards/Home.tsx')).toContain(
-      '<span>{result_nd_api ?? ""}</span>',
+      '<span className="loom-text loom-text--body">{result_nd_api ?? ""}</span>',
     );
   });
 

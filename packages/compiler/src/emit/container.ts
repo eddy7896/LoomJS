@@ -28,7 +28,7 @@ const importName = (path: string): string =>
  * deep link must not 404. The rule is that a static path never leaves `dist/`: a request for
  * `../../etc/passwd` is answered with the app, not with the file.
  */
-function serverModule(routes: readonly string[]): string {
+function serverModule(routes: readonly string[], uploads: readonly string[]): string {
   const imports = routes
     .map((path) => `import ${importName(path)} from './${path.replace(/\.ts$/, '')}';`)
     .join(NEWLINE);
@@ -111,7 +111,30 @@ async function sendFile(res: ServerResponse, path: string): Promise<boolean> {
   }
 }
 
-const server = createServer((req, res) => {
+${
+    uploads.length > 0
+      ? `/**
+ * Files uploaded to local disk (docs/29-storage.md).
+ *
+ * Served from the folder the bucket writes to, with the same resolved-path check the built assets
+ * get: a key that climbs out of the folder is refused, whatever it looks like before it resolves.
+ * On a serverless host this folder does not survive between invocations, which is why local disk is
+ * for a laptop or a container with a volume.
+ */
+const UPLOADS = ${JSON.stringify(uploads)}.map((folder) => resolve(folder));
+
+function uploadFor(pathname: string): string | undefined {
+  const key = normalize(decodeURIComponent(pathname.slice('/files/'.length)));
+  for (const root of UPLOADS) {
+    const wanted = resolve(join(root, key));
+    if (wanted === root || wanted.startsWith(root + sep)) return wanted;
+  }
+  return undefined;
+}
+
+`
+      : ''
+}const server = createServer((req, res) => {
   void (async () => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const handler = ROUTES.get(url.pathname.replace(/\\/+$/, '') || '/');
@@ -127,7 +150,19 @@ const server = createServer((req, res) => {
       return;
     }
 
-    if (url.pathname.startsWith('/api/')) {
+${
+    uploads.length > 0
+      ? `    if (url.pathname.startsWith('/files/')) {
+      const stored = uploadFor(url.pathname);
+      if (stored && (await sendFile(res, stored))) return;
+      res.statusCode = 404;
+      res.end('Not found');
+      return;
+    }
+
+`
+      : ''
+}    if (url.pathname.startsWith('/api/')) {
       res.statusCode = 404;
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({ error: 'No such route.' }));
@@ -318,6 +353,8 @@ ${authService}${usesSql || authService ? database : ''}`;
 }
 
 export interface ContainerOptions {
+  /** Folders a local-disk bucket writes into, served back at /files (`docs/29-storage.md`). */
+  uploadFolders?: readonly string[];
   /**
    * Sign-in providers whose secrets this project supplies itself (A3).
    *
@@ -336,7 +373,7 @@ export interface ContainerOptions {
 
 export function emitContainerFiles(options: ContainerOptions): EmittedFile[] {
   return [
-    { path: 'server.ts', content: serverModule([...options.routes].sort()) },
+    { path: 'server.ts', content: serverModule([...options.routes].sort(), options.uploadFolders ?? []) },
     { path: 'Dockerfile', content: dockerfile(options.routes.length > 0) },
     { path: '.dockerignore', content: DOCKERIGNORE },
     {

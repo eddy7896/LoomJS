@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { styleAttr } from '../emit/style';
@@ -18,6 +19,6 @@ export const buttonEmitter: ComponentEmitter = {
     const attrs = styleAttr(component, ctx);
     const handler = eventAttr(component, ctx, 'onClick', depth);
 
-    return `${indent(depth)}<button type="button"${attrs}${handler}>{${labelExpr}}</button>`;
+    return `${indent(depth)}<button type="button"${classAttr(component)}${attrs}${handler}>{${labelExpr}}</button>`;
   },
 };

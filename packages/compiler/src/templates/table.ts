@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { styleAttr } from '../emit/style';
 import { indent } from '../emit/text';
@@ -29,7 +30,7 @@ export const tableEmitter: ComponentEmitter = {
   emit(component, ctx, depth) {
     const items = component.props.items;
     const rowsExpr = items ? valueExpr(items, ctx, component.id, 'items') : '[]';
-    const attrs = styleAttr(component, ctx, { display: 'block' });
+    const attrs = classAttr(component) + styleAttr(component, ctx, { display: 'block' });
 
     const empty = staticString(component, 'empty');
     const named = columnNames(staticString(component, 'columns'));
@@ -56,7 +57,7 @@ ${indent(depth + 3)}<table style={{ width: '100%', borderCollapse: 'collapse' }}
 ${indent(depth + 4)}<thead>
 ${indent(depth + 5)}<tr>
 ${indent(depth + 6)}{${listVar}.map((${colVar}: string) => (
-${indent(depth + 7)}<th key={${colVar}} style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid #E8EAEE' }}>
+${indent(depth + 7)}<th key={${colVar}} style={{ textAlign: 'left', padding: '6px 8px' }}>
 ${indent(depth + 8)}{${colVar}}
 ${indent(depth + 7)}</th>
 ${indent(depth + 6)}))}
@@ -66,7 +67,7 @@ ${indent(depth + 4)}<tbody>
 ${indent(depth + 5)}{rows.map((${rowVar}: Record<string, unknown>, index: number) => (
 ${indent(depth + 6)}<tr key={index}>
 ${indent(depth + 7)}{${listVar}.map((${colVar}: string) => (
-${indent(depth + 8)}<td key={${colVar}} style={{ padding: '6px 8px', borderBottom: '1px solid #F1F2F5' }}>
+${indent(depth + 8)}<td key={${colVar}} style={{ padding: '6px 8px' }}>
 ${indent(depth + 9)}{${rowVar}[${colVar}] === null || ${rowVar}[${colVar}] === undefined
 ${indent(depth + 10)}? ''
 ${indent(depth + 10)}: String(${rowVar}[${colVar}])}

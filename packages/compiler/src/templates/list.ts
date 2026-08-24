@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { layoutToStyle } from '../emit/layout';
 import { styleAttr } from '../emit/style';
@@ -27,7 +28,7 @@ export const listEmitter: ComponentEmitter = {
     const items = component.props.items;
     const itemsExpr = items ? valueExpr(items, ctx, component.id, 'items') : '[]';
 
-    const attrs = styleAttr(component, ctx, component.layout ? layoutToStyle(component.layout) : { display: 'flex' });
+    const attrs = classAttr(component) + styleAttr(component, ctx, component.layout ? layoutToStyle(component.layout) : { display: 'flex' });
     const itemVar = `item_${component.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     const empty = staticString(component, 'empty');
 

@@ -1,8 +1,9 @@
 import { useCallback, type CSSProperties, type PointerEvent } from 'react';
 import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
-import { componentStyle, styleToCss } from '@loom/compiler';
-import { iconPath } from '@loom/components';
+import { componentStyle, layoutSizeStyle, styleToCss } from '@loom/compiler';
+import { variantClassName, iconPath } from '@loom/components';
 import { extendSelection } from '../state/store';
+import { ChartPreview } from './ChartPreview';
 
 /**
  * Design mode renders **real DOM**, not a raster canvas (docs/01) — what you see here is the
@@ -79,6 +80,13 @@ export function ComponentView({
    */
   const shared = {
     'data-loom-id': id,
+    /**
+     * The variant classes, from the **same** function the compiler calls (`docs/27-variants.md`).
+     *
+     * This is the whole reason the canvas and the running app agree about what an outline button
+     * looks like: not two implementations kept in step by discipline, but one answer used twice.
+     */
+    className: variantClassName(component),
     onClick: (event: React.MouseEvent) => {
       event.stopPropagation();
       // Shift adds to the selection rather than replacing it — the gesture every design tool
@@ -108,7 +116,13 @@ export function ComponentView({
       }
     : {};
   const style = { ...(componentStyle(component) as CSSProperties), ...placement };
-  const leafStyle = { ...(styleToCss(component) as CSSProperties), ...placement };
+  // A leaf carries the size it was drawn at and nothing else about layout — the same rule the
+  // compiler follows, so a resized element is the same shape here as in the running app.
+  const leafStyle = {
+    ...(layoutSizeStyle(component.layout) as CSSProperties),
+    ...(styleToCss(component) as CSSProperties),
+    ...placement,
+  };
 
   if (component.type === 'Text') {
     return (
@@ -212,11 +226,7 @@ export function ComponentView({
 
   if (component.type === 'Checkbox') {
     return (
-      <label
-        {...shared}
-        ref={attach}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, ...leafStyle }}
-      >
+      <label {...shared} ref={attach} style={leafStyle}>
         <input type="checkbox" readOnly checked={booleanProp(component, 'value')} />
         <span>{textContent(component, 'label')}</span>
       </label>
@@ -298,12 +308,159 @@ export function ComponentView({
       <fieldset {...shared} ref={attach} style={leafStyle}>
         {question ? <legend>{question}</legend> : null}
         {options.map((option, index) => (
-          <label key={option} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label key={option}>
             <input type="radio" readOnly checked={index === 0} name={component.id} />
             <span>{option}</span>
           </label>
         ))}
       </fieldset>
+    );
+  }
+
+  /**
+   * The upload fields (`docs/29-storage.md`).
+   *
+   * Drawn as they will look before anybody has chosen a file, which is the state a designer is
+   * arranging for. The input is present but never armed here: opening a file picker because
+   * somebody clicked an element they were trying to select is the tool getting in the way.
+   */
+  if (component.type === 'FileField' || component.type === 'ImageField') {
+    const value = textContent(component, 'value');
+    const label = textContent(component, 'label') || 'Choose a file';
+    return (
+      <div {...shared} ref={attach} style={leafStyle}>
+        <span className="loom-upload__pick">{label}</span>
+        {component.type === 'ImageField' && value ? (
+          <img className="loom-upload__preview" src={value} alt="" />
+        ) : null}
+        {/* Where it lands, said on the canvas: a field pointing at no bucket is the one mistake
+            here that only shows up as a refusal at build time. */}
+        {!textContent(component, 'bucket') ? (
+          <span className="canvas-placeholder__note">No bucket</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  /**
+   * Charts, drawn with sample data (`docs/30-charts.md`).
+   *
+   * There is no data in the editor — the rows arrive from a query when the app runs — so the canvas
+   * shows a made-up series rather than an empty box. The same honesty as a Table's ghost rows: the
+   * size, the shape and the colour are real, and the numbers are openly not.
+   */
+  if (
+    component.type === 'BarChart' ||
+    component.type === 'LineChart' ||
+    component.type === 'PieChart'
+  ) {
+    return (
+      <div {...shared} ref={attach} style={{ minWidth: 160, minHeight: 100, ...style }}>
+        <ChartPreview component={component} />
+      </div>
+    );
+  }
+
+  if (component.type === 'Stat') {
+    const raw = textContent(component, 'value');
+    return (
+      <div {...shared} ref={attach} style={leafStyle}>
+        <span className="loom-stat__label">{textContent(component, 'label') || 'Total'}</span>
+        {/* A bound value has nothing to show yet, so the canvas shows a plausible one rather than
+            an empty space where the number will be. */}
+        <span className="loom-stat__value">{raw || '1,248'}</span>
+        {textContent(component, 'note') ? (
+          <span className="loom-stat__note">{textContent(component, 'note')}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  /**
+   * A calendar on the canvas: this month, with no events on it.
+   *
+   * The grid is the thing being arranged, and it is real — the same six rows the app draws. What is
+   * missing is the data, which is missing in the editor for every element that reads rows.
+   */
+  if (component.type === 'Calendar') {
+    const agenda = textContent(component, 'variant') === 'agenda';
+    const monday = textContent(component, 'weekStart') !== 'sunday';
+    const weekdays = monday
+      ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const offset = monday ? (first.getDay() + 6) % 7 : first.getDay();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1 - offset);
+
+    return (
+      <div {...shared} ref={attach} style={{ minWidth: 220, minHeight: 200, ...style }}>
+        {agenda ? (
+          <span className="loom-calendar__empty">
+            {textContent(component, 'empty') || 'Nothing yet'}
+          </span>
+        ) : (
+          <>
+            <div className="loom-calendar__head">
+              <span className="loom-calendar__step">{'\u2039'}</span>
+              <span className="loom-calendar__month">
+                {first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              </span>
+              <span className="loom-calendar__step">{'\u203a'}</span>
+            </div>
+            <div className="loom-calendar__grid">
+              {weekdays.map((name) => (
+                <span key={name} className="loom-calendar__weekday">
+                  {name}
+                </span>
+              ))}
+              {Array.from({ length: 42 }, (_unused, index) => {
+                const date = new Date(
+                  start.getFullYear(),
+                  start.getMonth(),
+                  start.getDate() + index,
+                );
+                const outside = date.getMonth() !== now.getMonth();
+                const today = date.toDateString() === now.toDateString();
+                return (
+                  <div
+                    key={index}
+                    className={`loom-calendar__day${outside ? ' is-outside' : ''}${
+                      today ? ' is-today' : ''
+                    }`}
+                  >
+                    <span className="loom-calendar__date">{date.getDate()}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /**
+   * A chat on the canvas: the composer, which is what a designer is arranging, and a note where the
+   * messages will be. Inventing sample messages would put words on the artboard that no query will
+   * ever produce.
+   */
+  if (component.type === 'Chat') {
+    return (
+      <div {...shared} ref={attach} style={{ minWidth: 200, minHeight: 160, ...style }}>
+        <div className="loom-chat__log">
+          <span className="loom-chat__empty">
+            {textContent(component, 'empty') || 'No messages yet'}
+          </span>
+        </div>
+        <div className="loom-chat__compose">
+          <span className="loom-chat__draft">
+            {textContent(component, 'placeholder') || 'Write a message'}
+          </span>
+          <span className="loom-chat__send">{textContent(component, 'sendLabel') || 'Send'}</span>
+        </div>
+      </div>
     );
   }
 
@@ -316,7 +473,7 @@ export function ComponentView({
         <div
           {...shared}
           ref={attach}
-          className="canvas-placeholder"
+          className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
           style={{ ...leafStyle, minWidth: 80, minHeight: 60 }}
         >
           {textContent(component, 'alt') || 'Image'}
@@ -334,6 +491,148 @@ export function ComponentView({
     );
   }
 
+  /**
+   * Media (`docs/28-media.md`).
+   *
+   * The canvas draws the real elements — a `<video>` is a video, an `<audio>` is a player — because
+   * a designer judging whether a player fits a layout needs the box it will actually occupy, and a
+   * grey rectangle standing in for one is a different size every time.
+   *
+   * What it does *not* do is play them. The canvas is a picture of the app: sound starting while
+   * somebody is arranging a screen is the tool interrupting the work.
+   */
+  if (component.type === 'Video') {
+    const src = textContent(component, 'src');
+    const poster = textContent(component, 'poster');
+    if (!src && !poster) {
+      return (
+        <div
+          {...shared}
+          ref={attach}
+          className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
+          style={{ minWidth: 160, minHeight: 90, ...style }}
+        >
+          Video
+        </div>
+      );
+    }
+    return (
+      <video
+        {...shared}
+        ref={attach as unknown as (node: HTMLVideoElement | null) => void}
+        src={src || undefined}
+        poster={poster || undefined}
+        controls={booleanProp(component, 'controls')}
+        // Never armed here, whatever the document says: a screen full of elements that all start
+        // playing when it is opened is not a canvas anybody can work in.
+        autoPlay={false}
+        muted
+        preload="metadata"
+        style={style}
+      />
+    );
+  }
+
+  if (component.type === 'Audio') {
+    const src = textContent(component, 'src');
+    return (
+      <audio
+        {...shared}
+        ref={attach as unknown as (node: HTMLAudioElement | null) => void}
+        src={src || undefined}
+        controls={booleanProp(component, 'controls')}
+        preload="none"
+        style={style}
+      />
+    );
+  }
+
+  /**
+   * A carousel draws its **first** picture, with the controls the app will have.
+   *
+   * The index is state that only exists in the running app, so the canvas shows where it starts.
+   * Drawing every picture at once would be drawing something the app never renders — the same
+   * mistake the List used to make with its extra children.
+   */
+  if (component.type === 'Carousel') {
+    const slides = listOf(component, 'items');
+    const first = slides[0];
+    return (
+      <div {...shared} ref={attach} style={{ minWidth: 120, minHeight: 80, ...style }}>
+        {first ? (
+          <img className="loom-carousel__slide" src={first} alt={textContent(component, 'alt')} />
+        ) : (
+          <span className="canvas-placeholder">Carousel</span>
+        )}
+        {slides.length > 1 ? (
+          <>
+            <span className="loom-carousel__step loom-carousel__step--back">{'\u2039'}</span>
+            <span className="loom-carousel__step loom-carousel__step--next">{'\u203a'}</span>
+          </>
+        ) : null}
+        {booleanProp(component, 'dots') && slides.length > 1 ? (
+          <div className="loom-carousel__dots">
+            {slides.map((slide, index) => (
+              <span
+                key={`${slide}-${index}`}
+                className={index === 0 ? 'loom-carousel__dot is-on' : 'loom-carousel__dot'}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (component.type === 'Avatar') {
+    const size = numberProp(component, 'size', 40);
+    const src = textContent(component, 'src');
+    const name = textContent(component, 'name');
+    const initials = name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0] ?? '')
+      .join('')
+      .toUpperCase();
+
+    return (
+      <span
+        {...shared}
+        ref={attach}
+        style={{ ...style, width: size, height: size, fontSize: Math.round(size * 0.4) }}
+      >
+        {src ? (
+          <img className="loom-avatar__image" src={src} alt={name} />
+        ) : (
+          <span>{initials}</span>
+        )}
+      </span>
+    );
+  }
+
+  /**
+   * An Embed is drawn as a labelled panel rather than as a live iframe.
+   *
+   * Loading someone else's page into the editor would run their scripts inside the studio, on every
+   * render, for every embed on the screen — and none of that helps anyone judge a layout. The box
+   * is the right size and says what is in it, which is the part that matters here.
+   */
+  if (component.type === 'Embed') {
+    return (
+      <div
+        {...shared}
+        ref={attach}
+        className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
+        style={{ minWidth: 160, minHeight: 90, ...style }}
+      >
+        <span>{textContent(component, 'title') || 'Embed'}</span>
+        <span className="canvas-placeholder__note">{textContent(component, 'src')}</span>
+      </div>
+    );
+  }
+
   if (component.type === 'Link') {
     return (
       <a
@@ -342,7 +641,7 @@ export function ComponentView({
         // The canvas is a picture: following a link out of the editor is never what a click here
         // meant, so the address is drawn and not armed.
         href={undefined}
-        style={{ cursor: 'default', textDecoration: 'underline', ...leafStyle }}
+        style={{ cursor: 'default', ...leafStyle }}
       >
         {textContent(component, 'label') || 'Link'}
       </a>
@@ -440,7 +739,14 @@ export function ComponentView({
     // canvas says that rather than drawing a header it cannot know.
     if (columns.length === 0) {
       return (
-        <div {...shared} ref={attach} className="canvas-placeholder" style={leafStyle}>
+        <div
+          {...shared}
+          ref={attach}
+          // Its own class *and* the variant one: a table with no columns yet still has the look a
+          // designer picked for it, and a bare className after the spread would drop that.
+          className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
+          style={leafStyle}
+        >
           <span>{textContent(component, 'empty') || 'Nothing yet'}</span>
           <span className="canvas-placeholder__note">Columns come from the first row</span>
         </div>
@@ -452,14 +758,7 @@ export function ComponentView({
           <thead>
             <tr>
               {columns.map((column) => (
-                <th
-                  key={column}
-                  style={{
-                    textAlign: 'left',
-                    padding: '6px 8px',
-                    borderBottom: '1px solid #E8EAEE',
-                  }}
-                >
+                <th key={column} style={{ textAlign: 'left', padding: '6px 8px' }}>
                   {column}
                 </th>
               ))}
@@ -469,10 +768,7 @@ export function ComponentView({
             {[0, 1].map((row) => (
               <tr key={row}>
                 {columns.map((column) => (
-                  <td
-                    key={column}
-                    style={{ padding: '6px 8px', borderBottom: '1px solid #F1F2F5', opacity: 0.4 }}
-                  >
+                  <td key={column} style={{ padding: '6px 8px', opacity: 0.4 }}>
                     —
                   </td>
                 ))}
@@ -484,11 +780,33 @@ export function ComponentView({
     );
   }
 
+  /**
+   * Tiles wrap by **width**, so the canvas has to lay them out the same way the app will.
+   *
+   * The generic container below is flex, which would put every child in one row and tell a designer
+   * nothing about how the gallery behaves at the size they are drawing for.
+   */
+  const tiles =
+    component.type === 'Tiles'
+      ? {
+          display: 'grid',
+          gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(
+            40,
+            Math.trunc(numberProp(component, 'minWidth', 160)),
+          )}px, 1fr))`,
+          gap: `${Math.max(0, Math.trunc(numberProp(component, 'gap', 12)))}px`,
+        }
+      : {};
+
   return (
     <div
       {...shared}
       ref={attach}
-      style={{ ...style, minHeight: component.children?.length ? undefined : 48 }}
+      style={{
+        ...style,
+        ...tiles,
+        minHeight: component.children?.length ? undefined : 48,
+      }}
     >
       {(component.children ?? []).map((childId) => (
         <ComponentView

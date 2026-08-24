@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { componentStyle, styleAttr } from '../emit/style';
 import { indent } from '../emit/text';
@@ -17,9 +18,11 @@ export const frameEmitter: ComponentEmitter = {
     const attrs = styleAttr(component, ctx, component.layout ? own : { display: 'flex', ...own });
     const children = component.children ?? [];
 
-    if (children.length === 0) return `${indent(depth)}<div${attrs} />`;
+    const classes = classAttr(component);
+
+    if (children.length === 0) return `${indent(depth)}<div${classes}${attrs} />`;
 
     const body = children.map((id) => ctx.renderChild(id, depth + 1)).join('\n');
-    return `${indent(depth)}<div${attrs}>\n${body}\n${indent(depth)}</div>`;
+    return `${indent(depth)}<div${classes}${attrs}>\n${body}\n${indent(depth)}</div>`;
   },
 };

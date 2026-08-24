@@ -545,6 +545,47 @@ export function everyComponentSnapshot(): Snapshot {
  * emitted app's own `tsc`: the operator templates declare locals, and a local nothing reads
  * fails a build with `noUnusedLocals` — which no amount of string matching here would catch.
  */
+/**
+ * A project that stores files (`docs/29-storage.md`).
+ *
+ * Local disk, because that is the one every checkout can build without an account anywhere — and
+ * because its upload route is the one with real logic in it: a signature to check and a path to
+ * refuse. The presigning providers are pinned by their own tests against the vendors' material.
+ */
+export function uploadSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const root = base.components.cp_root000001!;
+
+  const file: Component = createComponent('FileField', 'cp_file');
+  file.props.bucket = { kind: 'static', value: 'cn_files' };
+
+  const image: Component = createComponent('ImageField', 'cp_image');
+  image.props.bucket = { kind: 'static', value: 'cn_files' };
+
+  return {
+    ...base,
+    connectors: {
+      cn_files: {
+        id: 'cn_files',
+        moduleId: 'local',
+        config: {
+          label: 'Uploads',
+          directory: '.data/uploads',
+          prefix: 'uploads',
+          maxMb: 5,
+          accept: 'image/*, application/pdf',
+        },
+      },
+    },
+    components: {
+      ...base.components,
+      cp_root000001: { ...root, children: [...(root.children ?? []), file.id, image.id] },
+      [file.id]: file,
+      [image.id]: image,
+    },
+  };
+}
+
 export function operatorPipelineSnapshot(): Snapshot {
   const { snapshot } = inferredSnapshot();
   const route = Object.values(snapshot.nodes).find((node) => node.category === 'api')!;

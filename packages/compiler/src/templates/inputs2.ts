@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { staticString } from '../emit/props';
@@ -31,7 +32,7 @@ export const multilineFieldEmitter: ComponentEmitter = {
     const rows = staticNumber(component, 'rows', 4);
     const state = ctx.requireFieldState(component.id, initialFieldValue(component));
 
-    return `${indent(depth)}<textarea${styleAttr(component, ctx)}
+    return `${indent(depth)}<textarea${classAttr(component)}${styleAttr(component, ctx)}
 ${indent(depth + 1)}value={${state}}
 ${indent(depth + 1)}rows={${rows}}
 ${indent(depth + 1)}placeholder={${JSON.stringify(placeholder)}}
@@ -72,7 +73,7 @@ ${indent(depth + 1)}</label>`,
       ? `${indent(depth + 1)}<legend>{${JSON.stringify(question)}}</legend>\n`
       : '';
 
-    return `${indent(depth)}<fieldset${styleAttr(component, ctx)}>
+    return `${indent(depth)}<fieldset${classAttr(component)}${styleAttr(component, ctx)}>
 ${legend}${items}
 ${indent(depth)}</fieldset>`;
   },
@@ -89,7 +90,7 @@ export const dateFieldEmitter: ComponentEmitter = {
       (min ? `\n${indent(depth + 1)}min={${JSON.stringify(min)}}` : '') +
       (max ? `\n${indent(depth + 1)}max={${JSON.stringify(max)}}` : '');
 
-    return `${indent(depth)}<input${styleAttr(component, ctx)}
+    return `${indent(depth)}<input${classAttr(component)}${styleAttr(component, ctx)}
 ${indent(depth + 1)}type="date"
 ${indent(depth + 1)}value={${state}}${bounds}
 ${indent(depth + 1)}onChange={(event) => set_${state}(event.target.value)}

@@ -153,6 +153,28 @@ primitives prove the emission.
   second edit repaired it. The frame now records which build it went to fetch and loads again if
   the app moved on while it was in the air. It terminates on its own: a load with no build behind
   it is the last one.
+- **The Preview follows the screen being designed.** It used to load the app's root and stay there
+  for the life of the session — and the root is the *entry* artboard, the only one served at `/`.
+  Every other screen has its own path, so anyone working on a second screen was watching a preview
+  of the first: elements were added, compiled and delivered, and nothing appeared, because the page
+  in the frame did not contain them and never would. The frame is now **told** to navigate when the
+  active screen changes, and told again after a reload lands it back at the root. It is a
+  same-document navigation — `pushState` plus the `popstate` the router already listens for — not a
+  reload, because changing screens is no reason to throw away what somebody has typed into the
+  running app.
+- **A screen with params is left alone.** `/order/:id` is reachable *through* the app, from whatever
+  supplies the id; jumping straight there would render it against a record that does not exist,
+  which looks like a working preview of broken data.
+- **An element keeps the size it was drawn at.** Only containers used to pass their layout into the
+  emitted style, so a Text dragged out to 320 pixels shipped as a span that hugged its word: the
+  canvas showed one shape and the app rendered another. Every element now carries its drawn width
+  and height — the size only, not the arrangement, because a leaf has no children to arrange. It
+  surfaced through media, where a carousel with no size collapses to nothing and takes its controls
+  with it, but it was never only about media.
+- **The bridge is dev-server only.** The listener is injected into the previewed app's HTML by the
+  preview server, alongside the console hook — it takes orders from the embedding frame and nothing
+  else, and only for a plain path. Nothing of it is emitted: the repo a user downloads has no idea
+  loom exists.
 
 ## C4 — Free placement, rulers, grid and guides ✅
 

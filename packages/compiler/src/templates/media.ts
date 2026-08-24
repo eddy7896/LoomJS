@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import { actionsOf } from '@loom/ir';
 import { iconPath } from '@loom/components';
 import type { ComponentEmitter } from '../types';
@@ -23,7 +24,7 @@ export const imageEmitter: ComponentEmitter = {
 
     // Empty alt is a *decision* — it tells a screen reader the image carries no meaning — but it
     // has to be written out, so `alt` is always present in the output.
-    return `${indent(depth)}<img${styleAttr(component, ctx)}
+    return `${indent(depth)}<img${classAttr(component)}${styleAttr(component, ctx)}
 ${indent(depth + 1)}src={${srcExpr}}
 ${indent(depth + 1)}alt={${JSON.stringify(alt)}}
 ${indent(depth)}/>`;
@@ -35,7 +36,7 @@ export const linkEmitter: ComponentEmitter = {
   emit(component, ctx, depth) {
     const label = component.props.label;
     const labelExpr = label ? valueExpr(label, ctx, component.id, 'label') : '""';
-    const attrs = styleAttr(component, ctx);
+    const attrs = classAttr(component) + styleAttr(component, ctx);
 
     // A Link pointing at a screen is the router's job: a full page load would throw away the
     // app's state to reach a route it already has.
@@ -79,7 +80,7 @@ export const iconEmitter: ComponentEmitter = {
 
     // `aria-hidden`: an icon beside a label reads the label twice otherwise, and an icon *without*
     // a label is a button that needs its own name — which is the Button's problem, not this one.
-    return `${indent(depth)}<svg${styleAttr(component, ctx)}
+    return `${indent(depth)}<svg${classAttr(component)}${styleAttr(component, ctx)}
 ${indent(depth + 1)}viewBox="0 0 24 24"
 ${indent(depth + 1)}width={${px}}
 ${indent(depth + 1)}height={${px}}

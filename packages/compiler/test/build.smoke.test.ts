@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -13,6 +13,7 @@ import {
   conditionalSnapshot,
   crudSnapshot,
   everyComponentSnapshot,
+  uploadSnapshot,
   firestoreOperationsSnapshot,
   operatorPipelineSnapshot,
   triggeredMathSnapshot,
@@ -37,8 +38,19 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
  * `pnpm test:smoke` (excluded from the default vitest run).
  */
 
+/**
+ * Every project this suite emits, so they can be deleted when it is done.
+ *
+ * They were not being deleted, and each one carries a `node_modules`. Three hundred and nineteen of
+ * them had accumulated in the system temp folder — twenty-two gigabytes — until an install failed
+ * with ENOSPC and took the whole suite with it. A test that leaves a project behind is a test that
+ * eventually stops the machine it runs on.
+ */
+const projects: string[] = [];
+
 async function emitProject(snapshot: Parameters<typeof compile>[0]): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'loom-smoke-'));
+  projects.push(dir);
   await writeFiles(compile(snapshot).files, dir, { clean: true });
   await run(npm, ['install', '--no-audit', '--no-fund'], { cwd: dir, shell: true });
   return dir;
@@ -71,6 +83,12 @@ async function stop(child: ReturnType<typeof spawn>): Promise<void> {
 
 afterAll(async () => {
   await Promise.all(children.map((child) => stop(child)));
+
+  // After the servers, never before: a vite still holding files in one of these directories turns
+  // a delete into a permission error on Windows.
+  await Promise.all(
+    projects.map((dir) => rm(dir, { recursive: true, force: true }).catch(() => undefined)),
+  );
 });
 
 /** A fresh port per run, so a leftover server can never answer for this one. */
@@ -122,6 +140,27 @@ describe('emitted app builds for real', () => {
       '--loom-color-brand: #0055ff;',
     );
     expect(await readFile(join(dir, 'index.html'), 'utf8')).toContain('Archivo');
+  });
+
+  it('type-checks an app that takes uploads, and keeps the keys out of the bundle', async () => {
+    const dir = await emitProject(uploadSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    // The whole point, checked against the *built* bundle rather than the source: whatever the
+    // emitter meant to do, this is what a browser actually downloads.
+    const assets = join(dir, 'dist', 'assets');
+    for (const name of await readdir(assets)) {
+      if (!name.endsWith('.js')) continue;
+      const bundle = await readFile(join(assets, name), 'utf8');
+      expect(bundle).not.toContain('UPLOAD_SECRET');
+      expect(bundle).not.toContain('.data/uploads');
+    }
+
+    // And the browser half is there, asking this app's own server for somewhere to put the file.
+    const client = await readFile(join(dir, 'src', 'upload.ts'), 'utf8');
+    expect(client).toContain("'/api/upload'");
+
+    expect(await readFile(join(dir, '.env.example'), 'utf8')).toContain('UPLOAD_SECRET=');
   });
 
   it('type-checks a route body holding every operator step', async () => {

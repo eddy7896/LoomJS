@@ -25,6 +25,7 @@ describe('compile(trivial snapshot)', () => {
       'src/artboards/Home.tsx',
       'src/index.css',
       'src/main.tsx',
+      'src/components.css',
       'src/theme.css',
       'tsconfig.json',
       'vite.config.ts',
@@ -52,7 +53,7 @@ describe('compile(trivial snapshot)', () => {
     expect(home).toContain('padding: 24');
     expect(home).toContain('alignItems: "stretch"');
     expect(home).toContain('justifyContent: "flex-start"');
-    expect(home).toContain('<span>{"Hello loomJS"}</span>');
+    expect(home).toContain('<span className="loom-text loom-text--body">{"Hello loomJS"}</span>');
   });
 
   it('is byte-for-byte stable across runs (golden)', async () => {
@@ -85,8 +86,10 @@ describe('compile errors (Build tier)', () => {
 
   it('rejects an unknown component type and names the known ones', () => {
     const snapshot = trivialSnapshot();
-    snapshot.components.cp_text000001!.type = 'Carousel';
-    expect(() => compile(snapshot)).toThrow(/No template for component type "Carousel"/);
+    // A type nobody has ever implemented. This used to say "Carousel", which stopped being a
+    // useful example of an unknown type the day the vocabulary grew one (`docs/28-media.md`).
+    snapshot.components.cp_text000001!.type = 'Hologram';
+    expect(() => compile(snapshot)).toThrow(/No template for component type "Hologram"/);
   });
 
   it('rejects a bound property until the binding runtime lands (M3)', () => {

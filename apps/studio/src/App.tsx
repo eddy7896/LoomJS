@@ -9,6 +9,7 @@ import { DataPanel } from './panels/DataPanel';
 import { LogsPanel } from './panels/LogsPanel';
 import { CodePanel } from './panels/CodePanel';
 import { ToolsPanel } from './panels/ToolsPanel';
+import { FilesPanel } from './panels/FilesPanel';
 import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewWindow } from './preview/PreviewWindow';
@@ -88,6 +89,8 @@ export default function App({
             <LogsPanel />
           ) : rail === 'tools' ? (
             <ToolsPanel />
+          ) : rail === 'files' ? (
+            <FilesPanel />
           ) : rail === 'data' ? (
             <DataPanel />
           ) : (

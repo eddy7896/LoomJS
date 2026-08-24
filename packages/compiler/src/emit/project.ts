@@ -1,4 +1,4 @@
-import { FONT_STYLESHEET, themeCss, type ThemeOverrides } from '@loom/ui';
+import { FONT_STYLESHEET, componentsCss, themeCss, type ThemeOverrides } from '@loom/ui';
 import type { EmittedFile } from '../types';
 import { DEV_API_PLUGIN } from './server';
 
@@ -42,6 +42,14 @@ export interface ScaffoldOptions {
   usesMysql?: boolean;
   /** The project's token overrides, emitted into its stylesheet. */
   theme?: ThemeOverrides;
+  /**
+   * Packages something else decided this project needs — a bucket's SDK, today.
+   *
+   * Passed in rather than switched on here: which SDK an upload needs is the bucket manifest's
+   * business, and duplicating that list in the scaffolder would be two places to update the day a
+   * provider changes (`docs/29-storage.md`).
+   */
+  extraDependencies?: Readonly<Record<string, string>>;
 }
 
 export function scaffoldFiles(
@@ -72,6 +80,7 @@ export function scaffoldFiles(
       ...(options.usesSql ? { pg: '^8.13.1' } : {}),
       ...(options.usesMysql ? { mysql2: '^3.11.4' } : {}),
       ...(options.usesFirestore ? { 'firebase-admin': '^13.0.0' } : {}),
+      ...(options.extraDependencies ?? {}),
       // The server runs the emitted TypeScript directly: the handlers import each other without
       // file extensions, which Node's own ESM loader requires and a compile step would have to
       // rewrite. One dependency beats a second build configuration.
@@ -154,8 +163,15 @@ ReactDOM.createRoot(root).render(
       content: themeCss(theme),
     },
     {
+      // The variants, as ordinary CSS in the project's own tokens (`docs/27-variants.md`). The
+      // studio's canvas is painted by this same string, which is what stops the two disagreeing.
+      path: 'src/components.css',
+      content: componentsCss(),
+    },
+    {
       path: 'src/index.css',
       content: `@import './theme.css';
+@import './components.css';
 
 * {
   box-sizing: border-box;

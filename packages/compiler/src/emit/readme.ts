@@ -29,6 +29,10 @@ export interface ReadmeFacts {
   usesSql: boolean;
   /** True when the project signs people in. */
   usesAuth: boolean;
+  /** True when people can upload files (`docs/29-storage.md`). */
+  usesUploads?: boolean;
+  /** True when at least one bucket writes to the app's own disk. */
+  usesLocalUploads?: boolean;
 }
 
 /** What each name is for, so a deployment is not filling in blanks by guesswork. */
@@ -48,6 +52,12 @@ const ENV_NOTES: Record<string, string> = {
   HOME_ASSISTANT_URL: 'Where your Home Assistant lives, e.g. http://homeassistant.local:8123',
   HOME_ASSISTANT_TOKEN: 'A long-lived access token from your Home Assistant profile.',
   TOOL_API_KEY: 'Sent as a bearer token by requests that need one.',
+  UPLOAD_SECRET:
+    'Any long random string. Signs upload tickets so the upload route is not an open dropbox.',
+  R2_ACCESS_KEY_ID: 'Cloudflare R2 access key ID.',
+  R2_SECRET_ACCESS_KEY: 'Cloudflare R2 secret access key. Server only.',
+  AWS_ACCESS_KEY_ID: 'AWS access key ID, for the S3 bucket uploads go to.',
+  AWS_SECRET_ACCESS_KEY: 'AWS secret access key. Server only.',
 };
 
 const list = (lines: readonly string[]): string => lines.join(NEWLINE);
@@ -127,6 +137,27 @@ export function emitReadme(facts: ReadmeFacts): EmittedFile {
     }
   }
 
+  if (facts.usesUploads) {
+    sections.push(
+      '## Files people upload',
+      '',
+      'The browser never holds a bucket key. It asks `/api/upload` for a ticket, this server signs',
+      'one with the credentials above, and the file goes straight to the bucket — so the key stays',
+      'here and the ticket expires in minutes.',
+      '',
+    );
+
+    if (facts.usesLocalUploads) {
+      sections.push(
+        '**Files are stored on disk**, under the folder configured for the bucket, and served back',
+        'at `/files/…`. That works on a laptop and in a container with a volume. It does **not**',
+        'work on a serverless host — that filesystem is temporary and per-invocation, so uploads',
+        'would disappear. Point the bucket at object storage before deploying there.',
+        '',
+      );
+    }
+  }
+
   // ---- where things are ----------------------------------------------------------------
   const map = [
     '| Path | What is in it |',
@@ -136,6 +167,7 @@ export function emitReadme(facts: ReadmeFacts): EmittedFile {
     '| `src/theme.css` | Design tokens as custom properties |',
   ];
   if (facts.routes.length > 0) map.push('| `api/` | One serverless function per route |');
+  if (facts.usesUploads) map.push('| `src/server/` | Bucket settings and upload signing |');
   if (facts.usesAuth) map.push('| `src/server/auth.ts` | Sessions, in HttpOnly cookies |');
   if (facts.migrations > 0) map.push('| `migrations/` | Schema changes, oldest first |');
   map.push('| `server.ts` | The server a container runs |');

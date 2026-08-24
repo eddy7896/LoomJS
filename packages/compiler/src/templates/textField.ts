@@ -1,3 +1,4 @@
+import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
 import { staticString } from '../emit/props';
@@ -18,7 +19,7 @@ export const textFieldEmitter: ComponentEmitter = {
 
     // Explicit, like every other input template: `text` is the browser default, but a developer
     // reading the output should not have to know that to know what this is.
-    return `${indent(depth)}<input${styled}
+    return `${indent(depth)}<input${classAttr(component)}${styled}
 ${indent(depth + 1)}type="text"
 ${indent(depth + 1)}value={${state}}
 ${indent(depth + 1)}placeholder={${JSON.stringify(placeholder)}}

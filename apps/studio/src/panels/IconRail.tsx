@@ -4,7 +4,7 @@ import { setRail, type Rail } from '../state/store';
 /**
  * The icon rail (S0, `docs/11-editor-shell.md`).
  *
- * Six sections: Design, Nodes, Data, Tools, Code, Logs. Bubble's rail also carries Code, API and Settings,
+ * Seven sections: Design, Nodes, Data, Files, Tools, Code, Logs. Bubble's rail also carries Code, API and Settings,
  * and drawing those greyed out would promise things that do not exist — a rail that lies is worse
  * than a short rail. They arrive when they have something behind them, which is exactly how Logs
  * arrived (`docs/23-logs.md`).
@@ -49,6 +49,12 @@ const ICONS: Record<Rail, JSX.Element> = {
       <path d="M4 7h16M4 12h11M4 17h7" />
     </>
   ),
+  // A folder — somewhere the files go.
+  files: (
+    <>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17Z" />
+    </>
+  ),
   // A stack of discs — the database.
   data: (
     <>
@@ -64,6 +70,7 @@ const SECTIONS: readonly { id: Rail; label: string; hint: string }[] = [
   { id: 'nodes', label: 'Nodes', hint: 'The graph behind the screens' },
   { id: 'data', label: 'Data', hint: 'Connections and tables' },
   { id: 'tools', label: 'Tools', hint: 'Models, services, anything with an endpoint' },
+  { id: 'files', label: 'Files', hint: 'Where uploads live' },
   { id: 'code', label: 'Code', hint: 'The repo this project compiles to' },
   { id: 'logs', label: 'Logs', hint: 'What the running app says' },
 ];

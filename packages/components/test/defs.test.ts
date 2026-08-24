@@ -24,7 +24,9 @@ describe('component definitions', () => {
   });
 
   it('rejects an unknown type', () => {
-    expect(() => createComponent('Carousel', 'cp_3')).toThrow(/Unknown component type/);
-    expect(defFor('Carousel')).toBeUndefined();
+    // A type nobody has implemented. It used to say "Carousel", which stopped being an example of
+    // an unknown type the day the vocabulary grew one (`docs/28-media.md`).
+    expect(() => createComponent('Hologram', 'cp_3')).toThrow(/Unknown component type/);
+    expect(defFor('Hologram')).toBeUndefined();
   });
 });

@@ -664,7 +664,7 @@ describe('a Text wired straight to a field shows what the person typed', () => {
 
   it('reads the field’s own state, with nothing in between', () => {
     const code = home(wired());
-    expect(code).toContain('<span>{field_cp_title}</span>');
+    expect(code).toContain('<span className="loom-text loom-text--body">{field_cp_title}</span>');
     // No pipeline, no derivation, no request: it is the state the input already owns.
     expect(code).not.toContain('fetch(');
     expect(code).not.toContain('derived_');
