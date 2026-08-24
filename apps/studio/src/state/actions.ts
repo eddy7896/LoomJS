@@ -30,6 +30,7 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   message: 'Show a message',
   openUrl: 'Open a link',
   copy: 'Copy to clipboard',
+  download: 'Download a file',
   signIn: 'Sign in',
   signInWith: 'Sign in with…',
   signUp: 'Sign up',
@@ -37,6 +38,14 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
 };
 
 /** The order they appear in the "add" menu: the ones a form needs, first. */
+/**
+ * What the picker offers, in the order it offers it.
+ *
+ * `download` is deliberately **absent** until the emitters for it land (documents, then export).
+ * The IR carries the shape so the format does not need a second bump, and the editor does not
+ * offer a step that would fail the build — a picker that lists something the compiler refuses is
+ * the failure mode this list exists to prevent.
+ */
 export const ACTION_ORDER: ActionKind[] = [
   'trigger',
   'setVariable',
@@ -164,11 +173,13 @@ export function triggerChoices(snapshot: Snapshot): Choice[] {
 }
 
 export function variableChoices(snapshot: Snapshot): Choice[] {
-  return Object.values(snapshot.nodes)
-    // The current user is app state too, and it is nobody's to set: signing in is what writes it.
-    .filter(isVariable)
-    .map((node) => ({ value: node.id, label: nodeTitle(node) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  return (
+    Object.values(snapshot.nodes)
+      // The current user is app state too, and it is nobody's to set: signing in is what writes it.
+      .filter(isVariable)
+      .map((node) => ({ value: node.id, label: nodeTitle(node) }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  );
 }
 
 /** Inputs on the same screen. A field on another screen has no state here to set. */
@@ -242,7 +253,9 @@ function defaultAction(snapshot: Snapshot, componentId: Id, kind: ActionKind): A
     }
     case 'setVariable': {
       const first = variableChoices(snapshot)[0];
-      return first ? { kind, nodeId: first.value, value: { kind: 'static', value: '' } } : undefined;
+      return first
+        ? { kind, nodeId: first.value, value: { kind: 'static', value: '' } }
+        : undefined;
     }
     case 'setField': {
       const first = fieldChoices(snapshot, componentId)[0];

@@ -15,7 +15,19 @@ import { z } from 'zod';
  *  - Types use the curated visible vocabulary only; @loom/typesys will elaborate later.
  */
 
-export const SCHEMA_VERSION = 1 as const;
+/**
+ * Bumped to 2 by the V1 completion plan's IR wave (`docs/V1-COMPLETION.md` §5), which landed
+ * every shape the remaining phases need in one go rather than churning the format twenty times.
+ *
+ * **Every addition is optional**, so a version-1 document is already a valid version-2 one — which
+ * is why `migrateSnapshot` can carry one forward by stamping the number rather than rewriting
+ * anything. Refusing a document loudly is the right answer to a change that loses data, and the
+ * wrong answer to one that cannot.
+ */
+export const SCHEMA_VERSION = 2 as const;
+
+/** Versions this build can still open. Anything older is refused, and says so.  */
+export const READABLE_VERSIONS = [1, 2] as const;
 
 export const IdSchema = z.string().min(1);
 export type Id = z.infer<typeof IdSchema>;
@@ -27,6 +39,14 @@ export type Id = z.infer<typeof IdSchema>;
 export type TypeRef =
   | { kind: 'text' }
   | { kind: 'number' }
+  /**
+   * A number that is not a float. Money is the reason: `0.1 + 0.2` is not `0.3` in IEEE 754, and
+   * a builder that stores an invoice total in a double has chosen that for everyone using it
+   * (`docs/V1-COMPLETION.md` C8). `scale` is the digits kept after the point.
+   */
+  | { kind: 'decimal'; scale: number }
+  /** A decimal that knows what it is denominated in. Two currencies never add. */
+  | { kind: 'money'; currency: string }
   | { kind: 'boolean' }
   | { kind: 'date' }
   | { kind: 'record' }
@@ -41,6 +61,8 @@ export const TypeRefSchema: z.ZodType<TypeRef> = z.lazy(() =>
   z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('text') }),
     z.object({ kind: z.literal('number') }),
+    z.object({ kind: z.literal('decimal'), scale: z.number().int().min(0).max(20) }),
+    z.object({ kind: z.literal('money'), currency: z.string().min(1) }),
     z.object({ kind: z.literal('boolean') }),
     z.object({ kind: z.literal('date') }),
     z.object({ kind: z.literal('record') }),
@@ -116,8 +138,18 @@ const withCondition = { when: ConditionSchema.optional() };
 export const ActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('navigate'), flowId: IdSchema, ...withCondition }),
   z.object({ kind: z.literal('trigger'), target: PortRefSchema, ...withCondition }),
-  z.object({ kind: z.literal('setVariable'), nodeId: IdSchema, value: ValueSourceSchema, ...withCondition }),
-  z.object({ kind: z.literal('setField'), componentId: IdSchema, value: ValueSourceSchema, ...withCondition }),
+  z.object({
+    kind: z.literal('setVariable'),
+    nodeId: IdSchema,
+    value: ValueSourceSchema,
+    ...withCondition,
+  }),
+  z.object({
+    kind: z.literal('setField'),
+    componentId: IdSchema,
+    value: ValueSourceSchema,
+    ...withCondition,
+  }),
   /** Back to what it *started* as — a number field to its initial number, not to "". */
   z.object({ kind: z.literal('clearField'), componentId: IdSchema, ...withCondition }),
   z.object({
@@ -127,6 +159,22 @@ export const ActionSchema = z.discriminatedUnion('kind', [
     ...withCondition,
   }),
   z.object({ kind: z.literal('openUrl'), url: z.string(), ...withCondition }),
+  /**
+   * Hand the person a file (`docs/V1-COMPLETION.md` §4.5). The thirteenth, and it earns the slot
+   * on spec 7's own terms: an export is started by a click, produces no value anything downstream
+   * reads, and navigates nowhere — every property of an action and none of a node. A node whose
+   * output nothing consumes is the shape of a mistake.
+   *
+   * `csv` takes a bound list. `pdf` takes a document artboard, printed with its own page size.
+   */
+  z.object({
+    kind: z.literal('download'),
+    value: ValueSourceSchema,
+    format: z.enum(['csv', 'pdf']),
+    /** What the file is called, without the extension. */
+    filename: z.string().optional(),
+    ...withCondition,
+  }),
   z.object({ kind: z.literal('copy'), value: ValueSourceSchema, ...withCondition }),
   /**
    * App auth (spec 10). These sign in the **app's** users, never the designer — two universes on
@@ -213,7 +261,18 @@ export type SizeMode = z.infer<typeof SizeModeSchema>;
 export const LayoutModeSchema = z.enum(['stack', 'free']);
 export type LayoutMode = z.infer<typeof LayoutModeSchema>;
 
-export const LayoutSchema = z.object({
+/**
+ * The two widths a layout may differ at (`docs/V1-COMPLETION.md` L3).
+ *
+ * **Two, and deliberately not a breakpoint system.** The base is the layout; `sm` is what it
+ * becomes on a phone. Every builder that offered five breakpoints taught its users to maintain
+ * five layouts, and the flex-first default already handles most of the range on its own — this is
+ * for the cases where a row genuinely has to become a column.
+ */
+export const BreakpointSchema = z.enum(['sm']);
+export type Breakpoint = z.infer<typeof BreakpointSchema>;
+
+const LayoutBaseSchema = z.object({
   /** Absent means `stack`: every document written before free placement existed reads as one. */
   mode: LayoutModeSchema.optional(),
   direction: z.enum(['row', 'column']),
@@ -222,6 +281,14 @@ export const LayoutSchema = z.object({
   align: z.enum(['start', 'center', 'end', 'stretch']),
   justify: z.enum(['start', 'center', 'end', 'between']),
   size: z.object({ width: SizeModeSchema, height: SizeModeSchema }).optional(),
+});
+
+/**
+ * One flat override level, never a nested one: a `sm` layout cannot itself carry a `sm`. Depth
+ * here would buy nothing and cost a document nobody could reason about.
+ */
+export const LayoutSchema = LayoutBaseSchema.extend({
+  responsive: z.object({ sm: LayoutBaseSchema.partial().optional() }).optional(),
 });
 export type Layout = z.infer<typeof LayoutSchema>;
 
@@ -334,7 +401,7 @@ export type Effect = z.infer<typeof EffectSchema>;
  * for constantly, and anything beyond it belongs to a component kit rather than to loom's core
  * (`docs/02-system-architecture.md`).
  */
-export const StyleSchema = z.object({
+const StyleBaseSchema = z.object({
   background: StyleValueSchema.optional(),
   textColor: StyleValueSchema.optional(),
   fontSize: StyleValueSchema.optional(),
@@ -366,6 +433,11 @@ export const StyleSchema = z.object({
   flipY: z.boolean().optional(),
   /** A frame that crops what overflows it. */
   clip: z.boolean().optional(),
+});
+
+/** The same one flat override level a layout gets, for the same reason. */
+export const StyleSchema = StyleBaseSchema.extend({
+  responsive: z.object({ sm: StyleBaseSchema.optional() }).optional(),
 });
 export type Style = z.infer<typeof StyleSchema>;
 
@@ -423,7 +495,17 @@ export type ScreenSize = z.infer<typeof ScreenSizeSchema>;
  * answers every request as whoever is asking. This keeps a signed-out visitor from landing on a
  * screen built for someone else and seeing its empty shape.
  */
-export const GuardSchema = z.object({ redirectTo: IdSchema });
+export const GuardSchema = z.object({
+  redirectTo: IdSchema,
+  /**
+   * "Only for these roles" (`docs/V1-COMPLETION.md` O2). Absent means any signed-in person.
+   *
+   * Like the guard it sits on, this is a router-level convenience and **not** the security
+   * boundary — the boundary is the row-level-security policy the project emits (O3). A client can
+   * always ask; what it gets back is the database's decision, not this one's.
+   */
+  requireRole: z.array(z.string()).nonempty().optional(),
+});
 export type Guard = z.infer<typeof GuardSchema>;
 
 /**
@@ -436,6 +518,41 @@ export type Guard = z.infer<typeof GuardSchema>;
 export const GuidesSchema = z.object({ x: z.array(z.number()), y: z.array(z.number()) });
 export type Guides = z.infer<typeof GuidesSchema>;
 
+/**
+ * What a search engine and a social card are told about a screen (`docs/V1-COMPLETION.md` L4).
+ *
+ * **Static, in V1.** A bound title — "Invoice #123" — would need the route's own data before the
+ * page renders, which is the server-rendering question this deliberately does not open. Saying so
+ * is better than a `meta` field that silently only works when the value is a literal.
+ */
+export const MetaSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  /** An absolute URL to the card image. */
+  image: z.string().optional(),
+});
+export type Meta = z.infer<typeof MetaSchema>;
+
+/**
+ * What an artboard *is*.
+ *
+ * A `screen` is a route in the app. A `document` is a page meant for paper — an invoice, a report
+ * card, a statement — laid out at a page size with margins, and reached by printing rather than by
+ * navigating. Absent means `screen`, so every project written before this reads as one.
+ */
+export const ArtboardKindSchema = z.enum(['screen', 'document']);
+export type ArtboardKind = z.infer<typeof ArtboardKindSchema>;
+
+/** A paper size, in millimetres, plus how much of it stays empty. */
+export const PageSchema = z.object({
+  preset: z.enum(['a4', 'letter', 'legal', 'a5']).optional(),
+  width: z.number().positive(),
+  height: z.number().positive(),
+  orientation: z.enum(['portrait', 'landscape']).optional(),
+  margin: z.number().min(0),
+});
+export type Page = z.infer<typeof PageSchema>;
+
 export const ArtboardSchema = z.object({
   id: IdSchema,
   name: z.string(),
@@ -445,6 +562,19 @@ export const ArtboardSchema = z.object({
   /** Absent means anyone may open the screen. */
   guard: GuardSchema.optional(),
   guides: GuidesSchema.optional(),
+  /** Absent means `screen`. */
+  kind: ArtboardKindSchema.optional(),
+  /** Required when `kind` is `document`; meaningless otherwise. */
+  page: PageSchema.optional(),
+  /** The shell this screen renders inside (R2). Absent means it is the whole page. */
+  layoutId: IdSchema.optional(),
+  /**
+   * Crawlable without a session (L4). A public route is prerendered to real HTML at build time;
+   * a private one stays behind the app shell. Absent means private, because the safe default for
+   * "should a stranger see this" is no.
+   */
+  public: z.boolean().optional(),
+  meta: MetaSchema.optional(),
 });
 export type Artboard = z.infer<typeof ArtboardSchema>;
 
@@ -469,7 +599,18 @@ export type Port = z.infer<typeof PortSchema>;
  * would make every rule about tables mean two things. What it shares with `db` is where it runs —
  * inside an API route, on the server, because the credential must not reach a browser.
  */
-export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db', 'tool']);
+/**
+ * `event` is the seventh, and it answers a different question from the other six.
+ *
+ * The rest say what a node *does*. This one says **who starts it**: a realtime subscription, an
+ * inbound webhook and a schedule are all things the outside world begins, rather than things
+ * something upstream fires. That is the first thing a reader needs to know about a graph they did
+ * not draw, so it earns a category rather than three `fn` kinds.
+ *
+ * It carries a rule, which is what makes it a category and not a label: **an `event` node has no
+ * data `in` ports.** It is a source. A fourth kind has to satisfy that or it does not belong here.
+ */
+export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db', 'tool', 'event']);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 
 export const NodeSchema = z.object({
@@ -585,6 +726,68 @@ export const MigrationSchema = z.object({
 export type Migration = z.infer<typeof MigrationSchema>;
 
 // ---------------------------------------------------------------------------
+// Reusable components and layouts (R1, R2)
+// ---------------------------------------------------------------------------
+
+/**
+ * A component defined once and placed many times (`docs/V1-COMPLETION.md` R1).
+ *
+ * `root` is a subtree that lives in `components` like any other, and is not on any artboard — the
+ * definition is the thing, the instances are references to it. `params` are the only way in: an
+ * instance may override those and nothing else, which is exactly the boundary that makes this a
+ * component rather than a group somebody copied. Wiring into a definition's internals from outside
+ * would make every instance's behaviour depend on where it happened to be placed.
+ */
+export const ComponentDefinitionSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  root: IdSchema,
+  params: z.array(ParamSchema).optional(),
+});
+export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
+
+/**
+ * The shell a set of screens render inside (`docs/V1-COMPLETION.md` R2) — a sidebar, a top bar,
+ * whatever a project puts around every page of itself.
+ *
+ * `root` holds exactly one `Outlet` element somewhere in its subtree: the hole the screen renders
+ * into. Emitted as a react-router layout route, so the shell mounts once and navigating between
+ * the screens inside it does not tear it down and rebuild it.
+ */
+export const LayoutDefinitionSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  root: IdSchema,
+});
+export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
+
+// ---------------------------------------------------------------------------
+// Tenancy (O1) — who the rows belong to
+// ---------------------------------------------------------------------------
+
+/**
+ * How this project knows which organisation a row belongs to (`docs/V1-COMPLETION.md` O1).
+ *
+ * loom does not invent a tenancy model or keep one of its own: it **names the tables the project
+ * already has**, so the generated app and the emitted row-level-security policies agree about
+ * where to look. That is the same rule the connectors follow everywhere else — map what is there
+ * rather than wrap it.
+ *
+ * Absent means a single-tenant app, which is most of them.
+ */
+export const TenancySchema = z.object({
+  /** The organisations themselves. */
+  orgTable: z.string().min(1),
+  /** Which people belong to which organisation, and as what. */
+  membershipTable: z.string().min(1),
+  /** The column on every tenanted table naming its owner. */
+  tenantColumn: z.string().min(1),
+  /** The column on the membership row holding the role. */
+  roleColumn: z.string().min(1).optional(),
+});
+export type Tenancy = z.infer<typeof TenancySchema>;
+
+// ---------------------------------------------------------------------------
 // The snapshot root
 // ---------------------------------------------------------------------------
 
@@ -600,6 +803,23 @@ export const SnapshotSchema = z.object({
   theme: z.record(z.string(), z.string()).optional(),
   artboards: z.record(z.string(), ArtboardSchema),
   components: z.record(z.string(), ComponentSchema),
+  /**
+   * Components defined once and instanced (R1). Their `root` subtrees live in `components` above,
+   * reachable from here rather than from any artboard.
+   */
+  definitions: z.record(z.string(), ComponentDefinitionSchema).optional(),
+  /** The shells screens render inside (R2). */
+  layouts: z.record(z.string(), LayoutDefinitionSchema).optional(),
+  /**
+   * The role names this app knows (O2). An option set and nothing more: "admin", "teacher".
+   *
+   * Deliberately not a permission model. What a role may *do* is decided by the row-level-security
+   * policies the project emits and by the conditions on its own canvas — a second place that also
+   * decided it is how an authorization bug gets a hiding place.
+   */
+  roles: z.array(z.string()).optional(),
+  /** How rows are scoped to an organisation (O1). Absent means single-tenant. */
+  tenancy: TenancySchema.optional(),
   nodes: z.record(z.string(), NodeSchema),
   wires: z.record(z.string(), WireSchema),
   flows: z.record(z.string(), FlowSchema),
@@ -623,5 +843,29 @@ export function serializeSnapshot(snapshot: Snapshot): string {
 }
 
 export function deserializeSnapshot(json: string): Snapshot {
-  return SnapshotSchema.parse(JSON.parse(json));
+  return SnapshotSchema.parse(migrateSnapshot(JSON.parse(json)));
+}
+
+/**
+ * Carry an older document forward to the current version.
+ *
+ * P0 promised a version guard that "either migrates or refuses loudly," and until now there was
+ * only ever one version, so only the refusing half existed. This is the other half.
+ *
+ * **1 → 2** is a stamp and nothing else. Every field the IR wave added is optional
+ * (`docs/V1-COMPLETION.md` §5), so a version-1 document already satisfies the version-2 schema —
+ * there is no data to move, no default to invent, and inventing one would be the bug. Anything
+ * this does not recognise is returned untouched, and `SnapshotSchema.parse` refuses it by name
+ * rather than this function guessing.
+ */
+export function migrateSnapshot(document: unknown): unknown {
+  if (typeof document !== 'object' || document === null) return document;
+  const version = (document as { schemaVersion?: unknown }).schemaVersion;
+  if (version === 1) return { ...(document as object), schemaVersion: 2 };
+  return document;
+}
+
+/** Can this build open a document of that version at all? */
+export function canOpenVersion(version: unknown): version is (typeof READABLE_VERSIONS)[number] {
+  return READABLE_VERSIONS.includes(version as (typeof READABLE_VERSIONS)[number]);
 }

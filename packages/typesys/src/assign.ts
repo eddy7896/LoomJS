@@ -14,6 +14,10 @@ export function formatType(type: TypeRef): string {
       return `optional<${formatType(type.of)}>`;
     case 'enum':
       return `enum(${type.values.join('|')})`;
+    case 'decimal':
+      return `decimal(${type.scale})`;
+    case 'money':
+      return `money(${type.currency})`;
     default:
       return type.kind;
   }
@@ -49,6 +53,33 @@ export function isAssignable(from: TypeRef, to: TypeRef): boolean {
     return from.kind === 'enum' && from.values.every((value) => to.values.includes(value));
   }
   if (from.kind === 'enum') return to.kind === 'text';
+
+  /**
+   * Money is the reason `decimal` exists, and the rules are asymmetric on purpose
+   * (`docs/V1-COMPLETION.md` C8).
+   *
+   * **Two currencies never join.** Adding dollars to euros is not a rounding problem, it is a
+   * wrong answer, and the wire is where that gets refused rather than in a code review later.
+   *
+   * **A float may not become money.** `number` is IEEE 754 — the thing money is defined against —
+   * so letting one flow into a money port would quietly reintroduce every problem the type was
+   * added to prevent. A plain `decimal` accepts one, because a decimal is what you reach for when
+   * you want the precision and not the denomination.
+   *
+   * **Money may not become a float either.** It reads as harmless and is how a total ends up
+   * summed in a double three nodes later.
+   */
+  if (to.kind === 'money') {
+    return from.kind === 'money' && from.currency === to.currency;
+  }
+  if (from.kind === 'money') return false;
+
+  if (to.kind === 'decimal') {
+    // Widening the scale is fine; narrowing it drops digits somebody is relying on.
+    if (from.kind === 'decimal') return from.scale <= to.scale;
+    return from.kind === 'number';
+  }
+  if (from.kind === 'decimal') return false;
 
   return from.kind === to.kind;
 }
@@ -99,6 +130,12 @@ export function tsTypeOf(type: TypeRef): string {
       return 'string';
     case 'number':
       return 'number';
+    // Both emit as `string` and are handled by the decimal helpers the project owns. A number
+    // would be the whole bug: the emitted type has to make the unsafe operation awkward, not
+    // convenient.
+    case 'decimal':
+    case 'money':
+      return 'string';
     case 'boolean':
       return 'boolean';
     case 'date':

@@ -17,7 +17,6 @@ import { ownsComponent, valueExpr } from './props';
  * a success they did not get. Bubble continues on failure; this is a deliberate divergence.
  */
 
-
 interface Step {
   /** Lines of the emitted handler body, already at statement level. */
   lines: string[];
@@ -83,7 +82,11 @@ function triggerStep(
 }
 
 /** The setter for an input's own state, refusing anything that holds no value of its own. */
-function fieldSetter(ctx: EmitContext, componentId: Id, ownerId: Id): { setter: string; target: Component } {
+function fieldSetter(
+  ctx: EmitContext,
+  componentId: Id,
+  ownerId: Id,
+): { setter: string; target: Component } {
   const target = ctx.snapshot.components[componentId];
   if (!target) {
     throw new CompileError(`This action sets a component that no longer exists.`, ownerId);
@@ -120,7 +123,10 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
           id,
         );
       }
-      return { lines: [`set_${state.name}(${valueSourceExpr(action.value, ctx, id)});`], async: false };
+      return {
+        lines: [`set_${state.name}(${valueSourceExpr(action.value, ctx, id)});`],
+        async: false,
+      };
     }
 
     case 'setField': {
@@ -151,6 +157,21 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
         async: false,
       };
 
+    /**
+     * Handing the person a file (`docs/V1-COMPLETION.md` §4.5).
+     *
+     * The shape landed with the IR wave; the two emitters land with the phases that need them —
+     * `pdf` with documents (L2), `csv` with export (Q5). Until then this is a **Build-tier
+     * problem** with a sentence saying which phase owns it, rather than a silently dropped step:
+     * an action that compiles to nothing is the worst of the three possible behaviours.
+     */
+    case 'download':
+      throw new CompileError(
+        `Downloading a ${action.format.toUpperCase()} is not built yet. The action exists in the ` +
+          `document; the code for it arrives with documents and export.`,
+        id,
+      );
+
     // Auth (spec 10). Like a trigger, these can fail, and a failure stops the sequence: "sign in,
     // then go to the dashboard" must not reach the dashboard on a wrong password. Signing out
     // cannot really fail, but it is a request, so it waits for the same reason.
@@ -178,10 +199,7 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
       ctx.requireAuth();
       const provider = String(action.provider ?? '');
       if (!ssoProvider(provider)) {
-        throw new CompileError(
-          `"${provider}" is not a provider this app can sign in with.`,
-          id,
-        );
+        throw new CompileError(`"${provider}" is not a provider this app can sign in with.`, id);
       }
       if (hasFollowing) {
         throw new CompileError(

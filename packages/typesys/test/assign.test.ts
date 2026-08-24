@@ -108,3 +108,52 @@ describe('inference and TS mapping', () => {
     );
   });
 });
+
+/**
+ * Money and decimal (`docs/V1-COMPLETION.md` C8, Q4).
+ *
+ * These rules are the whole reason the two types exist. A finance app whose totals are IEEE
+ * doubles has a defect, not a tradeoff, and the wire is where that gets refused — at the gesture,
+ * in the Problems tier, rather than in a code review three weeks later.
+ */
+describe('money never quietly becomes a float', () => {
+  const usd: TypeRef = { kind: 'money', currency: 'USD' };
+  const eur: TypeRef = { kind: 'money', currency: 'EUR' };
+
+  it('joins money to money of the same currency, and nothing else', () => {
+    expect(isAssignable(usd, usd)).toBe(true);
+    // Adding dollars to euros is not a rounding problem; it is a wrong answer.
+    expect(isAssignable(usd, eur)).toBe(false);
+  });
+
+  it('refuses a float in either direction', () => {
+    // The whole point: a double may not become money...
+    expect(isAssignable(number, usd)).toBe(false);
+    // ...and money may not become a double, which is how a total ends up summed in one anyway.
+    expect(isAssignable(usd, number)).toBe(false);
+  });
+
+  it('lets a decimal widen its scale but never narrow it', () => {
+    expect(isAssignable({ kind: 'decimal', scale: 2 }, { kind: 'decimal', scale: 4 })).toBe(true);
+    // Narrowing drops digits somebody is relying on.
+    expect(isAssignable({ kind: 'decimal', scale: 4 }, { kind: 'decimal', scale: 2 })).toBe(false);
+  });
+
+  it('takes a plain number into a decimal, which is what a decimal is for', () => {
+    expect(isAssignable(number, { kind: 'decimal', scale: 2 })).toBe(true);
+    // A decimal is not interchangeable with a float on the way back out.
+    expect(isAssignable({ kind: 'decimal', scale: 2 }, number)).toBe(false);
+    // And a decimal is not money: it has the precision and not the denomination.
+    expect(isAssignable({ kind: 'decimal', scale: 2 }, usd)).toBe(false);
+  });
+
+  it('emits both as strings, so the unsafe operation stays awkward', () => {
+    expect(tsTypeOf(usd)).toBe('string');
+    expect(tsTypeOf({ kind: 'decimal', scale: 2 })).toBe('string');
+  });
+
+  it('names them on the canvas the way a designer would read them', () => {
+    expect(formatType(usd)).toBe('money(USD)');
+    expect(formatType({ kind: 'decimal', scale: 2 })).toBe('decimal(2)');
+  });
+});

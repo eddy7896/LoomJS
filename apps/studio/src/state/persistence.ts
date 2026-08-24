@@ -1,4 +1,11 @@
-import { SCHEMA_VERSION, deserializeSnapshot, serializeSnapshot, type Snapshot } from '@loom/ir';
+import {
+  READABLE_VERSIONS,
+  SCHEMA_VERSION,
+  canOpenVersion,
+  deserializeSnapshot,
+  serializeSnapshot,
+  type Snapshot,
+} from '@loom/ir';
 import { getState, subscribe } from './store';
 
 /**
@@ -59,17 +66,25 @@ export function restoreProject(store: ProjectStore = localProjectStore): Restore
     return { status: 'refused', reason: 'The saved project is not readable JSON.' };
   }
 
-  if (version !== SCHEMA_VERSION) {
+  // An older document this build still understands is migrated on the way in
+  // (`migrateSnapshot`), not refused. Refusing is for a version that would lose something — a
+  // document from a *newer* build, or one from before anything this build knows how to carry
+  // forward. The half-loaded project P0 warned about is still the thing being avoided; it is just
+  // no longer the answer to a change that adds only optional fields.
+  if (!canOpenVersion(version)) {
     return {
       status: 'refused',
-      reason: `The saved project is version ${String(version)}; this build reads version ${SCHEMA_VERSION}.`,
+      reason: `The saved project is version ${String(version)}; this build reads ${READABLE_VERSIONS.join(' and ')} (current: ${SCHEMA_VERSION}).`,
     };
   }
 
   try {
     return { status: 'restored', snapshot: deserializeSnapshot(raw) };
   } catch (error) {
-    return { status: 'refused', reason: `The saved project did not validate: ${(error as Error).message}` };
+    return {
+      status: 'refused',
+      reason: `The saved project did not validate: ${(error as Error).message}`,
+    };
   }
 }
 
