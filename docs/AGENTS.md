@@ -98,4 +98,6 @@ but keep the document **branch-ready now**: stable ids on everything, changes as
 `docs/01-system-context.md` (vision) · `docs/02-system-architecture.md` (layers) ·
 `docs/03-system-memory.md` (**decision log — read before re-deciding**) ·
 `docs/04-hallucination-check.md` · `docs/05-guardrails.md` · `docs/06-glossary.md`
-(terminology) · `docs/07-v1-scope.md` (in/out line).
+(terminology) · `docs/07-v1-scope.md` (in/out line) ·
+`docs/V1-COMPLETION.md` (**the plan from here to done** — target app classes, the audited gap,
+the component↔node contract in §3, and the phase plan).

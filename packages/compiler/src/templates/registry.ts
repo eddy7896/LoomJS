@@ -1,0 +1,76 @@
+import type { ComponentEmitter } from '../types';
+import { buttonEmitter } from './button';
+import { frameEmitter } from './frame';
+import { listEmitter } from './list';
+import { tableEmitter } from './table';
+import { textEmitter } from './textComponent';
+import { textFieldEmitter } from './textField';
+import { checkboxEmitter, numberFieldEmitter, selectEmitter } from './inputs';
+import {
+  dateFieldEmitter,
+  multilineFieldEmitter,
+  radioGroupEmitter,
+  sliderEmitter,
+} from './inputs2';
+import { iconEmitter, imageEmitter, linkEmitter } from './media';
+import {
+  audioEmitter,
+  avatarEmitter,
+  carouselEmitter,
+  embedEmitter,
+  tilesEmitter,
+  videoEmitter,
+} from './media2';
+import { shapeEmitter } from './shape';
+import { fileFieldEmitter, imageFieldEmitter } from './upload';
+import { barChartEmitter, lineChartEmitter, pieChartEmitter, statEmitter } from './charts';
+import { calendarEmitter, chatEmitter } from './calendar';
+
+/**
+ * The component template registry: each component type owns exactly one code template
+ * (docs/02 — "compile = stitch templates + wire data flow"). Growing the vocabulary means
+ * adding an emitter here, never branching inside the walker.
+ */
+const EMITTERS: ComponentEmitter[] = [
+  frameEmitter,
+  textEmitter,
+  buttonEmitter,
+  textFieldEmitter,
+  numberFieldEmitter,
+  checkboxEmitter,
+  selectEmitter,
+  listEmitter,
+  tableEmitter,
+  imageEmitter,
+  videoEmitter,
+  audioEmitter,
+  carouselEmitter,
+  tilesEmitter,
+  avatarEmitter,
+  embedEmitter,
+  linkEmitter,
+  iconEmitter,
+  multilineFieldEmitter,
+  radioGroupEmitter,
+  dateFieldEmitter,
+  sliderEmitter,
+  shapeEmitter,
+  fileFieldEmitter,
+  imageFieldEmitter,
+  barChartEmitter,
+  lineChartEmitter,
+  pieChartEmitter,
+  statEmitter,
+  calendarEmitter,
+  chatEmitter,
+];
+
+const BY_TYPE = new Map(EMITTERS.map((e) => [e.type, e]));
+
+export function emitterFor(type: string): ComponentEmitter | undefined {
+  return BY_TYPE.get(type);
+}
+
+export function knownComponentTypes(): string[] {
+  return [...BY_TYPE.keys()].sort();
+}

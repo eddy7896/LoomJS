@@ -1,0 +1,2680 @@
+/* loom studio tokens — Archivo + JetBrains Mono, light mode only (guardrails 19-24). */
+:root {
+  /* loom's own brand, from docs/Design System/DesignDoc.html — the same values @loom/ui hands a
+     generated app, so the studio and what it builds are styled from one source. */
+  --brand: #ec3013;
+  --brand-tint: #fdece8;
+  --ink: #1b1d21;
+  /* Text on a light surface is ink-2 or darker; ink-soft is for marks only. */
+  --ink-2: #4b5058;
+  --ink-soft: #868d97;
+  --line: #e8eaee;
+  --surface: #ffffff;
+  --surface-sunken: #f6f7f9;
+  /* Selection chrome is deliberately NOT the brand: red is reserved for the primary action and
+     the FN node category (guardrail 19-24). Editor furniture stays ink. */
+  --accent: #1b1d21;
+  --ok: #12a07a;
+  --busy: #d98a12;
+  --error: #ec3013;
+  --radius: 14px;
+
+  font-family: Archivo, system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-sunken);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  background: var(--surface-sunken);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Toggled chrome is ink, never brand: red is reserved for the single primary
+   action and the FN node category (guardrails 19-20). A studio where every
+   pressed toggle is red spends the one colour that has to stay rare. */
+button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.is-active:hover:not(:disabled) {
+  background: #000;
+  border-color: #000;
+}
+
+/* Every interactive element gets a visible keyboard path (WCAG 2.2 AA). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+input,
+select {
+  font: inherit;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  transition: border-color 140ms ease;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+input::placeholder {
+  color: var(--ink-soft);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ---- shell ---- */
+.studio {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  margin-right: 6px;
+}
+
+.brand__js {
+  color: var(--brand);
+}
+
+.toolbar__mode {
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.toolbar__group {
+  display: flex;
+  gap: 4px;
+}
+
+/* The right cluster reads as status, then destructive, then view: a hairline
+   keeps the save state from looking like another button. */
+.toolbar .save {
+  margin-right: 4px;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* The icon rail, then the one column the reference builds around, then the canvas. */
+  grid-template-columns: 48px 248px 1fr 276px;
+  /* The Preview floats over all of it. */
+  position: relative;
+}
+
+/* ---- panels ---- */
+.panel {
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  padding: 12px;
+}
+
+.inspector {
+  border-right: none;
+  border-left: 1px solid var(--line);
+}
+
+.panel__title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  margin: 0;
+}
+
+.panel__empty {
+  color: var(--ink-2);
+  line-height: 1.5;
+  max-width: 34ch;
+}
+
+.layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: default;
+}
+
+.layer:hover {
+  background: var(--surface-sunken);
+}
+
+.layer.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.layer__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer__type {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.layer__actions {
+  display: none;
+  gap: 2px;
+}
+
+.layer:hover .layer__actions {
+  display: flex;
+}
+
+.layer__actions button {
+  padding: 0 5px;
+  line-height: 18px;
+}
+
+/* ---- inspector fields ---- */
+.field-group {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+
+.field-group:first-of-type {
+  border-top: none;
+}
+
+.field-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.field-group__title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+
+.badge {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.id {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.field__label {
+  color: var(--ink-2);
+}
+
+/* ---- canvas ---- */
+.canvas {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, #d8dbe3 1px, transparent 1px) 0 0 / 20px 20px,
+    var(--surface-sunken);
+}
+
+.canvas__layer {
+  position: absolute;
+  top: 48px;
+  left: 48px;
+  transform-origin: 0 0;
+}
+
+.artboard {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 12px 32px rgb(20 22 26 / 8%);
+}
+
+.artboard__label {
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+.overlay {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+}
+
+.overlay--selected {
+  outline: 2px solid var(--accent);
+}
+
+.overlay__label {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.canvas__zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+/* A screen's root frame fills the screen. On a blank canvas there has to be somewhere to draw,
+   and a frame that claimed only its content height would leave most of the screen belonging to
+   nothing. The artboard becomes the flex parent, so growing the root is one line rather than a
+   fight with the inline min-height the canvas gives an empty container. */
+.artboard {
+  display: flex;
+  flex-direction: column;
+}
+
+.artboard > [data-loom-id] {
+  flex: 1 1 auto;
+}
+
+/* ---- the canvas is the app's document, not the studio's ----
+   Design mode draws the app's own markup *inside the studio*, so the studio's element styles land
+   on it: a Text field inherited `width: 100%` from the inspector's inputs and stretched across the
+   screen, buttons wore the studio's chrome, and everything sat at the studio's 13px. The canvas
+   was showing loom's design system where it should have been showing the project's.
+
+   So inside a screen, the studio's styling is rolled back to the browser's and the emitted app's
+   own base is applied in its place (`src/index.css` of the generated app). Inline styles — which
+   is where a component's real styling lives — win over all of this, as they do in the app. */
+.artboard {
+  font-family: var(--loom-font-body, Archivo, system-ui, sans-serif);
+  font-size: medium;
+  line-height: 1.5;
+  color: var(--loom-color-ink, #1b1d21);
+}
+
+/**
+ * The canvas draws the *app's* elements, so the studio's own chrome is reverted off them.
+ *
+ * Anything the variant stylesheet owns is skipped: `all: revert` outranks a single class, so
+ * without this a `.loom-button` on the canvas fell back to the browser's grey rectangle while the
+ * same button in the running app was painted properly — the exact disagreement the shared
+ * stylesheet exists to prevent (`docs/27-variants.md`). An element wearing a loom class needs no
+ * reset anyway: the stylesheet already says what it looks like, top to bottom.
+ */
+.artboard input:not([class*='loom-']),
+.artboard select:not([class*='loom-']),
+.artboard textarea:not([class*='loom-']),
+.artboard button:not([class*='loom-']),
+.artboard label:not([class*='loom-']),
+.artboard a:not([class*='loom-']) {
+  all: revert;
+  /* The one rule the emitted app does assert over everything. */
+  box-sizing: border-box;
+}
+
+/* Resize handles: on the selection, one per edge and corner (docs/12-canvas.md). */
+.overlay__handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.overlay__handle:hover {
+  background: var(--accent);
+}
+
+/* ---- rulers, grid and guides (docs/12-canvas.md) ----
+   Free placement is only as good as what you can line things up against. None of this emits any
+   CSS into the app: it is how someone works, not what they built. */
+.canvas.has-rulers .canvas__layer {
+  margin: 22px 0 0 22px;
+}
+
+.ruler {
+  position: absolute;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 9px;
+  z-index: 4;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.ruler--x {
+  top: 0;
+  left: 22px;
+  right: 0;
+  height: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ruler--y {
+  top: 22px;
+  left: 0;
+  bottom: 0;
+  width: 22px;
+  border-right: 1px solid var(--line);
+}
+
+.ruler__corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+}
+
+.ruler__mark {
+  position: absolute;
+  padding: 1px 2px;
+}
+
+.ruler--x .ruler__mark {
+  top: 4px;
+  border-left: 1px solid var(--line);
+}
+
+.ruler--y .ruler__mark {
+  left: 3px;
+  border-top: 1px solid var(--line);
+}
+
+/* Where each screen sits along the ruler, so a number means something inside one. */
+.ruler__span {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* The grid is drawn on the screen itself, under everything on it. */
+.artboard.has-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px);
+  background-size: var(--grid-step, 8px) var(--grid-step, 8px);
+}
+
+.guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.guide {
+  position: absolute;
+  background: color-mix(in srgb, var(--brand) 70%, transparent);
+  pointer-events: auto;
+}
+
+.guide--x {
+  top: 0;
+  width: 1px;
+  cursor: ew-resize;
+}
+
+.guide--y {
+  left: 0;
+  height: 1px;
+  cursor: ns-resize;
+}
+
+/* The one being pulled out of a ruler: dashed until it is let go of. */
+.guide--draft {
+  position: absolute;
+  background: transparent;
+  border-left: 1px dashed var(--brand);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.guide--draft.guide--y {
+  border-left: 0;
+  border-top: 1px dashed var(--brand);
+}
+
+.guide::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.canvas__chrome {
+  position: absolute;
+  right: 12px;
+  top: 34px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  z-index: 6;
+  font-size: 11px;
+}
+
+.canvas__chrome button.is-active {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+/* An empty project: an invitation rather than a void. */
+.canvas__empty {
+  position: absolute;
+  top: 34%;
+  left: 30%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.canvas__empty p {
+  margin: 2px 0;
+}
+
+.canvas__empty kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 4px;
+}
+
+/* ---- the floating toolbar (docs/12-canvas.md) ----
+   On the canvas, centred at the bottom, because that is where the hand already is. */
+.toolbelt {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(20, 22, 26, 0.16);
+  /* Above the Preview window: a floating panel that swallows a click on the tools is a trap. */
+  z-index: 30;
+}
+
+.toolbelt__tool {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.toolbelt__tool:hover {
+  background: var(--surface-sunken);
+}
+
+.toolbelt__tool.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.toolbelt__slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The frame tool carries a size: free, or the shape of a device. */
+.toolbelt__chevron {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 10px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.toolbelt__chevron:hover {
+  color: var(--ink);
+}
+
+.toolbelt__popover--sizes {
+  left: 0;
+  transform: none;
+  width: 220px;
+}
+
+.toolbelt__group button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.toolbelt__dim {
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.toolbelt__split {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.toolbelt__popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: 240px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(20, 22, 26, 0.16);
+}
+
+.toolbelt__search {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.toolbelt__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.toolbelt__group-label {
+  font-size: 11px;
+  color: var(--ink-2);
+  padding: 4px 2px;
+}
+
+.toolbelt__group button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 5px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.toolbelt__group button:hover {
+  background: var(--surface-sunken);
+}
+
+/* A tool is armed: the pointer says so, and nothing on the canvas invites a click instead. */
+.canvas--drawing,
+.canvas--drawing * {
+  cursor: crosshair;
+}
+
+/* The rubber band. The only thing in the editor that thinks in pixels, and it dies on release. */
+.draw-band {
+  position: fixed;
+  pointer-events: none;
+  border: 1px solid var(--brand);
+  background: rgba(236, 48, 19, 0.08);
+  border-radius: 2px;
+  z-index: 4;
+}
+
+/* ---- the inspector, as a design panel (docs/13-inspector.md) ----
+   Figma's shape — titled sections, dense paired controls, a mark in front of each number — in
+   loom's own light surface. The palette is not copied: red stays reserved for the primary action
+   and the FN category, and the studio is light-mode only (docs/05-guardrails.md 19-24). */
+.inspector__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: -10px;
+  background: var(--surface);
+  z-index: 2;
+}
+
+.inspector__name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  font-weight: 600;
+  padding: 3px 6px;
+}
+
+.inspector__name:hover,
+.inspector__name:focus {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.ins {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px 12px;
+}
+
+.ins__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ins__title {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ins__title:hover {
+  color: var(--ink);
+}
+
+.ins.is-closed .ins__title {
+  color: var(--ink-soft);
+}
+
+.ins__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ins__body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 6px;
+}
+
+/**
+ * A row wraps rather than crushing what is in it.
+ *
+ * The panel is narrow and gets narrower; a row that only ever shrank ended with a select clipped
+ * behind a number, which is a control you can see and cannot read. Wrapping costs a line and
+ * keeps every control legible at any width.
+ */
+.ins__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A control with its mark in front: `X 0`, `W 382`. The mark is a label, not decoration — it is
+   what makes a row of numbers readable without a column of words beside it. */
+.ins__cell {
+  /* Wide enough to read a number and its mark. Below this a cell wraps to the next line instead
+     of shrinking into something unreadable. */
+  flex: 1 1 88px;
+  min-width: 88px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  /* Nothing inside a cell paints over its neighbour. */
+  overflow: hidden;
+}
+
+.ins__cell:focus-within {
+  border-color: var(--ink-2);
+}
+
+.ins__mark {
+  color: var(--ink-2);
+  font-size: 11px;
+  min-width: 10px;
+  text-align: center;
+}
+
+.ins__cell input,
+.ins__cell select {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  min-width: 0;
+  width: 100%;
+}
+
+/**
+ * A select sharing a cell with an input gives way first.
+ *
+ * It used to refuse to shrink, so in a cell too narrow for both, the select won and the number
+ * was pushed out of sight — the wrong way round, since the number is the value and the select is
+ * how it was chosen.
+ */
+.ins__cell select {
+  color: var(--ink-2);
+  font-size: 10px;
+  width: auto;
+  max-width: 68px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-left: 2px;
+}
+
+.ins__cell input {
+  flex: 1;
+  min-width: 30px;
+}
+
+.ins__grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.ins__choice {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ins__choice:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.ins__choice.is-active {
+  background: var(--surface-sunken);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.ins__swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+  /* A transparent swatch has to read as *nothing*, not as white. */
+  background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line) 25%, transparent 25%);
+  background-size: 8px 8px;
+}
+
+.ins__icon {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.ins__icon:hover {
+  color: var(--ink);
+}
+
+.ins__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.ins__check input {
+  width: auto;
+}
+
+/* Sections hold the older field blocks unchanged, so nothing inside them has to be rewritten. */
+.ins .field-group {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* The section header already names it; a second title inside would say it twice. */
+.ins .field-group__title {
+  display: none;
+}
+
+/* ---- the colour picker and the effects list (docs/13-inspector.md) ---- */
+.ins__color {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.ins__value {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 232px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(20 22 26 / 16%);
+}
+
+.picker__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+.picker__swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.picker__swatch {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.picker__swatch.is-active {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.picker__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.picker__wheel {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.picker__hex {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker__note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+/* Each effect is one composed thing, boxed so a stack of them stays readable. */
+.ins__effect {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-sunken);
+}
+
+.ins__effect-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ins__add {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11px;
+  padding: 2px 4px;
+  width: auto;
+  cursor: pointer;
+}
+
+/* ---- preview: a floating window (docs/12-canvas.md) ---- */
+.preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+}
+
+.preview--window {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgb(20 22 26 / 18%);
+  overflow: hidden;
+}
+
+.preview--window.is-collapsed {
+  box-shadow: 0 8px 20px rgb(20 22 26 / 14%);
+}
+
+.preview__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  /* The whole bar is the handle, so there is nothing to aim at. */
+  cursor: grab;
+  user-select: none;
+}
+
+.preview__bar:active {
+  cursor: grabbing;
+}
+
+.preview__spacer {
+  flex: 1;
+}
+
+.preview__title {
+  font-weight: 600;
+}
+
+.preview__state {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.preview__device {
+  font-size: 11px;
+  max-width: 120px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.dot--busy {
+  background: var(--busy);
+}
+
+.dot--error {
+  background: var(--error);
+}
+
+.preview__stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  /* Room for the side buttons and the base to sit outside the shell. */
+  padding: 14px;
+  /* The same ground the canvas draws its screens on. */
+  background: var(--surface-sunken);
+}
+
+/* The device the app is held in.
+   Proportions are the real ones — bezels a phone actually has, a lid with a base under it —
+   because seeing a screen inside the thing it will be held in is how a designer judges whether a
+   header is reachable by a thumb or a footer is buried under a home bar. */
+.preview__device-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+  /* The buttons live outside the shell, as they do on the thing itself. */
+  overflow: visible;
+}
+
+/* ---- phone ---- */
+.preview__device-frame.is-phone {
+  background: linear-gradient(150deg, #3a3f47, #16181c 42%, #1f2228);
+  border-radius: 46px;
+  padding: 13px;
+  box-shadow:
+    0 0 0 1.5px #4a505a,
+    0 18px 36px rgb(20 22 26 / 28%);
+}
+
+/* ---- tablet ---- */
+.preview__device-frame.is-tablet {
+  background: linear-gradient(150deg, #3a3f47, #191c20 45%, #23262c);
+  border-radius: 26px;
+  padding: 17px;
+  box-shadow:
+    0 0 0 1.5px #4a505a,
+    0 18px 36px rgb(20 22 26 / 24%);
+}
+
+/* ---- laptop: a lid, and the base it closes onto ---- */
+.preview__device-frame.is-desktop {
+  background: linear-gradient(150deg, #cfd3da, #b7bcc4);
+  border-radius: 14px 14px 4px 4px;
+  padding: 11px;
+  align-items: flex-start;
+  box-shadow: 0 14px 30px rgb(20 22 26 / 20%);
+}
+
+.preview__device-frame.is-desktop .preview__viewport {
+  border-radius: 3px;
+  /* The black bezel inside the aluminium. */
+  outline: 6px solid #16181c;
+}
+
+.preview__base {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  /* Wider than the lid, the way the deck of a laptop is — but never wider than the window. */
+  width: 108%;
+  max-width: calc(100% + 28px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: linear-gradient(180deg, #d8dbe1 0 40%, #b3b8c1);
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 6px 14px rgb(20 22 26 / 18%);
+}
+
+/* The lip you open it by. */
+.preview__base i {
+  width: 16%;
+  height: 5px;
+  border-radius: 0 0 6px 6px;
+  background: #9aa0a9;
+}
+
+/* ---- the details that only make sense at a readable size ---- */
+.preview__island {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  border-radius: 999px;
+  z-index: 2;
+}
+
+.preview__camera {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3b4048;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
+  z-index: 2;
+}
+
+.preview__home {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34%;
+  height: 4px;
+  border-radius: 999px;
+  /* Dark, because the app behind it is usually light — the same choice the phone makes. */
+  background: rgb(20 22 26 / 32%);
+  z-index: 2;
+}
+
+/* ---- the buttons down the sides ----
+   Placed as a proportion of the shell by the component, so they hold at any scale. */
+.preview__button {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #4a505a, #2b2f36);
+}
+
+/* The app itself. With no hardware around it, it is drawn exactly like a screen on the canvas —
+   same corner radius, same lift — because it is the same screen. */
+.preview__viewport {
+  overflow: hidden;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.preview__viewport.is-bare {
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 12px 32px rgb(20 22 26 / 8%);
+}
+
+.preview__viewport.is-phone {
+  border-radius: 33px;
+}
+
+.preview__viewport.is-tablet {
+  border-radius: 12px;
+}
+
+.preview__frame {
+  display: block;
+  border: none;
+  background: #fff;
+}
+
+.preview__size {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* Red is the primary action and the FN category, and nothing else (`docs/05-guardrails.md`), so a
+   toggle in this bar says "on" quietly. */
+.preview__bar button.is-active {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+.preview__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    var(--ink-soft) 50% 60%,
+    transparent 60% 70%,
+    var(--ink-soft) 70% 80%,
+    transparent 80%
+  );
+  cursor: nwse-resize;
+}
+
+.preview__booting {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  font-size: 12px;
+  background: var(--surface-sunken);
+}
+
+.preview__error {
+  padding: 10px;
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  color: var(--error);
+  font-size: 12px;
+}
+
+.preview__error p {
+  margin: 4px 0 8px;
+}
+
+/* ---- M2: multiple artboards, flow arrows, drag-reorder ---- */
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 10px;
+}
+
+/* Header actions stay compact so a two-word button never wraps onto a second
+   line and pushes the header out of alignment with its neighbours. */
+.panel__head button {
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+/**
+ * A hint is quieter than what it explains.
+ *
+ * These were `--ink-2`, which is nearly body-text dark, so a panel of short controls read as a
+ * wall of prose with some inputs in it. Muted is what muted is for.
+ */
+.panel__hint {
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0 0 8px;
+  max-width: 40ch;
+}
+
+.field__row {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--ink-2);
+  margin-left: 6px;
+}
+
+.chip--mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.artboard-slot {
+  position: absolute;
+  top: 0;
+}
+
+.artboard-slot.is-active .artboard {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+.layer--artboard {
+  font-weight: 600;
+}
+
+.layer--artboard.is-active {
+  background: var(--surface-sunken);
+}
+
+.flow-layer {
+  position: absolute;
+  inset: -2000px;
+  width: 8000px;
+  height: 8000px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.flow-layer > g,
+.flow-layer defs {
+  transform: translate(2000px, 2000px);
+}
+
+.flow {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.flow__hit {
+  stroke: transparent;
+  stroke-width: 14;
+  fill: none;
+}
+
+.flow__line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+}
+
+.flow.is-selected .flow__line {
+  stroke-width: 3.5;
+}
+
+#loom-arrowhead path {
+  fill: var(--accent);
+}
+
+.flow__label {
+  fill: var(--accent);
+  font-size: 11px;
+  text-anchor: middle;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+.drop-marker {
+  position: fixed;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ---- M3: Nodes mode ---- */
+.nodes-canvas {
+  position: relative;
+  min-width: 0;
+  background: var(--surface-sunken);
+}
+
+.nodes-canvas .react-flow__attribution {
+  display: none;
+}
+
+.nnode {
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%);
+  font-size: 12px;
+}
+
+.nnode.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Functional hues: UI mirrors, server routes and functions read differently at a glance. */
+.nnode--ui .nnode__head {
+  background: color-mix(in srgb, #7c5cff 12%, transparent);
+}
+
+.nnode--api .nnode__head {
+  background: color-mix(in srgb, #12a07a 14%, transparent);
+}
+
+.nnode--fn .nnode__head {
+  background: color-mix(in srgb, #ec3013 14%, transparent);
+}
+
+.nnode__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.nnode__title {
+  font-weight: 600;
+}
+
+.nnode__kind {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.nnode__body {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nnode__body-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+
+.nstep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 3px 8px;
+}
+
+.nstep__index {
+  color: var(--ink-2);
+  font-size: 10px;
+}
+
+.nstep__op {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.nnode__ports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.nport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+}
+
+.nport--out {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.nport__type {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.nhandle--trigger {
+  background: var(--busy);
+  border-radius: 2px;
+}
+
+.nhandle--data {
+  background: var(--accent);
+}
+
+.nedge path {
+  stroke: var(--ink-soft);
+}
+
+.problem {
+  position: absolute;
+  /* Clear of the canvas controls, which live in the bottom-left corner. */
+  left: 56px;
+  bottom: 12px;
+  z-index: 10;
+  /* A Problems message is something to read, never something to click. Left interactive it sits
+     over the zoom and fit buttons and swallows them until the problem is resolved. */
+  pointer-events: none;
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+  border: 1px solid var(--error);
+  color: var(--error);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  max-width: 460px;
+}
+
+.portline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.dot--data {
+  background: var(--accent);
+}
+
+.dot--trigger {
+  background: var(--busy);
+  border-radius: 2px;
+}
+
+.toolbar__modes button {
+  border-radius: 6px;
+}
+
+/* ---- M4: connections ---- */
+.data-panel {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.connection__url {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connect-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.field--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.connect-form__error {
+  color: var(--error);
+  font-size: 11px;
+  margin: 0;
+}
+
+.tables {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.table-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  color: var(--ink-2);
+}
+
+.table-row--button {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.table-row__caret {
+  color: var(--ink-faint, var(--ink-soft));
+  font-size: 9px;
+}
+
+/* D2: the schema, as a table — a designer builds against these names all day. */
+/**
+ * The connector tabs wrap.
+ *
+ * They did not need to at two, and at four they overflowed the rail and slid under the canvas —
+ * which then swallowed the click, so the last tab could be seen and not pressed. A row that grows
+ * with the connector list has to wrap, or every new connector is a new bug.
+ */
+.connect-form__modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.connect-form__modules button {
+  flex: 1 1 auto;
+  min-width: 72px;
+}
+
+.connect-form__modules .is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.schema {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 2px 0 8px;
+}
+
+.schema th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-2);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.schema td {
+  padding: 2px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+
+.schema__type {
+  color: var(--ink-2);
+}
+
+.schema__flags {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.schema__flag {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
+  color: var(--ink-2);
+}
+
+.schema__flag--required {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+/* Node categories are functional colour (guardrail 19): DB and State join UI/FN/API. */
+.nnode--db .nnode__head {
+  background: color-mix(in srgb, #d98a12 14%, transparent);
+}
+
+.nnode--state .nnode__head {
+  background: color-mix(in srgb, #2f7de1 14%, transparent);
+}
+
+/* AUTO: dashed while loom owns it, so provenance is visible without reading a panel. */
+.nnode.is-auto {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.nnode.is-auto--proposed {
+  border-width: 2px;
+}
+
+.badge--auto {
+  background: color-mix(in srgb, var(--busy) 16%, transparent);
+  color: var(--busy);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* A colour token's current value, so a name in a list is still a colour to the eye. */
+.swatch {
+  width: 22px;
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+input[type='color'] {
+  padding: 0;
+  height: 24px;
+  cursor: pointer;
+}
+
+/* The screen's resize grip: bottom-right corner, the way every design tool puts it. */
+.artboard__resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  cursor: nwse-resize;
+  opacity: 0;
+}
+
+.artboard-slot:hover .artboard__resize,
+.artboard-slot.is-active .artboard__resize {
+  opacity: 1;
+}
+
+.artboard-slot {
+  /* The grip is positioned against the slot, so the slot has to be the containing block. */
+  position: absolute;
+}
+
+/* Whether the work is safe. Quiet when it is, loud when it is not. */
+.save {
+  font-size: 11px;
+  color: var(--ink-2);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.save--error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+/* A conditional style override reads as a block, not as more loose fields. */
+.conditional-style {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.conditional-style .field-group__head {
+  margin-bottom: 6px;
+}
+
+/* Drawn, and marked: this one only appears in the running app when its condition holds. */
+[data-conditional='true'] {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
+}
+
+/* ---- the left rail: screens above, problems below ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.rail > .panel {
+  border-right: none;
+  /* A panel scrolls inside itself rather than pushing what is under it off the rail. */
+  min-height: 0;
+}
+
+/**
+ * Problems is pinned to the bottom.
+ *
+ * It used to sit wherever the panel above happened to end, which put it halfway up an empty rail
+ * and moved it every time the panel's content changed — so the place you look for what is wrong
+ * was never the same place twice. `auto` here is the whole fix: the gap goes above it.
+ */
+.rail > .problems {
+  margin-top: auto;
+}
+
+/* Capped rather than free-growing: a long list of warnings must never push the screen tree off
+   the rail, because the tree is how you get to the thing the warning is about. */
+.problems {
+  flex: 0 0 auto;
+  max-height: 45%;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.problems--closed {
+  max-height: none;
+}
+
+.problems__list {
+  overflow: auto;
+  min-height: 0;
+}
+
+.problem-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.problem-row:hover {
+  background: var(--surface-sunken);
+}
+
+.problem-row:disabled {
+  cursor: default;
+}
+
+.problem-row--error {
+  border-left-color: var(--error);
+}
+
+/* Muted, because this is what half-finished work looks like and shouting at it is worse than
+   saying nothing (docs/02: "muted for work-in-progress, sharp red for true breaks"). */
+.problem-row--warning {
+  color: var(--ink-2);
+  border-left-color: var(--line);
+}
+
+.chip--error {
+  background: color-mix(in srgb, var(--error) 12%, var(--surface));
+  color: var(--error);
+}
+
+.chip--warn {
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+}
+
+/* ---- action sequences: an ordered list, never a modal ---- */
+.action-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 8px;
+  /* Numbered top to bottom, and the left edge carries the order the eye follows. */
+  border-left-width: 3px;
+}
+
+.action-row .field-group__head {
+  margin-bottom: 6px;
+}
+
+.action-row .field-group__head .badge {
+  flex: 1 1 auto;
+}
+
+.action-row button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* A component whose click does more than one thing says so on the canvas, so a sequence is never
+   invisible from the outside (docs/specs/actions.md). */
+.node[data-steps]::after,
+.artboard [data-steps]::after {
+  content: attr(data-steps) ' steps';
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  pointer-events: none;
+}
+
+/* ---- the icon rail: three sections, and only three ---- */
+.rail-icons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+}
+
+.rail-icons button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.rail-icons button:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.rail-icons button.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---- the element palette ---- */
+.palette {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+}
+
+.palette__search {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.palette__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.palette__section + .palette__section {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.palette__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 4px 6px;
+  border: none;
+  background: none;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette__head:hover {
+  color: var(--ink);
+}
+
+.palette__caret {
+  color: var(--ink-2);
+  font-size: 9px;
+}
+
+.palette__item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette__item:hover {
+  background: var(--surface-sunken);
+}
+
+.palette__select {
+  margin: 4px 0;
+  width: 100%;
+}
+
+/* Capped so the palette always has room below it; both scroll on their own. */
+.rail > .layers {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+}
+
+/* ---- the elements tree: drag, collapse, hide ---- */
+.layer__caret {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+/* A row hidden while designing still reads as a row — it has not gone anywhere, it is just out of
+   the way — so it dims rather than disappearing from its own tree. */
+.layer.is-hidden .layer__name,
+.layer.is-hidden .layer__type {
+  opacity: 0.45;
+}
+
+/* Where the drop lands: a line under the row for "after", an outline for "inside". Two gestures
+   that mean different things must not look the same. */
+.layer.is-over--after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+.layer.is-over--inside {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--surface-sunken);
+}
+
+.layer[draggable='true'] {
+  cursor: grab;
+}
+
+/* Dim until it matters: a row of eyes shouting on every line is noise, but a *hidden* row has to
+   announce itself without being hovered. */
+.layer__eye {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--ink-2);
+  line-height: 18px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.layer:hover .layer__eye,
+.layer__eye.is-hidden {
+  opacity: 1;
+}
+
+/* D2: a statement is written, not assembled — so it gets room to be read. */
+.query-editor {
+  width: 100%;
+  resize: vertical;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+
+.field-group__toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* D5: making the data structure. Dense rows, because a table is a list of small decisions. */
+.schema-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 10px;
+}
+
+.schema-edit__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.schema-edit__row input[type='text'],
+.schema-edit__row input:not([type]) {
+  flex: 1 1 90px;
+  min-width: 0;
+}
+
+.schema-edit__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.schema-edit__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+}
+
+/* A drop says what it destroys, and asks for the name to be typed. */
+.schema-edit__danger {
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--line));
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-edit__danger p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* D6: what a column points at, kept beside the column rather than in a diagram elsewhere. */
+.schema-edit__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.schema__flag--link {
+  background: color-mix(in srgb, #2f7de1 14%, transparent);
+  color: #2f7de1;
+}
+
+/* G1: everything else that is picked, marked more quietly than the one being edited. */
+.layer.is-also {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+[data-loom-id][data-also='true'] {
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+/* G2: a named box behind some nodes. It says how the graph reads; it changes nothing that runs. */
+.ngroup {
+  border: 1px dashed color-mix(in srgb, var(--ink-soft) 45%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink-soft) 5%, transparent);
+  pointer-events: none;
+}
+
+.ngroup__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  /* Only the title bar is grabbable: the nodes inside have to stay clickable. */
+  pointer-events: auto;
+}
+
+.ngroup__title {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-2);
+  padding: 0;
+}
+
+.ngroup__remove {
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.nodes-canvas__group {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* A3: what a sign-in provider needs, and whether it has it. */
+.provider {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.provider__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 5px 0;
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.provider__name {
+  flex: 1;
+  text-align: left;
+}
+
+.provider__state {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.dot--off {
+  background: transparent;
+  border: 1px solid var(--ink-soft);
+}
+
+.provider__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 10px;
+}
+
+.provider__copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.provider__copy code {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider__env {
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.provider__link {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* An element that has nothing to draw yet still needs a place on the canvas (V1). */
+.canvas-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px;
+  border: 1px dashed color-mix(in srgb, var(--ink-soft) 40%, transparent);
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 11px;
+  text-align: center;
+}
+
+.canvas-placeholder__note {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+/* Children of a List past the first: present, editable, and not going to ship (V1). */
+.canvas-ignored {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.45;
+  border-top: 1px dashed color-mix(in srgb, var(--ink-soft) 40%, transparent);
+  padding-top: 4px;
+}
+
+.canvas-ignored__note {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+/* L1: what the running app said, in the order it said it. */
+.logs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logs__count {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.logs__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 6px;
+}
+
+.logs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logline {
+  display: grid;
+  grid-template-columns: 52px 44px 1fr;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.logline__time,
+.logline__source {
+  color: var(--ink-2);
+  font-size: 10px;
+}
+
+.logline__message {
+  overflow-wrap: anywhere;
+}
+
+.logline__where {
+  color: var(--ink-2);
+  font-size: 10px;
+}
+
+/* Only the two that matter get colour: a log where every line is coloured has none. */
+.logline--error {
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.logline--error .logline__message {
+  color: var(--error);
+}
+
+.logline--warn .logline__message {
+  color: var(--busy, #a8730a);
+}
+
+/* T2: a tool is its own kind of work, so it is its own colour — beside DB, State and the rest. */
+.nnode--tool .nnode__head {
+  background: color-mix(in srgb, #7a5cff 14%, transparent);
+}
+
+.nstep--tool {
+  border-left: 2px solid color-mix(in srgb, #7a5cff 60%, transparent);
+}
+
+.nstep--db {
+  border-left: 2px solid color-mix(in srgb, #d98a12 60%, transparent);
+}
+
+.nstep--fn {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* The code, as something to read: a tree beside the file it opens. */
+.code {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.code__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1;
+}
+
+.code__tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 34%;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.code__file,
+.code__folder {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.code__file {
+  cursor: pointer;
+}
+
+.code__file.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.code__folder {
+  color: var(--ink-2);
+}
+
+.code__view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.code__viewhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.code__viewhead code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+/* Wide code scrolls inside its own box; the panel never scrolls sideways. */
+.code__text {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  font-size: 10px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.code__problem {
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--line));
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 11px;
+}
+
+.code__problem p {
+  margin: 0 0 6px;
+  color: var(--error);
+}
+
+/**
+ * The segmented control, for picking a variant (`docs/27-variants.md`).
+ *
+ * A dropdown would hide five of six answers behind a click, and comparing the answers is the whole
+ * task. It wraps rather than shrinks, for the same reason every other inspector row does: the panel
+ * is narrow and gets narrower, and a squashed option is one nobody can read.
+ */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+}
+
+.segmented__option {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.segmented__option:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+/* The chosen one carries the weight, so which is on is readable at a glance rather than by
+   comparing shades. */
+.segmented__option.is-on {
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 500;
+}

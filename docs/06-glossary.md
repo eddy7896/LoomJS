@@ -112,9 +112,15 @@ Hierarchy: **every connector is a module; not every module is a connector.**
 
 | Term | Meaning |
 | --- | --- |
-| **Screen (local) bucket** | data scoped to one artboard → React local state |
-| **Global (app) bucket** | app-wide data (current user, theme) → app store/Context |
+| **Variable** | the **State** node itself: many writers, one reader, last write wins |
+| **Screen (local) bucket** | a variable scoped to one artboard → React local state |
+| **Global (app) bucket** | a variable the whole app shares, named → one React Context above the router |
 | **Env (secrets) bucket** | server-only, name-referenced, never in snapshot/repo/client |
+
+A variable's **name** is its identity when the scope is global: two Global nodes carrying the same
+name are one value, which is how the screen that computes an answer and the screen that displays it
+meet. Its `set` port is the one **fan-in** port in the language, and a write is always **triggered**
+— see `specs/binding-trigger-runtime.md`.
 
 ## Property value kinds
 

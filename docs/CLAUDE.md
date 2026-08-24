@@ -35,6 +35,21 @@ Core promise: *a designer should never feel they left the canvas.*
 - `docs/05-guardrails.md` — hard constraints (security, design system, scope). Non-negotiable.
 - `docs/06-glossary.md` — canonical terminology. Use these exact terms; one term per concept.
 - `docs/07-v1-scope.md` — the V1 in/out line. Anything "out" is a v2 branch, not a gap.
+- `docs/09-implementation-plan.md` — execution plan for M0–M6 (repo shape, gates, risks).
+- `docs/10-interaction-plan.md` — execution plan for P0–P7: persistence, conditions, actions,
+  CRUD + search, app auth, the runtime tier, reusable components. Several are prerequisites for
+  M6's acceptance test, not follow-ons.
+- `docs/11-editor-shell.md` — execution plan for S0–S5: the studio's own sidebar, the element
+  palette and the elements tree, plus the bar an element must clear to enter the vocabulary.
+- `docs/12-canvas.md` — the design canvas: free placement, drawing tools, shapes, rulers, guides.
+- `docs/13-inspector.md` — the inspector as a design panel, and what it deliberately does not copy.
+- `docs/14-data.md` — the connectors (Supabase, Postgres, Firestore), the node vocabulary they
+  share, and what each one is refused from pretending to do.
+- `docs/V1-COMPLETION.md` — **the executable plan from here to done.** The ten target app classes
+  (ERP, school, ecommerce, CRM, messaging, B2B SaaS, websites, finance, fitness, dashboards), the
+  twenty capabilities they require, the audited gap against what loom has today, the
+  **component↔node contract** every new element must satisfy (§3, read before adding an element),
+  the IR changes, and the N0/R/O/Q/E/L/H phase plan in three waves.
 
 ## Current phase
 
@@ -63,3 +78,24 @@ atomic ops) today. See `docs/03-system-memory.md`.
 - Surface: canvas `#F6F7F9`, panels `#FFFFFF`, borders `#E8EAEE`, ink `#1B1D21`,
   muted `#868D97`, radius 13–16px, soft shadows, light-mode only.
 - Node categories: UI `#7C5CFF` · FN `#EC3013` · API `#12A07A` · State `#2F7DE1` · DB `#D98A12`.
+
+## Design context (impeccable)
+
+Two root files carry the design brief for UI work. Read them before designing or changing
+any interface.
+
+- `/PRODUCT.md` — strategic. Register (`product`, the studio; `landing` runs `brand`), users,
+  purpose, brand personality, anti-references, accessibility bar.
+- `/DESIGN.md` — visual. Token frontmatter plus the six-section system spec. Sidecar of
+  extended tokens and component snippets lives at `/.impeccable/design.json`.
+
+The five design principles from PRODUCT.md, in short:
+
+1. **Never left the canvas** — no modal or wizard detours; the Code node is the escape hatch.
+2. **Color is functional** — category hues carry meaning, editor furniture stays ink.
+3. **Show the machinery** — types, ports, compiled output shown plainly; these users read code.
+4. **Two modes, never blurred** — Design owns appearance, Nodes owns behavior.
+5. **Ownership is visible** — the path from graph to real files stays reachable in the product.
+
+Named rules from DESIGN.md worth memorising: Signal Reserve, Ink Furniture, Never-Only-Color,
+Mono Means Machine, Ten-Pixel Floor, Floating Claim.

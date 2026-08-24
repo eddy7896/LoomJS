@@ -51,6 +51,21 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
 .cchip{font:700 11px var(--lj-mono);padding:6px 11px;border-radius:8px;background:var(--lj-canvas);border:1px solid var(--lj-hair-2);color:var(--lj-ink-2)}
 .coverpane{background:var(--lj-canvas);border:1px solid var(--lj-hair);border-radius:16px;height:100%;min-height:300px;position:relative;overflow:hidden;background-image:radial-gradient(var(--lj-hair-2) 1.1px,transparent 1.1px);background-size:22px 22px}
 
+/* brand surface */
+.bsplit{display:grid;grid-template-columns:1.15fr .85fr;gap:28px;align-items:end;margin-bottom:26px}
+.deepcard{background:var(--deep);border-radius:16px;padding:26px;color:var(--deep-ink);background-image:radial-gradient(var(--deep-line) 1.1px,transparent 1.1px);background-size:22px 22px}
+.deepsw{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:14px}
+.deepsw div{border:1px solid var(--deep-line);border-radius:10px;padding:10px;font:600 10px/1.6 var(--lj-mono);color:var(--deep-ink)}
+.rulecard{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:16px;padding:22px}
+.rulecard h4{font:800 14px var(--font-heading);margin:0 0 6px}
+.rulecard p{font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin:0}
+.dodont{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:8px}
+.dodont h4{font:800 14px var(--font-heading);margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--lj-ink)}
+.dodont li{font:400 13.5px/1.5 var(--font-body);color:var(--lj-ink-2);margin-bottom:9px}
+.dodont ul{margin:0;padding-left:18px}
+.notedemo{font:500 11.5px var(--lj-mono);color:var(--lj-ink-2);letter-spacing:.02em}
+.notedemo b{display:block;width:28px;height:1px;background:var(--lj-hair-2);margin-bottom:10px}
+
 /* generic card */
 .card2{background:var(--lj-panel);border:1px solid var(--lj-hair);border-radius:16px;padding:22px}
 .lbl{font:800 10px/1 var(--font-heading);letter-spacing:.1em;text-transform:uppercase;color:var(--lj-ink-3);margin:0 0 12px}
@@ -139,7 +154,7 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
         </svg>
         <div class="markwd">loom<b>JS</b></div>
       </div>
-      <div class="covertag">BRAND &amp; DESIGN SYSTEM · v1.0</div>
+      <div class="covertag">BRAND &amp; DESIGN SYSTEM · v1.1</div>
       <h1 class="coverh">Design the interface.<br>Weave the system.</h1>
       <p class="coverp">loomJS is a visual programming environment dressed as a design tool. Designers lay out UI on an artboard; the backend — functions, routes, state and data — is woven in as connected cards. This is the visual language that keeps both halves feeling like one calm, modern surface.</p>
       <div class="coverchips">
@@ -148,6 +163,7 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
         <span class="cchip">#ec3013</span>
         <span class="cchip">Light&nbsp;mode</span>
         <span class="cchip">14px&nbsp;radius</span>
+        <span class="cchip">WCAG&nbsp;2.2&nbsp;AA</span>
       </div>
     </div>
     <div class="coverpane">
@@ -227,6 +243,23 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
       <div class="sw"><div class="chip" style="background:var(--st-fill);border-bottom:1px solid var(--st-bd)"><div style="height:100%;width:8px;background:var(--st)"></div></div><div class="meta"><div class="nm">State</div><div class="hex">#2F7DE1</div></div></div>
       <div class="sw"><div class="chip" style="background:var(--db-fill);border-bottom:1px solid var(--db-bd)"><div style="height:100%;width:8px;background:var(--db)"></div></div><div class="meta"><div class="nm">Database</div><div class="hex">#D98A12</div></div></div>
     </div>
+
+    <p class="lbl" style="margin-top:22px">The ink fold — brand surface only</p>
+    <div class="deepcard">
+      <p style="font:400 13.5px/1.55 var(--font-body);color:var(--deep-ink-2);margin:0;max-width:640px">The landing page runs one dark section, where the five category hues sit at full strength on the wires. The studio does not have a dark mode and is not getting one; this is art direction for a single fold, not a theme.</p>
+      <div class="deepsw">
+        <div style="background:#16181b">deep<br>#16181B</div>
+        <div style="background:#1f2226">raise<br>#1F2226</div>
+        <div style="background:#2c3036">line<br>#2C3036</div>
+        <div style="background:#16181b;color:#e7e9ec">ink<br>#E7E9EC</div>
+        <div style="background:#16181b">muted<br>#9AA1AA</div>
+      </div>
+    </div>
+
+    <div class="rulecard" style="margin-top:18px">
+      <h4>The Readable Grey Rule</h4>
+      <p>Ink&nbsp;3 (#868D97) measures 3.1:1 on canvas and 3.3:1 on panel. It is <b>not</b> a text colour on light surfaces. Metadata, annotations, port types and placeholders take Ink&nbsp;2 (#4B5058, 7.8:1). Ink&nbsp;3 survives only on rules, dots and other non-text marks. On the ink fold, muted (#9AA1AA) clears 6.6:1 and is safe for text.</p>
+    </div>
   </div>
 
   <!-- TYPE -->
@@ -241,6 +274,16 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
       <div class="typerow"><span class="spec">Body / 15 / 400</span><span style="font-family:var(--font-body);font-size:15px">Drag a wire from any port to connect two nodes.</span></div>
       <div class="typerow"><span class="spec">Mono / 12 / 600</span><span style="font-family:var(--lj-mono);font-size:12px;font-weight:600;color:var(--lj-ink-2)">function validateCredentials({ email })</span></div>
     </div>
+
+    <p class="lbl" style="margin-top:22px">Brand surface scale — the landing page only</p>
+    <div class="card2">
+      <div class="typerow"><span class="spec">Hero / clamp(42–86) / 900</span><span class="typesamp" style="font-size:52px;font-weight:900;letter-spacing:-.042em;line-height:.96">Weave the system</span></div>
+      <div class="typerow"><span class="spec">Section / clamp(30–52) / 800</span><span class="typesamp" style="font-size:34px;font-weight:800;letter-spacing:-.032em">Colour is the type system</span></div>
+      <div class="typerow"><span class="spec">Lead / clamp(16.5–20) / 400</span><span style="font-family:var(--font-body);font-size:18px;line-height:1.55;color:var(--lj-ink-2)">Nodes are functions. Wires are data flow.</span></div>
+      <div class="typerow"><span class="spec">Body / 15 / 400</span><span style="font-family:var(--font-body);font-size:15px;color:var(--lj-ink-2)">Capped at 68ch so a paragraph never runs the width of the page.</span></div>
+      <div class="typerow"><span class="spec">Note / 11.5 mono / 500</span><span class="notedemo"><b></b>Closed beta · V1 in development</span></div>
+    </div>
+    <p class="lede" style="margin-top:14px">The steps are at least 1.3&times; apart, so hierarchy survives without weight tricks. The studio scale (9–13px) and the brand scale (11.5–86px) never mix on one surface.</p>
   </div>
 
   <!-- NODE CARDS -->
@@ -349,9 +392,66 @@ body{margin:0;background:var(--lj-canvas);font-family:var(--font-body);color:var
     </div>
   </div>
 
+  <!-- BRAND SURFACE -->
+  <div class="sec" id="brand">
+    <div class="eyebrow"><span class="no">08</span>Brand surface<span class="ln"></span></div>
+    <h2 class="h2">The page is a canvas</h2>
+    <p class="lede">The studio and the landing page are one register apart. In the studio, design serves the work. On the landing page, design <em>is</em> the work, and the strongest thing loomJS can show a visitor is its own artefact. So the marketing page is built out of the product&rsquo;s primitives: paper ground, dot grid, sheets that float, node cards, and wires that actually connect the things they touch.</p>
+
+    <div class="bsplit">
+      <div class="rulecard">
+        <h4>The Working Surface Rule</h4>
+        <p>The dot grid runs the full document and never stops. Sections are artboards and node clusters placed on it, not boxes stacked in a column. If a section could be lifted onto any other landing page unchanged, it is not carrying the brand.</p>
+      </div>
+      <div class="rulecard">
+        <h4>The Honest Wire Rule</h4>
+        <p>A wire on the brand surface obeys the same grammar as a wire in the graph: it runs between two things that are genuinely connected, and it takes the colour of the port it leaves. Wires are never decoration, never ambient, never drawn to fill space.</p>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card2">
+        <p class="lbl">The one recurring device</p>
+        <p class="notedemo" style="margin:0 0 14px"><b></b>Closed beta &middot; V1 in development</p>
+        <p style="font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin:0">A short mono annotation over a 28px rule. It appears once or twice per section and is <b>placed differently every time</b>: above a heading, in the right margin, under a diagram. A tracked uppercase kicker repeated over every section heading is AI scaffolding, not a system. The numbered eyebrows in this document are a documentation device and do not transfer to the brand surface.</p>
+      </div>
+      <div class="card2">
+        <p class="lbl">Composition</p>
+        <ul style="margin:0;padding-left:18px">
+          <li style="font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin-bottom:8px">Asymmetric and left-aligned. No centred stacks.</li>
+          <li style="font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin-bottom:8px">Section rhythm varies: dense datasheet rows next to open paper.</li>
+          <li style="font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin-bottom:8px">One dominant idea per fold, and one dark fold for the language.</li>
+          <li style="font:400 13.5px/1.55 var(--font-body);color:var(--lj-ink-2);margin:0">Motion is a single orchestration: reveals release per section, wires draw themselves once. Nothing loops.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="dodont">
+      <div>
+        <h4>Do</h4>
+        <ul>
+          <li>Show the artefact. Artboards, node cards, generated code and file paths are the page&rsquo;s imagery.</li>
+          <li>Spend the red once per screen, on the one action.</li>
+          <li>State what V1 does <em>not</em> do. The honest column is a differentiator, not a liability.</li>
+          <li>Draw structure with hairlines; keep the artboard double-shadow for things that genuinely float.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Don&rsquo;t</h4>
+        <ul>
+          <li>Numbered kickers or tracked uppercase labels as section grammar.</li>
+          <li>Grids of identical cards with a rounded icon square above every heading.</li>
+          <li>Ambient glow blobs, gradient washes, sparkle icons, or any AI-product cue. loomJS compiles; it does not guess.</li>
+          <li>Glassmorphism. The one blurred surface that ever shipped here was the old floating nav, and it is gone.</li>
+          <li>Category hues on chrome, badges, or syntax highlighting. Colour on the brand surface means exactly what it means in the graph.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <div class="foot">
     <svg class="mk" viewBox="0 0 48 48" fill="none"><rect x="1.5" y="1.5" width="45" height="45" rx="11" stroke="var(--lj-ink)" stroke-width="3"/><path d="M13 13 V35 M23 13 V35 M33 13 V35" stroke="var(--lj-ink)" stroke-width="3"/><path d="M13 19 C 23 19 23 29 33 29" stroke="var(--lj-brand)" stroke-width="4"/></svg>
-    loomJS Brand &amp; Design System · v1.0 · built on Modernist · Archivo + JetBrains Mono
+    loomJS Brand &amp; Design System · v1.1 · Archivo + JetBrains Mono · studio light-only, one ink fold on the brand surface
   </div>
 
 </div>
