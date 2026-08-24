@@ -59,12 +59,14 @@ export function compile(snapshot: Snapshot): CompileResult {
       .filter((id): id is string => Boolean(id)),
   );
   const usesSql = [...modules].some((id) => dialectOf(id));
+  const usesMysql = [...modules].some((id) => dialectOf(id) === 'mysql');
   const usesFirestore = [...modules].some((id) => isDocumentStore(id));
   const usesDatabase = dbNodes.length > 0 && !usesSql && !usesFirestore;
 
   const files: EmittedFile[] = scaffoldFiles(snapshot.name, snapshot.name, {
     usesDatabase,
-    usesSql,
+    usesSql: usesSql && !usesMysql,
+    usesMysql,
     usesFirestore,
     theme: snapshot.theme,
   });

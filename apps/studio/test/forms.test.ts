@@ -124,14 +124,29 @@ describe('what it builds', () => {
     expect(wired).toContain('pt_run');
   });
 
-  it('says which field it could not wire, rather than leaving one connected to nothing', async () => {
+  it('puts the conversion in when a date column needs one', async () => {
     await connected();
     const made = generateForm('notes')!;
 
-    // A DateField hands back the browser's `YYYY-MM-DD` text, and loom will not call that a date
-    // on the way into a date column — so the form reports it instead of looking finished.
-    expect(made.unwired.map((entry) => entry.column)).toEqual(['due_at']);
-    expect(made.unwired[0]!.reason).toMatch(/not assignable/);
+    // A DateField hands back the browser's `YYYY-MM-DD` text, and loom will not call that a date.
+    // The form wires the same "Read as date" step a designer would have added by hand, so nothing
+    // is left connected to nothing.
+    expect(made.unwired).toEqual([]);
+
+    const snapshot = getState().snapshot;
+    const conversion = Object.values(snapshot.nodes).find(
+      (node) => node.kind === 'compute' && (node.config as { op?: string }).op === 'toDate',
+    );
+    expect(conversion).toBeDefined();
+
+    // And it sits between the field and the column, rather than beside them.
+    const wires = Object.values(snapshot.wires);
+    expect(wires.some((wire) => wire.to.nodeId === conversion!.id)).toBe(true);
+    expect(
+      wires.some(
+        (wire) => wire.from.nodeId === conversion!.id && wire.to.portId === 'pt_col_due_at',
+      ),
+    ).toBe(true);
   });
 
   it('makes components a designer can edit, not a special element', async () => {

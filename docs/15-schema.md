@@ -153,12 +153,15 @@ edit would be a worse version of the thing it saved you from. Columns the databa
 not asked for, and the control follows what the column holds: a number gets a number field, a
 yes/no gets a checkbox, a structure gets a text area, because nothing here edits a structure.
 
-**What it cannot wire, it says.** A DateField hands back the browser's `YYYY-MM-DD`, which is
-text, and loom will not call text a date on the way into a date column — that is a conversion
-nothing performs. So the form reports the field it could not connect, with the reason, instead of
-laying out something that looks finished and drops what you type into it. Closing that gap
-properly — a conversion step, or a date type that admits it is a string — is a decision, not an
-oversight.
+**The date gap is closed.** A DateField hands back the browser's `YYYY-MM-DD`, which is text, and
+loom will not call text a date on the way into a date column — rightly, because nothing was
+converting it. Compute now has a **Read as date** operation that does, and the generated form
+wires a date column through it: the same step a designer would have added by hand. An empty box
+becomes nothing rather than an Invalid Date, which would otherwise reach the column as null with no
+explanation.
+
+If a field still cannot be wired for some other reason, the form says which one and why, rather
+than laying out something that looks finished and drops what you type into it.
 
 ## One tab for data
 

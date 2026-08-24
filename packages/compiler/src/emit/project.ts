@@ -38,6 +38,8 @@ export interface ScaffoldOptions {
   usesSql?: boolean;
   /** Adds the Firebase admin SDK, for a project whose data lives in Firestore. */
   usesFirestore?: boolean;
+  /** Adds the MySQL driver, for a project whose database speaks that dialect. */
+  usesMysql?: boolean;
   /** The project's token overrides, emitted into its stylesheet. */
   theme?: ThemeOverrides;
 }
@@ -68,6 +70,7 @@ export function scaffoldFiles(
       // Only what this project actually reaches for: a Supabase app never installs a driver it
       // does not open, and a Postgres app never carries a REST client it does not call.
       ...(options.usesSql ? { pg: '^8.13.1' } : {}),
+      ...(options.usesMysql ? { mysql2: '^3.11.4' } : {}),
       ...(options.usesFirestore ? { 'firebase-admin': '^13.0.0' } : {}),
       // The server runs the emitted TypeScript directly: the handlers import each other without
       // file extensions, which Node's own ESM loader requires and a compile step would have to

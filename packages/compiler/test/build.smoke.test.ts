@@ -18,6 +18,7 @@ import {
   triggeredMathSnapshot,
   inferredSnapshot,
   pipelineSnapshot,
+  mysqlSnapshot,
   postgresOperationsSnapshot,
   ssoSnapshot,
   postgresSnapshot,
@@ -257,6 +258,23 @@ describe('emitted app builds for real', () => {
 
     const callback = await readFile(join(dir, 'api', 'auth', 'callback.ts'), 'utf8');
     expect(callback).toContain('grant_type=pkce');
+  });
+
+  it('type-checks an app that talks to MySQL', async () => {
+    // MySQL's writes read the row back rather than returning it, which is two statements and a
+    // result header — none of which a string match would have type-checked.
+    const dir = await emitProject(mysqlSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const insert = await readFile(join(dir, 'api', 'createnote.ts'), 'utf8');
+    expect(insert).toContain("import mysql from 'mysql2/promise'");
+    expect(insert).toContain('written.insertId');
+
+    const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies.mysql2).toBeDefined();
+    expect(pkg.dependencies.pg).toBeUndefined();
   });
 
   it('type-checks an app whose data lives in a document store', async () => {

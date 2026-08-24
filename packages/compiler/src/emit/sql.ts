@@ -130,6 +130,30 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
   const text = (fragment: string): string => JSON.stringify(fragment);
 
   if (config.operation === 'insert') {
+    /**
+     * MySQL has no `RETURNING`, which is the whole reason it waited (`docs/14-data.md`).
+     *
+     * So the row that was written is read back: by the key that was supplied, or by the one the
+     * database made, which the driver reports as `insertId`. Two round trips instead of one, and
+     * the node answers with the same thing either way — which is the point.
+     */
+    if (dialect === 'mysql') {
+      return `  {
+    const row = (value ?? {}) as Record<string, unknown>;
+    const columns = Object.keys(row).filter((column) => row[column] !== undefined);
+    const written = await write(
+      ${text(`INSERT INTO ${name} (`)} +
+        columns.map((column) => quote(column)).join(", ") +
+        ") VALUES (" +
+        columns.map(() => slot(0)).join(", ") +
+        ")",
+      columns.map((column) => row[column]),
+    );
+    const id = row[${JSON.stringify(key)}] ?? written.insertId;
+    value = await one(${text(`SELECT * FROM ${name} WHERE ${id} = `)} + slot(0), [id]);
+  }`;
+    }
+
     return `  {
     const row = (value ?? {}) as Record<string, unknown>;
     const columns = Object.keys(row).filter((column) => row[column] !== undefined);
@@ -140,6 +164,29 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
       columns.map((_, index) => slot(index + 1)).join(", ") +
       ") RETURNING *";
     value = await one(statement, columns.map((column) => row[column]));
+  }`;
+  }
+
+  if (config.operation === 'update' && dialect === 'mysql') {
+    return `  {
+    const input = (value ?? {}) as Record<string, unknown>;
+    const id = input[${JSON.stringify(key)}];
+    if (id === undefined || id === null || id === "") {
+      throw new Error("Update needs the row it is changing.");
+    }
+    const columns = Object.keys(input).filter(
+      (column) => column !== ${JSON.stringify(key)} && input[column] !== undefined,
+    );
+    if (columns.length === 0) throw new Error("Update has nothing to change.");
+
+    await write(
+      ${text(`UPDATE ${name} SET `)} +
+        columns.map((column) => quote(column) + " = " + slot(0)).join(", ") +
+        ${text(` WHERE ${id} = `)} + slot(0),
+      [...columns.map((column) => input[column]), id],
+    );
+    // Read back what was written: there is no RETURNING here, and the node answers with the row.
+    value = await one(${text(`SELECT * FROM ${name} WHERE ${id} = `)} + slot(0), [id]);
   }`;
   }
 
@@ -161,6 +208,31 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
       ${text(` WHERE ${id} = `)} + slot(columns.length + 1) +
       " RETURNING *";
     value = await one(statement, [...columns.map((column) => input[column]), id]);
+  }`;
+  }
+
+  if (config.operation === 'upsert' && dialect === 'mysql') {
+    // `ON DUPLICATE KEY UPDATE` is MySQL's version of the same idea, and the row comes back the
+    // same way every other MySQL write's does: by reading it.
+    return `  {
+    const row = (value ?? {}) as Record<string, unknown>;
+    const columns = Object.keys(row).filter((column) => row[column] !== undefined);
+    if (columns.length === 0) throw new Error("Save has nothing to write.");
+    const changed = columns.filter((column) => column !== ${JSON.stringify(key)});
+
+    const written = await write(
+      ${text(`INSERT INTO ${name} (`)} +
+        columns.map((column) => quote(column)).join(", ") +
+        ") VALUES (" +
+        columns.map(() => slot(0)).join(", ") +
+        ") ON DUPLICATE KEY UPDATE " +
+        (changed.length > 0 ? changed : [${JSON.stringify(key)}])
+          .map((column) => quote(column) + " = VALUES(" + quote(column) + ")")
+          .join(", "),
+      columns.map((column) => row[column]),
+    );
+    const id = row[${JSON.stringify(key)}] ?? written.insertId;
+    value = await one(${text(`SELECT * FROM ${name} WHERE ${id} = `)} + slot(0), [id]);
   }`;
   }
 
@@ -186,6 +258,20 @@ export function sqlStep(node: Node, dialect: Dialect, table: string, key: string
         .join(", ") +
       " RETURNING *";
     value = await one(statement, columns.map((column) => row[column]));
+  }`;
+  }
+
+  if (config.operation === 'delete' && dialect === 'mysql') {
+    return `  {
+    const input = (value ?? {}) as Record<string, unknown>;
+    const id = input[${JSON.stringify(key)}];
+    if (id === undefined || id === null || id === "") {
+      throw new Error("Delete needs the row it is removing.");
+    }
+    // Read before removing: afterwards there is nothing left to answer with.
+    const removed = await one(${text(`SELECT * FROM ${name} WHERE ${id} = `)} + slot(0), [id]);
+    await write(${text(`DELETE FROM ${name} WHERE ${id} = `)} + slot(0), [id]);
+    value = removed;
   }`;
   }
 

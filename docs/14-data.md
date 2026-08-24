@@ -26,7 +26,7 @@ than what the node says.
 | **D2** | The studio side — connect, introspect, the schema table, the query editor | done  |
 | **D3** | More of what a database can do: count, save, total                        | done  |
 | **D4** | Firestore — the mapping, and the two things it will not pretend to do      | done  |
-| **D5** | MySQL emission, once writes can be done honestly                          | next  |
+| **D5** | MySQL emission — writes read the row back, since it has no RETURNING       | done  |
 
 ## What is emitted
 
@@ -152,3 +152,20 @@ The service account key is a whole credential — it carries a private key — s
 rule as a connection string: straight to the dev server, never into the env bucket, never into the
 document. The emitted app starts the admin SDK once per module, because a function is reused
 between requests and `initializeApp` throws on the second call.
+
+## MySQL
+
+It waited a phase, and the reason was one clause: MySQL has no `RETURNING`, so an insert cannot
+answer with the row it wrote. A connector that reads but silently mangles writes is worse than one
+that is not there.
+
+What closed it is a second round trip, stated rather than hidden. A write runs, and then the row is
+**read back** — by the key that was supplied, or by the one the database generated, which the
+driver reports as `insertId`. An update reads back the row it changed. A delete reads the row
+*before* removing it, because afterwards there is nothing left to answer with. Saving uses
+`ON DUPLICATE KEY UPDATE`, which is MySQL's version of the same idea.
+
+So a database node means exactly what it means everywhere else, and the cost is one extra
+statement per write rather than a different vocabulary. Placeholders are `?` instead of `$1`,
+identifiers are backticked instead of quoted, and `LIKE` replaces `ILIKE` — already
+case-insensitive under the usual collations.

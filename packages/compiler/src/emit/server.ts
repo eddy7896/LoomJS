@@ -480,6 +480,14 @@ function emitStep(node: Node, snapshot: Snapshot): string {
         return '  value = String(value).toLowerCase();';
       case 'trim':
         return '  value = String(value).trim();';
+      case 'toDate':
+        // An empty box is not a date, and `new Date("")` is an Invalid Date that serialises to
+        // null and lands in the column as one — so nothing is a nicer answer than nonsense.
+        return `  {
+    const text = String(value ?? '').trim();
+    const when = text ? new Date(text) : undefined;
+    value = when && !Number.isNaN(when.getTime()) ? when.toISOString() : null;
+  }`;
       case 'length':
         return '  value = String(value).length;';
       case 'double':
@@ -549,6 +557,62 @@ export function emitApiFunction(
    * the pooling that matters happens in front of the database (Supavisor, PgBouncer, Neon), which
    * is why the credential asks for the pooled connection string.
    */
+  /**
+   * MySQL's driver, and the two helpers its writes need.
+   *
+   * `mysql2/promise` speaks the same pooled shape as `pg`, and `?` is its placeholder — every
+   * value still travels as a parameter. `write` hands back the result header, which is where the
+   * generated key lives when the row did not carry one.
+   */
+  const mysqlPrelude = ((): string => {
+    const body = steps.join('\n');
+    const parts = [
+      `import mysql from 'mysql2/promise';
+
+// The connection string is read by NAME from the environment; the value never enters the
+// document, the snapshot, or this file (docs/05-guardrails.md #1).
+const pool = mysql.createPool({ uri: process.env.DATABASE_URL ?? '', connectionLimit: 1 });
+`,
+    ];
+
+    if (body.includes('slot(')) {
+      parts.push(`/** MySQL names every parameter the same way; the value still travels beside it. */
+const slot = (_index: number): string => '?';
+`);
+    }
+    if (body.includes('quote(')) {
+      parts.push(`const quote = (name: string): string => '\`' + name.replace(/\`/g, '\`\`') + '\`';
+`);
+    }
+    if (body.includes('many(') || body.includes('one(')) {
+      parts.push(`async function many(statement: string, values: unknown[]): Promise<unknown[]> {
+  const [rows] = await pool.query(statement, values);
+  return rows as unknown[];
+}
+`);
+    }
+    if (body.includes('one(')) {
+      parts.push(`async function one(statement: string, values: unknown[]): Promise<unknown> {
+  const rows = await many(statement, values);
+  if (rows.length === 0) throw new Error('That row was not found.');
+  return rows[0];
+}
+`);
+    }
+    if (body.includes('write(')) {
+      parts.push(`async function write(
+  statement: string,
+  values: unknown[],
+): Promise<{ insertId: number }> {
+  const [result] = await pool.query(statement, values);
+  return result as { insertId: number };
+}
+`);
+    }
+
+    return parts.join('\n');
+  })();
+
   const sqlPrelude = ((): string => {
     // The emitted app builds with `noUnusedLocals`, so a helper this route never calls is a
     // compile error rather than dead weight. Each one is written only if a step reached for it.
@@ -592,10 +656,16 @@ const slot = (index: number): string => '$' + index;
     return parts.join('\n');
   })();
 
+  const mysqlNode = plan.body.find(
+    (node) => node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId) === 'mysql',
+  );
+
   const dbPrelude = !usesDb
     ? ''
     : documentNode
     ? firestorePrelude(steps)
+    : mysqlNode
+    ? mysqlPrelude
     : sqlNode
     ? sqlPrelude
     : auth

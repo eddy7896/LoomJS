@@ -21,19 +21,20 @@ import type { ModuleManifest } from './module';
 export const MODULES: readonly ModuleManifest[] = [
   SUPABASE_MANIFEST,
   POSTGRES_MANIFEST,
+  MYSQL_MANIFEST,
   FIREBASE_MANIFEST,
 ];
 
 /**
- * MySQL is described here but not offered yet.
+ * Nothing is waiting any more.
  *
- * Reading it works — `information_schema` answers in nearly the same words — but writing to it
- * does not: MySQL has no `RETURNING`, so an insert has to be followed by a read of the row it
- * made, and that read is a different statement for an auto-increment key than for a supplied one.
- * A connector that reads but silently mangles writes is worse than one that is not there, so it
- * waits for that work rather than shipping half of it.
+ * MySQL was held back because it has no `RETURNING`: an insert could not answer with the row it
+ * wrote, and a connector that reads but silently mangles writes is worse than one that is not
+ * there. It now reads the row back — by the key that was supplied, or by the one the database
+ * made — which costs a second round trip and makes the node mean the same thing it means
+ * everywhere else (`docs/14-data.md`).
  */
-export const PLANNED: readonly ModuleManifest[] = [MYSQL_MANIFEST];
+export const PLANNED: readonly ModuleManifest[] = [];
 
 /** True when this connector stores documents rather than rows, and so cannot do everything. */
 export function isDocumentStore(moduleId: string): boolean {

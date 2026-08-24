@@ -55,6 +55,14 @@ export const COMPUTE_OPS = {
   negate: { label: 'Negate', in: { kind: 'number' }, out: { kind: 'number' } },
   isEmpty: { label: 'Is empty', in: { kind: 'text' }, out: { kind: 'boolean' } },
   not: { label: 'Not', in: { kind: 'boolean' }, out: { kind: 'boolean' } },
+  /**
+   * Text to a real date (`docs/15-schema.md`).
+   *
+   * A DateField hands back the browser's `YYYY-MM-DD`, which is text, and loom refuses to call
+   * text a date on the way into a date column — rightly, because nothing was converting it. This
+   * is the conversion, so the refusal now has an answer instead of only a reason.
+   */
+  toDate: { label: 'Read as date', in: { kind: 'text' }, out: { kind: 'date' } },
 } as const satisfies Record<string, { label: string; in: TypeRef; out: TypeRef }>;
 
 export type ComputeOp = keyof typeof COMPUTE_OPS;

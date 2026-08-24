@@ -1630,3 +1630,15 @@ export function ssoSnapshot(provider = 'github'): Snapshot {
     },
   ]);
 }
+
+/** The same project again, against MySQL — the dialect that has no `RETURNING` (D5). */
+export function mysqlSnapshot(): Snapshot {
+  const base = supabaseSnapshot();
+  return {
+    ...base,
+    connectors: {
+      ...base.connectors,
+      cn_supabase: { ...base.connectors.cn_supabase!, moduleId: 'mysql' },
+    },
+  };
+}

@@ -2,7 +2,7 @@ import { columnPortId, type ColumnSchema, type TableSchema } from '@loom/connect
 import { createComponent } from '@loom/components';
 import { newComponentId, type Component, type Id } from '@loom/ir';
 import { dispatch, getState, selectComponent } from './store';
-import { addGraphNode, connect, ensureMirror } from './graph';
+import { addBodyStep, addGraphNode, connect, ensureMirror, setNodeConfig } from './graph';
 import { addDbStep, connectedTables } from './connectors';
 
 /**
@@ -143,8 +143,21 @@ export function generateForm(tableName: string, parentId?: Id): GeneratedForm | 
       unwired.push({ column, reason: 'This field has nothing to wire from.' });
       continue;
     }
+
+    /**
+     * A date column takes a date, and a DateField hands back the browser's `YYYY-MM-DD` — which
+     * is text. loom will not call text a date, so the form puts the conversion in: the same
+     * "Read as date" step a designer would have wired by hand.
+     */
+    const wantsDate = table.columns.find((entry) => entry.name === column)?.type.kind === 'date';
+    const from = wantsDate ? addBodyStep(route, 'compute') : undefined;
+    if (from) {
+      setNodeConfig(from, { op: 'toDate' });
+      connect({ nodeId: mirror, portId: 'pt_value' }, { nodeId: from, portId: 'pt_input' });
+    }
+
     const result = connect(
-      { nodeId: mirror, portId: 'pt_value' },
+      from ? { nodeId: from, portId: 'pt_result' } : { nodeId: mirror, portId: 'pt_value' },
       { nodeId: route, portId: columnPortId(column) },
     );
     if (!result.ok) unwired.push({ column, reason: result.reason ?? 'It could not be wired.' });
