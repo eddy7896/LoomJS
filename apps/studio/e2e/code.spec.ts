@@ -84,3 +84,20 @@ test('a build that will not compile says so where the code would have been', asy
   // And there is nothing to hand over, so the button says no rather than shipping a broken zip.
   await expect(page.getByTestId('download-project')).toBeDisabled();
 });
+
+test('the download carries a README that explains the project', async ({ page }) => {
+  await page.getByTestId('rail-code').click();
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByTestId('download-project').click(),
+  ]);
+
+  const files = unzipSync(new Uint8Array(await readFile(await download.path())));
+  const readme = strFromU8(files['README.md']!);
+
+  // Whoever opens this repo may be a developer a designer handed it to.
+  expect(readme).toContain('Built with loom');
+  expect(readme).toContain('npm install');
+  expect(readme).toContain('Regenerating overwrites it');
+});

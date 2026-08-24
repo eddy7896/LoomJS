@@ -34,6 +34,8 @@ describe('compile(trivial snapshot)', () => {
       'Dockerfile',
       '.dockerignore',
       'docker-compose.yml',
+      // Every project explains itself, written from what it actually is (`docs/25-readme.md`).
+      'README.md',
       // Compared as a set: the emitted order is the compiler's business, and pinning it here
       // makes every new file a two-line edit for no reader's benefit.
     ].sort());

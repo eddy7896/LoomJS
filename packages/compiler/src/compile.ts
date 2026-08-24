@@ -10,6 +10,7 @@ import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/m
 import { dialectOf, isDocumentStore } from '@loom/connectors';
 import { migrationFile } from './emit/migrations';
 import { emitContainerFiles } from './emit/container';
+import { emitReadme } from './emit/readme';
 import { toolCredentials } from './emit/tools';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
@@ -174,6 +175,29 @@ export function compile(snapshot: Snapshot): CompileResult {
       content: `${envNames.map((name) => `${name}=`).join(NEWLINE)}${NEWLINE}`,
     });
   }
+
+  /**
+   * A README, written from this project rather than pasted into it.
+   *
+   * A repo with none assumes whoever opens it already knows what it is — and the person opening
+   * this one may be a developer a designer handed it to (`docs/25-readme.md`).
+   */
+  files.push(
+    emitReadme({
+      name: snapshot.name,
+      screens: [...routes.values()].map((route) => ({
+        name: route.componentName,
+        path: route.path,
+      })),
+      routes: files
+        .filter((file) => file.path.startsWith('api/') && !file.path.startsWith('api/auth/'))
+        .map((file) => file.path),
+      env: envNames,
+      migrations: (snapshot.migrations ?? []).length,
+      usesSql,
+      usesAuth: auth,
+    }),
+  );
 
   files.sort((a, b) => a.path.localeCompare(b.path));
   return { files };
