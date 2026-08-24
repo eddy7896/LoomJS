@@ -23,6 +23,25 @@ import { CompileError } from '../types';
  * webhook receiver without three mechanisms.
  */
 
+/**
+ * A string that may name environment values, as an emitted expression.
+ *
+ * `{{env:HOME_ASSISTANT_URL}}` inside a base URL is how a self-hosted service says "my address is
+ * a fact about the deployment". It is read on the server like every other name, so a project can
+ * be shared without carrying somebody's house on it.
+ */
+function withEnv(text: string): string {
+  const parts = text.split(/(\{\{env:[A-Z0-9_]+\}\})/g).filter((part) => part !== '');
+  if (parts.length === 1 && !parts[0]!.startsWith('{{env:')) return JSON.stringify(text);
+
+  return parts
+    .map((part) => {
+      const match = /^\{\{env:([A-Z0-9_]+)\}\}$/.exec(part);
+      return match ? `(process.env[${JSON.stringify(match[1]!)}] ?? '')` : JSON.stringify(part);
+    })
+    .join(' + ');
+}
+
 /** The value expression for one hole in a body template. */
 function holeExpr(name: string, config: Partial<ToolNodeConfig>, node: Node): string {
   // Configured on the node — a model, a token cap. These are decisions, not data flowing through.
@@ -86,16 +105,36 @@ function toolFrom(node: Node, snapshot: Snapshot): { tool: ToolManifest; config:
 /** What one tool call does, as lines of the emitted route's body. */
 export function toolStep(node: Node, snapshot: Snapshot): string {
   const { tool, config } = toolFrom(node, snapshot);
-  const key = `process.env[${JSON.stringify(tool.credential.name)}] ?? ''`;
+  const key = `process.env[${JSON.stringify(tool.credentials[0]?.name ?? 'TOOL_API_KEY')}] ?? ''`;
+
+  /**
+   * Only the auth styles that actually use it declare it.
+   *
+   * Basic auth builds its header from the environment directly, so a `const key` there is a local
+   * nobody reads — and the emitted app builds with `noUnusedLocals`, which makes that a build
+   * failure rather than untidiness.
+   */
+  const usesKey = tool.auth.kind === 'bearer' || tool.auth.kind === 'header';
+  const keyLine = usesKey ? `
+    const key = ${key};` : '';
 
   const headers: string[] = Object.entries(tool.headers ?? {}).map(
     ([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`,
   );
-  headers.push(
-    tool.auth.kind === 'bearer'
-      ? `"authorization": "Bearer " + key`
-      : `${JSON.stringify(tool.auth.header)}: key`,
-  );
+
+  if (tool.auth.kind === 'bearer') {
+    headers.push(`"authorization": "Bearer " + key`);
+  } else if (tool.auth.kind === 'header') {
+    headers.push(`${JSON.stringify(tool.auth.header)}: key`);
+  } else if (tool.auth.kind === 'basic') {
+    // Stripe puts the key in the username and leaves the password blank; Twilio uses the account
+    // SID and the token. Both are the same header, built the same way.
+    headers.push(
+      `"authorization": "Basic " + Buffer.from(${withEnv(tool.auth.user)} + ":" + ${
+        tool.auth.password ? withEnv(tool.auth.password) : '""'
+      }).toString("base64")`,
+    );
+  }
 
   // A request the designer wrote: the address and method are theirs, the body is whatever is
   // flowing through, and the answer is the whole response.
@@ -111,8 +150,7 @@ export function toolStep(node: Node, snapshot: Snapshot): string {
     const sendsBody = method !== 'GET' && method !== 'DELETE';
 
     return `  {
-    const input = (value ?? {}) as Record<string, unknown>;
-    const key = ${key};
+    const input = (value ?? {}) as Record<string, unknown>;${keyLine}
     value = await callTool(${JSON.stringify(url)}, {
       method: ${JSON.stringify(method)},
       headers: { ${headers.join(', ')} },${sendsBody ? `
@@ -142,16 +180,18 @@ export function toolStep(node: Node, snapshot: Snapshot): string {
   }
 
   const sendsBody = operation.method !== 'GET' && operation.method !== 'DELETE';
+  // Not everything speaks JSON. Stripe and Twilio take form encoding, and sending either JSON is
+  // a 400 that says nothing useful.
+  const encode = tool.encoding === 'form' ? 'formBody' : 'JSON.stringify';
 
   return `  {
-    const input = (value ?? {}) as Record<string, unknown>;
-    const key = ${key};
-    const body = await callTool(${JSON.stringify(tool.baseUrl + operation.path)}, {
+    const input = (value ?? {}) as Record<string, unknown>;${keyLine}
+    const body = await callTool(${withEnv(tool.baseUrl + operation.path)}, {
       method: ${JSON.stringify(operation.method)},
       headers: { ${headers.join(', ')} },${
         sendsBody
           ? `
-      body: JSON.stringify(${bodyExpr(operation.body ?? {}, config, node)}),`
+      body: ${encode}(${bodyExpr(operation.body ?? {}, config, node)}),`
           : ''
       }
     });
@@ -168,10 +208,42 @@ export function toolStep(node: Node, snapshot: Snapshot): string {
  * read as JSON only when it claims to be, since an HTML error page parsed as JSON throws something
  * about `<` that tells nobody anything.
  */
-export function toolPrelude(timeoutMs: number): string {
+export function toolPrelude(timeoutMs: number, form = false): string {
+  const encoder = form
+    ? `
+/**
+ * A body as form encoding, the way Stripe and Twilio read one.
+ *
+ * Nested values are written with brackets — \`line_items[0][price]\` — because that is the shape
+ * those APIs parse. Anything undefined is left out rather than sent as the word "undefined".
+ */
+function formBody(value: unknown): string {
+  const pairs: string[] = [];
+
+  const walk = (prefix: string, entry: unknown): void => {
+    if (entry === undefined || entry === null || entry === '') return;
+    if (Array.isArray(entry)) {
+      entry.forEach((item, index) => walk(\`\${prefix}[\${index}]\`, item));
+      return;
+    }
+    if (typeof entry === 'object') {
+      for (const [key, item] of Object.entries(entry as Record<string, unknown>)) {
+        walk(prefix ? \`\${prefix}[\${key}]\` : key, item);
+      }
+      return;
+    }
+    pairs.push(\`\${encodeURIComponent(prefix)}=\${encodeURIComponent(String(entry))}\`);
+  };
+
+  walk('', value);
+  return pairs.join('&');
+}
+`
+    : '';
+
   return `// Generated by @loom/compiler. Tool calls run here, on the server, so the key stays here
 // too (docs/22-api-connectors.md).
-
+${encoder}
 async function callTool(
   url: string,
   init: { method: string; headers: Record<string, string>; body?: string },
@@ -212,7 +284,9 @@ export function toolCredentials(snapshot: Snapshot): string[] {
     if (node.category !== 'tool') continue;
     const config = (node.config ?? {}) as Partial<ToolNodeConfig>;
     const tool = toolFor(String(config.toolId ?? ''));
-    if (tool) names.add(tool.credential.name);
+    // Every name it needs, not just the key: Twilio wants an account SID beside its token, and a
+    // self-hosted service wants its own address.
+    for (const credential of tool?.credentials ?? []) names.add(credential.name);
   }
 
   return [...names].sort();
@@ -227,4 +301,13 @@ export function toolTimeout(snapshot: Snapshot, body: readonly Node[]): number {
       return toolFor(String(config.toolId ?? ''))?.timeoutMs ?? 30_000;
     });
   return timeouts.length > 0 ? Math.max(...timeouts) : 30_000;
+}
+
+/** True when a step in this route sends form encoding, which needs the helper for it. */
+export function usesFormEncoding(snapshot: Snapshot, body: readonly Node[]): boolean {
+  return body.some((node) => {
+    if (node.category !== 'tool') return false;
+    const config = (node.config ?? {}) as Partial<ToolNodeConfig>;
+    return toolFor(String(config.toolId ?? ''))?.encoding === 'form';
+  });
 }

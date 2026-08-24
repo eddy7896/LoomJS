@@ -2385,3 +2385,20 @@ input[type='color'] {
 .logline--warn .logline__message {
   color: var(--busy, #a8730a);
 }
+
+/* T2: a tool is its own kind of work, so it is its own colour — beside DB, State and the rest. */
+.nnode--tool .nnode__head {
+  background: color-mix(in srgb, #7a5cff 14%, transparent);
+}
+
+.nstep--tool {
+  border-left: 2px solid color-mix(in srgb, #7a5cff 60%, transparent);
+}
+
+.nstep--db {
+  border-left: 2px solid color-mix(in srgb, #d98a12 60%, transparent);
+}
+
+.nstep--fn {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}

@@ -51,15 +51,30 @@ export function toolAttached(snapshot: Snapshot, toolId: string): Id | undefined
  */
 export async function attachTool(
   toolId: string,
-  key = '',
+  values: Record<string, string> | string = {},
 ): Promise<{ ok: boolean; error?: string }> {
   const tool = toolFor(toolId);
   if (!tool) return { ok: false, error: `${toolId} is not a tool loom knows.` };
 
-  const secret = key.trim();
-  if (secret) {
+  // A single string is the one-credential shorthand, which is most tools.
+  const given =
+    typeof values === 'string'
+      ? values.trim()
+        ? { [tool.credentials[0]?.name ?? 'TOOL_API_KEY']: values.trim() }
+        : {}
+      : values;
+
+  // Only the ones actually filled in: an empty box means "use what the server already has", not
+  // "set this to nothing".
+  const filled = Object.fromEntries(
+    Object.entries(given)
+      .map(([name, value]) => [name, String(value).trim()])
+      .filter(([, value]) => value !== ''),
+  );
+
+  if (Object.keys(filled).length > 0) {
     try {
-      await sendToServer({ [tool.credential.name]: secret });
+      await sendToServer(filled);
     } catch (error) {
       return { ok: false, error: (error as Error).message };
     }

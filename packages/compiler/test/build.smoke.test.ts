@@ -437,6 +437,29 @@ describe('a tool call answers for real', () => {
   });
 });
 
+describe('a tool that does not speak JSON', () => {
+  /**
+   * Stripe and Twilio take form encoding and HTTP basic auth (T2, `docs/22-api-connectors.md`).
+   *
+   * A preset's address is the vendor's, so this cannot be pointed at a stub the way the generic
+   * request tool can — what it checks is that the emitted project *builds* with both, which is
+   * where a mistake in either would show up. The encoder's behaviour is checked separately, by
+   * running the emitted function itself.
+   */
+  it('builds with form encoding and basic auth', async () => {
+    const dir = await emitProject(toolSnapshot('stripe', 'checkout'));
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    // The fixture's route is named for its screen, not for the operation, so this reads whatever
+    // route was emitted rather than guessing at a filename.
+    const routes = await readdir(join(dir, 'api'));
+    const route = await readFile(join(dir, 'api', routes[0]!), 'utf8');
+    expect(route).toContain('function formBody(');
+    expect(route).toContain('"authorization": "Basic " + Buffer.from(');
+    expect(route).toContain('https://api.stripe.com/v1/checkout/sessions');
+  });
+});
+
 describe('emitted serverless function answers for real', () => {
   it('runs the API route through the dev server the Preview uses', async () => {
     const dir = await emitProject(pipelineSnapshot());

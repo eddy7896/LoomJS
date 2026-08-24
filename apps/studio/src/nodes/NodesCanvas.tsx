@@ -84,7 +84,11 @@ function LoomNode({ data, selected }: NodeProps) {
           {body.map((step, index) => (
             <button
               key={step.id}
-              className="nstep"
+              // A step is coloured by what it *is*, so a route's body reads at a glance: a
+              // database read, a tool call and a computation are three different kinds of work
+              // and should not look alike (T2, `docs/22-api-connectors.md`).
+              className={`nstep nstep--${step.category}`}
+              data-testid={`nstep-${step.category}`}
               onClick={(event) => {
                 event.stopPropagation();
                 select({ kind: 'node', id: step.id });
@@ -93,7 +97,15 @@ function LoomNode({ data, selected }: NodeProps) {
               <span className="nstep__index mono">{index + 1}</span>
               <span>{step.name ?? step.kind}</span>
               <span className="nstep__op mono">
-                {String((step.config as { op?: string } | undefined)?.op ?? step.kind)}
+                {/* What it does, in its own words: an operation for a tool, an op for a
+                    computation, the table for a database step. */}
+                {String(
+                  (step.config as { operationId?: string; table?: string; op?: string } | undefined)
+                    ?.operationId ??
+                    (step.config as { table?: string } | undefined)?.table ??
+                    (step.config as { op?: string } | undefined)?.op ??
+                    step.kind,
+                )}
               </span>
             </button>
           ))}

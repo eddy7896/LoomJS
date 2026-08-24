@@ -1,6 +1,7 @@
+import { transformSync } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { applyOps, type Snapshot } from '@loom/ir';
-import { ANTHROPIC_TOOL, OPENAI_TOOL, createToolNode, holesIn } from '@loom/connectors';
+import { TOOLS, createToolNode, holesIn } from '@loom/connectors';
 import { compile } from '../src/index';
 import { toolSnapshot, trivialSnapshot } from './fixtures';
 
@@ -172,8 +173,9 @@ describe('the helper every call goes through', () => {
 });
 
 describe('the manifests themselves', () => {
+  // Every tool, not a list someone maintains: a provider added tomorrow is held to these too.
   it('fills every hole in a body template from something the operation takes', () => {
-    for (const tool of [ANTHROPIC_TOOL, OPENAI_TOOL]) {
+    for (const tool of TOOLS) {
       for (const operation of tool.operations) {
         const known = new Set([...operation.inputs.map((input) => input.name), 'model', 'maxTokens']);
         for (const hole of holesIn(operation.body)) expect(known).toContain(hole);
@@ -181,10 +183,171 @@ describe('the manifests themselves', () => {
     }
   });
 
-  it('keeps every key server-scoped, with a name the deployment can set', () => {
-    for (const tool of [ANTHROPIC_TOOL, OPENAI_TOOL]) {
-      expect(tool.credential.name).toMatch(/^[A-Z][A-Z0-9_]*$/);
-      expect(tool.timeoutMs).toBeGreaterThan(0);
+  it('names every credential the way an environment can hold it', () => {
+    for (const tool of TOOLS) {
+      expect(tool.credentials.length).toBeGreaterThan(0);
+      for (const credential of tool.credentials) {
+        expect(credential.name).toMatch(/^[A-Z][A-Z0-9_]*$/);
+        expect(credential.label.length).toBeGreaterThan(0);
+      }
     }
+  });
+
+  it('gives every tool a timeout, because a hung request is a bill', () => {
+    for (const tool of TOOLS) expect(tool.timeoutMs).toBeGreaterThan(0);
+  });
+
+  it('never writes a credential value into a manifest', () => {
+    // A manifest is committed. Anything that looks like a key in one is a key in the repo.
+    const text = JSON.stringify(TOOLS);
+    expect(text).not.toMatch(/sk-[A-Za-z0-9]/);
+    expect(text).not.toMatch(/xoxb-[A-Za-z0-9]/);
+  });
+
+  it('reaches every tool over https, or from the environment', () => {
+    for (const tool of TOOLS) {
+      if (!tool.baseUrl) continue;
+      expect(tool.baseUrl.startsWith('https://') || tool.baseUrl.startsWith('{{env:')).toBe(true);
+    }
+  });
+});
+
+describe('the providers beyond the models', () => {
+  it('sends Resend what its send-email reference describes', () => {
+    // POST https://api.resend.com/emails, bearer auth, JSON with from/to/subject.
+    const code = routeFor(toolSnapshot('resend', 'send'));
+
+    expect(code).toContain('https://api.resend.com/emails');
+    expect(code).toContain('"authorization": "Bearer " + key');
+    expect(code).toContain('"from": input["from"]');
+    expect(code).toContain('"subject": input["subject"]');
+    expect(code).toContain('?.["id"]');
+  });
+
+  it('sends Stripe form encoding with the key as a basic username', () => {
+    // Stripe's reference uses `-u "<secret key>"` — basic auth, key as username, no password —
+    // and `-d` form fields with nested values as line_items[0][price].
+    const code = routeFor(toolSnapshot('stripe', 'checkout'));
+
+    expect(code).toContain('https://api.stripe.com/v1/checkout/sessions');
+    expect(code).toContain('"authorization": "Basic " + Buffer.from(');
+    expect(code).toContain('STRIPE_SECRET_KEY');
+    // Form, not JSON: sending Stripe JSON is a 400 that says nothing useful.
+    expect(code).toContain('body: formBody(');
+    expect(code).toContain('function formBody(');
+    // And what a screen actually needs back is the link, not the session id.
+    expect(code).toContain('?.["url"]');
+  });
+
+  it('writes nested form fields the way Stripe parses them', () => {
+    const code = routeFor(toolSnapshot('stripe', 'checkout'));
+    // line_items[0][price] — the bracket shape, built by the helper rather than hand-written.
+    expect(code).toContain('${prefix}[${index}]');
+    expect(code).toContain('${prefix}[${key}]');
+  });
+
+  it('sends Twilio its capitalised parameters, with the SID in the path', () => {
+    // POST /2010-04-01/Accounts/{AccountSid}/Messages.json, basic auth with SID and token, form
+    // encoded, To/From/Body.
+    const code = routeFor(toolSnapshot('twilio', 'sms'));
+
+    expect(code).toContain('https://api.twilio.com/2010-04-01/Accounts/');
+    expect(code).toContain('process.env["TWILIO_ACCOUNT_SID"]');
+    expect(code).toContain('/Messages.json');
+    // Lowercase parameters are simply ignored by Twilio, so the capitals matter.
+    expect(code).toContain('"To": input["to"]');
+    expect(code).toContain('"Body": input["body"]');
+  });
+
+  it('sends Slack a message and reads the field that says whether it worked', () => {
+    const code = routeFor(toolSnapshot('slack', 'post'));
+
+    expect(code).toContain('https://slack.com/api/chat.postMessage');
+    expect(code).toContain('"channel": input["channel"]');
+    // Slack answers 200 even when it refused; `ok` is what says which happened.
+    expect(code).toContain('?.["ok"]');
+  });
+
+  it('reaches a Home Assistant that lives at an address only the deployment knows', () => {
+    const code = routeFor(toolSnapshot('homeAssistant', 'turnOn'));
+
+    // The address is read from the environment, so a shared project does not carry someone's house.
+    expect(code).toContain('process.env["HOME_ASSISTANT_URL"]');
+    expect(code).toContain('"/api/services/homeassistant/turn_on"');
+    expect(code).toContain('"entity_id": input["entity_id"]');
+  });
+
+  it('asks the deployment for every name a tool needs, not just its key', () => {
+    const example = compile(toolSnapshot('twilio', 'sms')).files.find(
+      (file) => file.path === '.env.example',
+    )!;
+    // Twilio needs the account SID beside the token; naming one of them would be naming half.
+    expect(example.content).toContain('TWILIO_ACCOUNT_SID=');
+    expect(example.content).toContain('TWILIO_AUTH_TOKEN=');
+  });
+
+  it('emits the form helper only where something takes form encoding', () => {
+    // The emitted app builds with noUnusedLocals, so an unused helper is a build failure.
+    expect(routeFor(toolSnapshot('slack', 'post'))).not.toContain('function formBody(');
+  });
+});
+
+describe('the form encoder, run rather than read', () => {
+  /**
+   * The emitted function itself, executed.
+   *
+   * Reading the source proves it was written; running it proves it encodes what Stripe parses.
+   * The function is pulled out of the emitted route rather than copied here, so this cannot drift
+   * from what actually ships.
+   */
+  function emittedFormBody(): (value: unknown) => string {
+    const code = routeFor(toolSnapshot('stripe', 'checkout'));
+    const start = code.indexOf('function formBody(');
+    const end = code.indexOf('\n}\n', start);
+    if (start < 0 || end < 0) throw new Error('no formBody in the emitted route');
+
+    // The emitted helper is TypeScript, so it is compiled the way the app compiles it rather than
+    // having its types stripped by hand.
+    const source = code.slice(start, end + 2);
+    const js = transformSync(source, { loader: 'ts' }).code;
+    return new Function(`${js}; return formBody;`)() as (value: unknown) => string;
+  }
+
+  it('writes nested values the way Stripe reads them', () => {
+    const formBody = emittedFormBody();
+    const encoded = formBody({
+      mode: 'payment',
+      line_items: [{ price: 'price_123', quantity: 2 }],
+    });
+
+    const pairs = encoded.split('&').map((pair) => decodeURIComponent(pair));
+    expect(pairs).toContain('mode=payment');
+    expect(pairs).toContain('line_items[0][price]=price_123');
+    expect(pairs).toContain('line_items[0][quantity]=2');
+  });
+
+  it('leaves out what was never filled in', () => {
+    const formBody = emittedFormBody();
+    // An optional input nobody supplied must not arrive as the word "undefined".
+    const encoded = formBody({ mode: 'payment', cancel_url: undefined, note: '' });
+    expect(encoded).toBe('mode=payment');
+  });
+
+  it('escapes what would otherwise change the shape', () => {
+    const formBody = emittedFormBody();
+    const encoded = formBody({ success_url: 'https://example.com/done?a=1&b=2' });
+    // The ampersand inside a value must not read as another pair.
+    expect(encoded.split('&')).toHaveLength(1);
+    expect(decodeURIComponent(encoded)).toBe('success_url=https://example.com/done?a=1&b=2');
+  });
+});
+
+describe('what is declared in the emitted route', () => {
+  it('declares the key only where the auth style reads it', () => {
+    // The emitted app builds with noUnusedLocals, so a `const key` nothing uses is a build
+    // failure. Basic auth builds its header from the environment directly.
+    expect(routeFor(toolSnapshot('anthropic'))).toContain('const key =');
+    expect(routeFor(toolSnapshot('stripe', 'checkout'))).not.toContain('const key =');
+    expect(routeFor(toolSnapshot('twilio', 'sms'))).not.toContain('const key =');
   });
 });

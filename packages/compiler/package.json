@@ -29,7 +29,8 @@
     "@loom/ui": "workspace:*"
   },
   "devDependencies": {
+    "@loom/inference": "workspace:*",
     "@types/node": "^20.11.0",
-    "@loom/inference": "workspace:*"
+    "esbuild": "^0.28.2"
   }
 }

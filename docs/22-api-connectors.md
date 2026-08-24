@@ -116,7 +116,7 @@ default lives on the tool and can be raised, never removed.
 | Phase  | What it is                                                              | State |
 | ------ | ----------------------------------------------------------------------- | ----- |
 | **T1** | The Tools tab, a single-request tool, and the Call node against it       | done  |
-| **T2** | Presets, starting with two whose endpoints were verified first           | done  |
+| **T2** | Presets: models, email, payments, messaging and devices — each verified   | done  |
 | **T3** | Asking a model: one model, one prompt, an answer, a length cap           | done  |
 | **T4** | OpenAPI import — operations, parameters and responses read from the spec | next  |
 | **T5** | Tools an agent may call, wired from the graph, with a step cap enforced  | next  |
@@ -199,3 +199,62 @@ which would carry the key in the open; `localhost` is the exception a developer 
 The emitted `.env.example` was a chain of `else if`, so a project that talked to a database *and*
 called a tool was told about one of them. It is one list now, and every credential the project
 needs is in it.
+
+## The providers, and what each one needed
+
+Seven presets, in five families, and adding them was mostly a lesson in how little vendors agree.
+
+| Family    | Tool           | What it does                | What it needed that nothing before did      |
+| --------- | -------------- | --------------------------- | ------------------------------------------- |
+| Models    | Claude         | Ask                         | a version header, and a key in `x-api-key`  |
+| Models    | OpenAI         | Ask                         | —                                            |
+| Email     | Resend         | Send email                  | —                                            |
+| Payments  | Stripe         | Start a checkout            | **form encoding** and **HTTP basic** auth   |
+| Messaging | Twilio         | Send a message              | basic auth with two values, and the account SID **in the path** |
+| Messaging | Slack          | Post a message              | —                                            |
+| Devices   | Home Assistant | Turn on · Turn off          | an address only the **deployment** knows    |
+| Anything  | HTTP request   | Whatever you describe       | —                                            |
+
+Three of those forced the manifest to grow, and each growth is a fact about the world rather than
+a preference:
+
+**Not everything speaks JSON.** Stripe and Twilio take form encoding, with nested values written
+`line_items[0][price]`. Sending either JSON is a 400 that says nothing useful. So a tool declares
+its encoding, and a form encoder is emitted — **only into routes that need one**, because the
+emitted app builds with `noUnusedLocals`.
+
+**Not every key is a bearer token.** Stripe puts the key in the *username* of HTTP basic and leaves
+the password blank; Twilio uses the account SID and the token. Guessing here is a 401 nobody can
+read.
+
+**Not every service has a fixed address.** Home Assistant runs on your own network, so its base URL
+is `{{env:HOME_ASSISTANT_URL}}` — read on the server like every other name, so a shared project
+does not carry somebody's house in it. The same mechanism puts Twilio's account SID into its path.
+
+A tool therefore declares **every name it needs**, not just a key: naming one of Twilio's two would
+be naming half, and the emitted `.env.example` would tell a deployment to set something that cannot
+work alone.
+
+### Capitals, and other things that are not details
+
+Twilio's parameters are `To`, `From`, `Body`. Lowercase ones are ignored — silently. Slack answers
+`200` even when it refused, so the answer is `ok` rather than the status code. Stripe's useful
+answer is `url`, the page to send someone to, not the session id. Each of those is in a test whose
+comment says where it came from.
+
+### In the node viewer
+
+A tool call is now its own kind of work: its own colour on the node, its own tint on the step
+inside a route, and a label saying what it does — the operation for a tool, the table for a
+database step, the op for a computation. A route's body reads at a glance, which it did not when
+three different kinds of work all looked alike.
+
+### What the gates caught
+
+Two real bugs, both from the emitted project's own `tsc`:
+
+- a basic-auth tool emitted `const key` that nothing read, because its header is built from the
+  environment directly — a build failure, not untidiness;
+- and the form encoder is now **run** rather than only read: the emitted function is pulled out of
+  the emitted route, compiled, and executed against the nested shape Stripe parses, so a value
+  containing an `&` cannot quietly become two fields.

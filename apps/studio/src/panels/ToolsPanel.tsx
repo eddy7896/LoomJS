@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { isRequestTool, type ToolManifest } from '@loom/connectors';
+import { TOOL_FAMILIES, isRequestTool, type ToolManifest } from '@loom/connectors';
 import { useEditor } from '../state/useEditor';
 import { readServerEnv, routeContaining, type ServerEnv } from '../state/connectors';
 import { addGraphNode } from '../state/graph';
@@ -53,17 +53,27 @@ export function ToolsPanel() {
         browser.
       </p>
 
-      {knownTools().map((tool) => (
-        <ToolRow
-          key={tool.id}
-          tool={tool}
-          attached={Boolean(toolAttached(snapshot, tool.id))}
-          heldByServer={serverEnv.names.includes(tool.credential.name)}
-          open={open === tool.id}
-          onToggle={() => setOpen((current) => (current === tool.id ? undefined : tool.id))}
-          onAdd={(operationId) => addToolStep(routeFor(), tool.id, operationId)}
-        />
-      ))}
+      {TOOL_FAMILIES.map((family) => {
+        const tools = knownTools().filter((tool) => tool.family === family.id);
+        if (tools.length === 0) return null;
+
+        return (
+          <div key={family.id} data-testid={`tool-family-${family.id}`}>
+            <div className="palette__head">{family.label}</div>
+            {tools.map((tool) => (
+              <ToolRow
+                key={tool.id}
+                tool={tool}
+                attached={Boolean(toolAttached(snapshot, tool.id))}
+                held={tool.credentials.filter((entry) => serverEnv.names.includes(entry.name))}
+                open={open === tool.id}
+                onToggle={() => setOpen((current) => (current === tool.id ? undefined : tool.id))}
+                onAdd={(operationId) => addToolStep(routeFor(), tool.id, operationId)}
+              />
+            ))}
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -71,23 +81,31 @@ export function ToolsPanel() {
 function ToolRow({
   tool,
   attached,
-  heldByServer,
+  held,
   open,
   onToggle,
   onAdd,
 }: {
   tool: ToolManifest;
   attached: boolean;
-  heldByServer: boolean;
+  /** Which of this tool's names the dev server already holds. Never their values. */
+  held: readonly { name: string }[];
   open: boolean;
   onToggle: () => void;
   onAdd: (operationId: string) => void;
 }) {
-  const [key, setKey] = useState('');
+  // One box per name the tool needs: Twilio wants an account SID beside its token, and a
+  // self-hosted service wants its own address.
+  const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const operations = operationsOf(tool.id);
+  const heldNames = held.map((entry) => entry.name);
+  const missing = tool.credentials.filter(
+    (credential) =>
+      !credential.optional && !heldNames.includes(credential.name) && !values[credential.name]?.trim(),
+  );
 
   return (
     <div className="provider" data-testid={`tool-${tool.id}`}>
@@ -107,9 +125,9 @@ function ToolRow({
           {attached ? (
             <>
               <p className="panel__hint">
-                {heldByServer
-                  ? `${tool.credential.name} is held by the dev server; the project keeps only its name.`
-                  : `No ${tool.credential.name} on the dev server — calls will be refused until there is one.`}
+                {heldNames.length > 0
+                  ? `${heldNames.join(', ')} held by the dev server; the project keeps only the names.`
+                  : `Nothing on the dev server yet — calls will be refused until there is.`}
               </p>
 
               {isRequestTool(tool.id) ? (
@@ -139,40 +157,48 @@ function ToolRow({
             </>
           ) : (
             <>
-              <label className="field field--stacked">
-                <span className="field__label">{tool.credential.label}</span>
-                <input
-                  type="password"
-                  data-testid={`tool-${tool.id}-key`}
-                  value={key}
-                  placeholder={heldByServer ? 'Already on the dev server' : ''}
-                  onChange={(event) => setKey(event.target.value)}
-                />
-                {tool.credential.hint ? (
-                  <span className="panel__hint">{tool.credential.hint}</span>
-                ) : null}
-              </label>
+              {tool.credentials.map((credential, index) => (
+                <label key={credential.name} className="field field--stacked">
+                  <span className="field__label">{credential.label}</span>
+                  <input
+                    // An address is not a secret, and masking it would only make it hard to check.
+                    type={credential.name.endsWith('_URL') ? 'text' : 'password'}
+                    data-testid={
+                      index === 0 ? `tool-${tool.id}-key` : `tool-${tool.id}-key-${credential.name}`
+                    }
+                    value={values[credential.name] ?? ''}
+                    placeholder={
+                      heldNames.includes(credential.name) ? 'Already on the dev server' : ''
+                    }
+                    onChange={(event) =>
+                      setValues((current) => ({ ...current, [credential.name]: event.target.value }))
+                    }
+                  />
+                  {credential.hint ? <span className="panel__hint">{credential.hint}</span> : null}
+                </label>
+              ))}
 
               {error ? <p className="connect-form__error">{error}</p> : null}
 
               <button
-                // A tool whose key is optional attaches with nothing typed: some endpoints want none.
-                disabled={busy || (!key.trim() && !heldByServer && !tool.credential.optional)}
+                // A tool whose names are all optional, or already on the server, attaches with
+                // nothing typed: some endpoints want no key at all.
+                disabled={busy || missing.length > 0}
                 data-testid={`tool-${tool.id}-attach`}
                 onClick={() => {
                   setBusy(true);
                   setError(undefined);
-                  void attachTool(tool.id, key).then((result) => {
+                  void attachTool(tool.id, values).then((result) => {
                     setBusy(false);
-                    if (result.ok) setKey('');
+                    if (result.ok) setValues({});
                     else setError(result.error);
                   });
                 }}
               >
                 {busy
                   ? 'Attaching…'
-                  : heldByServer && !key.trim()
-                    ? 'Use the key on the server'
+                  : heldNames.length === tool.credentials.length
+                    ? 'Use what the server holds'
                     : 'Attach'}
               </button>
             </>

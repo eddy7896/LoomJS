@@ -10,7 +10,7 @@ import type { Node, Snapshot } from '@loom/ir';
 import { dialectOf, isDocumentStore, moduleFor } from '@loom/connectors';
 import { CompileError, type EmittedFile } from '../types';
 import { firestorePrelude, firestoreStep } from './firestore';
-import { toolPrelude, toolStep, toolTimeout } from './tools';
+import { toolPrelude, toolStep, toolTimeout, usesFormEncoding } from './tools';
 import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
 
@@ -665,7 +665,12 @@ const slot = (index: number): string => '$' + index;
   );
 
   const toolNodes = plan.body.filter((node) => node.category === 'tool');
-  const toolLines = toolNodes.length > 0 ? toolPrelude(toolTimeout(snapshot, plan.body)) : '';
+  // The form encoder is emitted only where something takes form encoding: an unused helper is a
+  // build failure in the emitted app, which builds with `noUnusedLocals`.
+  const toolLines =
+    toolNodes.length > 0
+      ? toolPrelude(toolTimeout(snapshot, plan.body), usesFormEncoding(snapshot, plan.body))
+      : '';
 
   const dbPrelude = !usesDb
     ? ''

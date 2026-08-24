@@ -995,8 +995,8 @@ function ToolSection({ nodeId }: { nodeId: string }) {
       {/* Said where the call is, because "where does the key go" is asked here and answered
           nowhere else. */}
       <p className="panel__hint">
-        Runs on the server. {tool.credential.name} is read there by name — it never reaches the
-        browser.
+        Runs on the server. {tool.credentials.map((entry) => entry.name).join(', ')} read there by
+        name — never in the browser.
       </p>
     </section>
   );

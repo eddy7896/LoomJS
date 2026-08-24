@@ -100,3 +100,57 @@ test('a request you write yourself asks for an address', async ({ page }) => {
   await expect(page.getByTestId('tool-url')).toBeVisible();
   await expect(page.getByTestId('tool-method')).toHaveValue('POST');
 });
+
+test('tools are grouped the way a person thinks about them', async ({ page }) => {
+  await page.getByTestId('rail-tools').click();
+
+  await expect(page.getByTestId('tool-family-ai')).toContainText('Models');
+  await expect(page.getByTestId('tool-family-email')).toContainText('Resend');
+  await expect(page.getByTestId('tool-family-payments')).toContainText('Stripe');
+  await expect(page.getByTestId('tool-family-messaging')).toContainText('Twilio');
+  await expect(page.getByTestId('tool-family-messaging')).toContainText('Slack');
+  await expect(page.getByTestId('tool-family-iot')).toContainText('Home Assistant');
+});
+
+test('a tool that needs two names asks for both', async ({ page }) => {
+  await watchEnv(page);
+  await page.getByTestId('rail-tools').click();
+  await page.getByTestId('tool-twilio-toggle').click();
+
+  // Twilio wants an account SID beside its token; asking for one would be asking for half.
+  await expect(page.getByTestId('tool-twilio-key')).toBeVisible();
+  await expect(page.getByTestId('tool-twilio-key-TWILIO_AUTH_TOKEN')).toBeVisible();
+
+  // And it will not attach until both are there.
+  await expect(page.getByTestId('tool-twilio-attach')).toBeDisabled();
+  await page.getByTestId('tool-twilio-key').fill('ACxxxx');
+  await page.getByTestId('tool-twilio-key-TWILIO_AUTH_TOKEN').fill('token');
+  await expect(page.getByTestId('tool-twilio-attach')).toBeEnabled();
+});
+
+test('a self-hosted device hub asks where it lives, in the clear', async ({ page }) => {
+  await watchEnv(page);
+  await page.getByTestId('rail-tools').click();
+  await page.getByTestId('tool-homeAssistant-toggle').click();
+
+  // An address is not a secret, and masking it would only make it hard to check.
+  await expect(page.getByTestId('tool-homeAssistant-key')).toHaveAttribute('type', 'text');
+});
+
+test('a tool call reads as its own kind of work in the node viewer', async ({ page }) => {
+  await watchEnv(page);
+
+  await page.getByTestId('rail-tools').click();
+  await page.getByTestId('tool-resend-toggle').click();
+  await page.getByTestId('tool-resend-key').fill('re_test_key');
+  await page.getByTestId('tool-resend-attach').click();
+  await page.getByTestId('tool-resend-add-send').click();
+
+  await page.getByTestId('rail-nodes').click();
+
+  // Inside the route, coloured as a tool rather than looking like a computation.
+  const step = page.getByTestId('nstep-tool');
+  await expect(step).toHaveCount(1);
+  await expect(step).toContainText('Resend: Send email');
+  await expect(step).toContainText('send');
+});
