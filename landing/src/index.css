@@ -1,8 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ===================================================================
-   loomJS Landing Page — Design Tokens (Tailwind v4 Theme)
+   loomJS Landing — Design Tokens (Tailwind v4 Theme)
+   Values are the authoritative brand tokens (docs/DESIGN.md).
    =================================================================== */
 
 @theme {
@@ -16,6 +17,13 @@
   --color-panel: #FFFFFF;
   --color-hair: #E8EAEE;
   --color-hair-2: #DFE2E7;
+
+  /* ── The ink fold: one dark drafting table, mid-page ── */
+  --color-deep: #16181B;
+  --color-deep-raise: #1F2226;
+  --color-deep-line: #2C3036;
+  --color-deep-ink: #E7E9EC;
+  --color-deep-ink-2: #9AA1AA;
 
   /* ── Brand ── */
   --color-brand: #EC3013;
@@ -45,528 +53,1552 @@
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
 
   /* ── Radius ── */
-  --radius-sm: 8px;
-  --radius-md: 10px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
   --radius-lg: 14px;
   --radius-xl: 16px;
   --radius-2xl: 20px;
 }
 
+:root {
+  /* The only easing on this page. Ease-out quint, no bounce. */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --rail-h: 56px;
+  --gutter: clamp(20px, 5vw, 64px);
+
+  /* Pointer field. usePointerField writes these; the defaults below are what a
+     touch device or a reduced-motion visitor sees, and they read as intentional. */
+  --mx: 50vw;
+  --my: 38vh;
+  --px: 0;
+  --py: 0;
+  --drift: 18px;
+}
+
 /* ===================================================================
-   Base
+   Base — the page is one continuous canvas
    =================================================================== */
 html {
-  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--rail-h) + 16px);
 }
 
 body {
   font-family: var(--font-body);
   color: var(--color-ink);
   background-color: var(--color-canvas);
+  overflow-x: hidden;
 }
 
 /* ===================================================================
-   Dot Grid Background
+   The canvas ground — pointer-reactive, composited, behind everything
    =================================================================== */
-.dot-grid {
+.canvas-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.canvas-field__grid {
+  position: absolute;
+  inset: calc(var(--drift) * -2);
   background-image: radial-gradient(var(--color-hair-2) 1.1px, transparent 1.1px);
-  background-size: 22px 22px;
+  background-size: 24px 24px;
+  transform: translate3d(calc(var(--px) * var(--drift) * -1), calc(var(--py) * var(--drift) * -1), 0);
+  will-change: transform;
 }
 
-/* ===================================================================
-   Floating Nav Pill
-   =================================================================== */
-.floating-nav {
-  position: fixed;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  background: rgba(27, 29, 33, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 28px;
-  padding: 6px 8px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 8px 32px rgba(0, 0, 0, 0.28),
-    0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.floating-nav-link {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.55);
-  padding: 8px 16px;
-  border-radius: 22px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  position: relative;
-}
-
-.floating-nav-link:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.floating-nav-link.active {
-  color: #fff;
-  background: var(--color-brand);
-}
-
-.floating-nav-cta {
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 12.5px;
-  color: #fff;
-  background: var(--color-brand);
-  padding: 8px 18px;
-  border-radius: 22px;
-  margin-left: 4px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-}
-
-.floating-nav-cta:hover {
-  background: var(--color-brand-hover);
-  transform: scale(1.04);
-}
-
-/* ===================================================================
-   Top Navbar (minimal)
-   =================================================================== */
-.top-nav {
-  position: fixed;
+/* Light falling on the table. Washes the grid out where the cursor is, rather
+   than adding a coloured glow on top of it. */
+.canvas-field__light {
+  position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  z-index: 90;
-  padding: 16px 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 560px;
+  height: 560px;
+  margin: -280px 0 0 -280px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(255 255 255 / 42%) 0%,
+    rgb(255 255 255 / 20%) 42%,
+    rgb(255 255 255 / 0%) 70%
+  );
+  transform: translate3d(var(--mx), var(--my), 0);
+  will-change: transform;
 }
 
-.top-nav.scrolled {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+::selection {
+  background: var(--color-brand);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.shell {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* A "sheet" is a white surface laid on the canvas. Artboard elevation. */
+.sheet {
+  background: var(--color-panel);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 12px 32px rgb(20 22 26 / 8%);
+}
+
+/* ===================================================================
+   Margin annotation — the page's one recurring typographic device.
+   Deliberate brand grammar, placed differently in every section.
+   =================================================================== */
+.note {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--color-ink-2);
+  line-height: 1.5;
+}
+
+.note--on-deep {
+  color: var(--color-deep-ink-2);
+}
+
+.note-rule {
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: var(--color-hair-2);
+  margin-bottom: 10px;
+}
+
+.note-rule--on-deep {
+  background: var(--color-deep-line);
+}
+
+/* ===================================================================
+   Type scale — 1.3x+ between steps, fluid at the top
+   =================================================================== */
+.t-hero {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: clamp(42px, 6.1vw, 86px);
+  line-height: 0.96;
+  letter-spacing: -0.042em;
+  text-wrap: balance;
+}
+
+.t-section {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: clamp(30px, 4.2vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.032em;
+}
+
+.t-lead {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: clamp(16.5px, 1.35vw, 20px);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.t-body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 68ch;
+}
+
+.t-sub {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+/* ===================================================================
+   Top rail — part of the canvas, not a floating pill
+   =================================================================== */
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  height: var(--rail-h);
+  display: flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--color-canvas) 88%, transparent);
+  border-bottom: 1px solid transparent;
+  transition: border-color 200ms var(--ease), background 200ms var(--ease);
+}
+
+.rail.is-stuck {
+  background: color-mix(in srgb, var(--color-canvas) 96%, transparent);
+  border-bottom-color: var(--color-hair);
+}
+
+.rail__inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.rail__links {
+  display: none;
+  gap: 4px;
+  margin-left: auto;
+}
+
+@media (min-width: 880px) {
+  .rail__links { display: flex; }
+}
+
+.rail__link {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: color 160ms var(--ease), background 160ms var(--ease);
+}
+
+.rail__link:hover { color: var(--color-ink); background: var(--color-panel); }
+.rail__link[aria-current='true'] { color: var(--color-ink); }
+
+.rail__cta {
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  background: var(--color-brand);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  transition: background 160ms var(--ease);
+}
+
+@media (min-width: 880px) { .rail__cta { margin-left: 8px; } }
+.rail__cta:hover { background: var(--color-brand-hover); }
+
+/* ===================================================================
+   Reveal — one orchestration, driven by IntersectionObserver
+   =================================================================== */
+.rv {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 700ms var(--ease) var(--rv-delay, 0ms),
+    transform 700ms var(--ease) var(--rv-delay, 0ms);
+}
+
+.is-in .rv,
+.rv.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Wires draw themselves. pathLength="1" normalises every path. */
+.wire {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1100ms var(--ease) var(--rv-delay, 0ms);
+}
+
+.is-in .wire { stroke-dashoffset: 0; }
+
+/* ===================================================================
+   Node card — the product's signature object, used as page furniture
+   =================================================================== */
+.node {
+  background: var(--color-panel);
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.node--deep {
+  background: var(--color-deep-raise);
+  border-color: var(--color-deep-line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.node__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--color-hair);
-  padding: 12px 40px;
+}
+
+.node--deep .node__head { border-bottom-color: var(--color-deep-line); }
+
+.node__title {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node--deep .node__title { color: var(--color-deep-ink); }
+
+.node__kind {
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.node__body {
+  padding: 9px 12px;
+  background: var(--color-canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.node--deep .node__body { background: color-mix(in srgb, var(--color-deep) 70%, var(--color-deep-raise)); }
+
+.port {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.port__name { color: var(--color-ink-2); }
+.node--deep .port__name { color: var(--color-deep-ink-2); }
+
+.port__type {
+  color: var(--color-ink-2);
+  background: var(--color-panel);
+  border: 1px solid var(--color-hair);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.node--deep .port__type {
+  color: var(--color-deep-ink-2);
+  background: var(--color-deep);
+  border-color: var(--color-deep-line);
 }
 
 /* ===================================================================
    Hero
    =================================================================== */
-.hero-section {
-  min-height: 100vh;
+.hero {
+  padding-top: clamp(36px, 6vh, 76px);
+  padding-bottom: clamp(56px, 9vh, 112px);
+}
+
+.hero__grid {
+  display: grid;
+  gap: clamp(44px, 6vw, 76px);
+}
+
+.hero__claim {
+  max-width: 22ch;
+}
+
+.hero__lead {
+  max-width: 58ch;
+}
+
+.hero__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  position: relative;
-  overflow: hidden;
-  padding-top: 80px;
+  gap: 12px;
 }
 
-.hero-glow {
-  position: absolute;
-  width: 700px;
-  height: 700px;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.hero-glow-1 {
-  background: var(--color-node-ui);
-  top: -200px;
-  right: -100px;
-}
-
-.hero-glow-2 {
-  background: var(--color-brand);
-  bottom: -300px;
-  left: -200px;
-  opacity: 0.08;
-}
-
-.hero-badge-pill {
+.btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--color-panel);
-  border: 1px solid var(--color-hair);
-  border-radius: 100px;
-  padding: 6px 16px 6px 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-}
-
-.hero-badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
   background: var(--color-brand);
-  animation: pulse-glow 2.5s infinite;
+  border: 1px solid var(--color-brand);
+  padding: 12px 22px;
+  border-radius: var(--radius-md);
+  transition: background 160ms var(--ease), border-color 160ms var(--ease);
 }
 
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(236, 48, 19, 0.4); }
-  50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(236, 48, 19, 0); }
-}
+.btn-primary:hover { background: var(--color-brand-hover); border-color: var(--color-brand-hover); }
 
-.hero-input-group {
-  display: flex;
-  gap: 0;
-  background: var(--color-panel);
-  border: 1px solid var(--color-hair-2);
-  border-radius: 14px;
-  padding: 5px;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.hero-input-group:focus-within {
-  border-color: var(--color-brand);
-  box-shadow:
-    0 0 0 3px var(--color-brand-tint),
-    0 4px 16px rgba(0, 0, 0, 0.04);
-}
-
-.hero-email {
-  flex: 1;
-  min-width: 0;
-  padding: 11px 16px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
+.btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 15px;
   color: var(--color-ink);
   background: transparent;
-  border: none;
-  outline: none;
-}
-
-.hero-email::placeholder {
-  color: var(--color-ink-3);
-}
-
-.hero-submit-btn {
-  flex-shrink: 0;
-  padding: 11px 22px;
-  background: var(--color-brand);
-  color: #fff;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 13.5px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-}
-
-.hero-submit-btn:hover {
-  background: var(--color-brand-hover);
-  transform: scale(1.03);
-}
-
-/* ── Hero Canvas Visual ── */
-.hero-canvas-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1.15;
-  border-radius: var(--radius-2xl);
-  border: 1px solid var(--color-hair);
-  background: var(--color-canvas);
-  overflow: hidden;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 12px 40px rgba(0, 0, 0, 0.06);
-}
-
-.hero-node-pill {
-  position: absolute;
-  background: var(--color-panel);
   border: 1px solid var(--color-hair-2);
+  padding: 12px 18px;
   border-radius: var(--radius-md);
-  padding: 9px 14px;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 12px;
-  color: var(--color-ink);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease);
 }
 
-.hero-node-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-@keyframes wire-draw {
-  to { stroke-dashoffset: 0; }
-}
+.btn-quiet:hover { border-color: var(--color-ink-3); background: var(--color-panel); }
 
 /* ===================================================================
-   Node Cards (showcase)
+   The hero image: an operable miniature of the studio
    =================================================================== */
-.ncard {
+.studio {
   background: var(--color-panel);
   border: 1px solid var(--color-hair);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 8px 20px rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  transition: box-shadow 0.3s, transform 0.3s;
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 24px 60px rgb(20 22 26 / 10%);
 }
 
-.ncard:hover {
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 20px 48px rgba(0, 0, 0, 0.09);
-  transform: translateY(-4px);
+/* Every control in the window is a real button, so reset first, style after. */
+.studio__mode,
+.studio__btn,
+.studio__row,
+.studio__step {
+  font: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  color: inherit;
 }
 
-.ncard-header {
+.studio__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 11px 13px;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 12px;
+  gap: 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--color-hair);
 }
 
-.ncard-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.ncard-tag {
-  margin-left: auto;
+.studio__name {
   font-family: var(--font-mono);
-  font-weight: 800;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  padding: 3px 7px;
-  border-radius: 6px;
-}
-
-.ncard-body {
-  padding: 12px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ncard-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.ncard-key {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10.5px;
-  color: var(--color-ink-3);
-}
-
-.ncard-val {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--color-ink);
 }
 
-.ncard-field {
-  padding: 7px 10px;
-  border: 1px solid var(--color-hair-2);
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--color-ink-3);
+.studio__modes {
+  display: flex;
+  gap: 3px;
   background: var(--color-canvas);
-}
-
-.ncard-btn {
-  padding: 8px 11px;
-  border-radius: 8px;
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 11px;
-  color: #fff;
-  text-align: center;
-}
-
-/* ===================================================================
-   Code Block (features)
-   =================================================================== */
-.code-block {
-  background: var(--color-ink);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
-}
-
-.code-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #33373d;
-}
-
-.code-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #4B5058;
-}
-
-.code-filename {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  color: #868D97;
-  margin-left: 6px;
-}
-
-.code-content {
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1.7;
-  color: #C4C9D1;
-  margin: 0;
-  overflow-x: auto;
-}
-
-.ck { color: #7C5CFF; }
-.cf { color: #2F7DE1; }
-.cs { color: #12A07A; }
-.ct { color: #EC3013; }
-.ca { color: #D98A12; }
-
-/* ===================================================================
-   Wire Diagram
-   =================================================================== */
-.wire-pane {
-  position: relative;
   border: 1px solid var(--color-hair);
-  border-radius: var(--radius-xl);
-  height: 160px;
-  overflow: hidden;
-  background-color: var(--color-canvas);
+  border-radius: 9px;
+  padding: 3px;
+  margin-left: 8px;
 }
 
-.wire-pill {
-  position: absolute;
+.studio__mode {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: var(--color-ink-2);
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+
+.studio__mode[aria-pressed="true"] {
   background: var(--color-panel);
-  border: 1px solid var(--color-hair-2);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 10%);
+}
+
+.studio__acts { margin-left: auto; }
+
+.studio__btn {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 11px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  white-space: nowrap;
+  font-size: 12px;
+  padding: 7px 15px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hair);
+  color: var(--color-ink);
+  transition: border-color 160ms var(--ease), background 160ms var(--ease);
 }
 
-.wire-pill-dot {
+.studio__btn:hover { border-color: var(--color-ink-3); }
+
+/* Ink, not brand: the page spends its one red on Request access. */
+.studio__btn--go {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: #fff;
+}
+
+.studio__btn--go:hover { background: #000; border-color: #000; }
+
+.studio__body {
+  display: grid;
+  grid-template-columns: 154px minmax(0, 1fr) 176px;
+}
+
+@media (max-width: 760px) {
+  .studio__body { grid-template-columns: minmax(0, 1fr); }
+  .studio__rail { display: none; }
+}
+
+.studio__rail {
+  padding: 16px 0;
+  border-right: 1px solid var(--color-hair);
+}
+
+.studio__rail--right {
+  border-right: 0;
+  border-left: 1px solid var(--color-hair);
+}
+
+.studio__railtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+  padding: 0 16px 12px;
+}
+
+.studio__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  color: var(--color-ink-2);
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+
+.studio__row:hover { background: color-mix(in srgb, var(--color-canvas) 70%, transparent); }
+
+.studio__row[aria-pressed="true"] {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.studio__row svg { flex: none; }
+
+.studio__row .dot {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  border-radius: 2px;
+  flex: none;
 }
 
-/* ===================================================================
-   Mode Toggle
-   =================================================================== */
-.mode-toggle {
-  display: inline-flex;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hair-2);
-  border-radius: 12px;
-  padding: 4px;
+.studio__prop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
+.studio__prop b { font-weight: 500; color: var(--color-ink); }
+
+.studio__prop--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.studio__stepper {
+  display: flex;
+  align-items: center;
   gap: 3px;
 }
 
-.mode-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 18px;
-  border-radius: 9px;
+.studio__step {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-hair);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--color-ink);
+  transition: border-color 160ms var(--ease);
+}
+
+.studio__step:hover:not(:disabled) { border-color: var(--color-ink-3); }
+.studio__step:disabled { opacity: 0.35; cursor: default; }
+
+.studio__num {
+  min-width: 24px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink);
+}
+
+.studio__input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink);
+  background: var(--color-panel);
+  border: 1px solid var(--color-hair);
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+
+.studio__input:focus { outline: none; border-color: var(--color-ink); }
+
+.studio__stage {
+  background: var(--color-canvas);
+  background-image: radial-gradient(var(--color-hair-2) 1px, transparent 1px);
+  background-size: 22px 22px;
+  display: grid;
+  place-items: center;
+  padding: 34px 20px;
+}
+
+/* Fixed-size scene: the overlay SVG maps 1:1 to these coordinates, so every
+   wire meets the thing it connects to at any viewport width. */
+.studio__frame {
+  --scene: 1;
+  position: relative;
+  width: calc(520px * var(--scene));
+  height: calc(340px * var(--scene));
+}
+
+/* The scene is a fixed 520x340 coordinate space so the wires stay exact. When
+   the stage cannot hold it, scale the whole space rather than clipping it. */
+.studio__scene {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 520px;
+  height: 340px;
+  transform: scale(var(--scene));
+  transform-origin: top left;
+}
+
+@media (max-width: 999px) { .studio__frame { --scene: 0.84; } }
+@media (max-width: 879px) { .studio__frame { --scene: 0.68; } }
+/* Below 760 the rails are gone, so the full-size scene fits again. */
+@media (max-width: 759px) { .studio__frame { --scene: 1; } }
+
+.studio__wire {
+  position: absolute;
+  inset: 0;
+  width: 520px;
+  height: 340px;
+  pointer-events: none;
+}
+
+.studio__board {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 260px;
+  height: 200px;
+  background: var(--color-panel);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 14px 32px rgb(20 22 26 / 10%);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.studio__board[data-frame]::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.studio__handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--color-panel);
+  border: 1.5px solid var(--color-ink);
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.studio__label {
+  position: absolute;
+  left: 0;
+  top: -22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
+.studio__chip {
+  position: absolute;
+  left: 252px;
+  top: 226px;
+  width: 250px;
+}
+
+/* Child selection: a thin ring, gapped so it reads on the ink-filled button. */
+.sel-ring {
+  box-shadow:
+    0 0 0 1.5px var(--color-panel),
+    0 0 0 3px var(--color-ink);
+}
+
+.mini-field {
+  border: 1px solid var(--color-hair);
+  padding: 9px 11px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+
+.mini-btn {
+  padding: 11px;
+  text-align: center;
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 13px;
-  color: var(--color-ink-3);
-  transition: all 0.25s;
+  font-size: 12.5px;
+  color: #fff;
+  background: var(--color-ink);
 }
 
-.mode-tab-active {
+/* Node cards in the graph are selectable, so they are buttons. */
+.studio__gnode {
+  position: absolute;
+  display: block;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+
+.studio__gnode .node__head,
+.studio__gnode .node__body { display: flex; }
+.studio__gnode .node__body { flex-direction: column; gap: 5px; }
+
+.studio__gnode[aria-pressed="true"] {
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ink) 26%, transparent);
+}
+
+/* Compile output, in the same footprint so the window never jumps height. */
+.studio__code {
+  position: absolute;
+  inset: 0;
   background: var(--color-panel);
-  color: var(--color-ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--color-hair);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 14px 32px rgb(20 22 26 / 10%);
 }
 
-/* ===================================================================
-   Waitlist CTA
-   =================================================================== */
-.wl-input {
-  padding: 12px 14px;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hair-2);
-  border-radius: var(--radius-sm);
+.studio__codebar {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-hair);
   font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-ink);
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  width: 100%;
+  font-size: 11px;
+  color: var(--color-ink-2);
 }
 
-.wl-input::placeholder {
-  color: var(--color-ink-3);
+.studio__codebody {
+  margin: 0;
+  padding: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.85;
+  overflow: auto;
+  color: var(--color-ink-2);
 }
 
-.wl-input:focus {
-  border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px var(--color-brand-tint);
+.studio__codeline {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 12px;
+  padding-inline: 14px;
+  white-space: pre;
+}
+
+.studio__codeline .n { color: var(--color-ink-3); text-align: right; }
+.studio__codeline.is-traced { background: var(--color-node-ui-fill); }
+.studio__codeline.is-traced .n { color: var(--color-node-ui); }
+
+.studio__hint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+.studio__hint::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-node-api);
+  flex: none;
+}
+
+@media (max-width: 620px) {
+  .studio__frame { width: 100%; height: auto; }
+  .studio__scene { position: static; width: 100%; height: auto; transform: none; }
+  .studio__wire,
+  .studio__chip { display: none; }
+  .studio__board { position: static; width: 100%; height: auto; }
 }
 
 /* ===================================================================
-   Reduced Motion
+   Section frame
+   =================================================================== */
+.section {
+  padding-block: clamp(72px, 11vw, 148px);
+}
+
+.section--tight { padding-block: clamp(56px, 8vw, 104px); }
+
+.section__head {
+  display: grid;
+  gap: clamp(16px, 3vw, 40px);
+  margin-bottom: clamp(36px, 5vw, 64px);
+}
+
+@media (min-width: 900px) {
+  .section__head--split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr);
+    align-items: end;
+  }
+}
+
+/* ===================================================================
+   Two modes — one seam, the mirrored component on both sides of it
+   =================================================================== */
+.seam {
+  --pane-pad: clamp(22px, 2.6vw, 34px);
+  --stage-h: 212px;
+  --label-block: 40px;
+  display: grid;
+  position: relative;
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-xl);
+  background: var(--color-panel);
+}
+
+@media (min-width: 940px) {
+  .seam { grid-template-columns: 1fr 1fr; }
+}
+
+.seam__pane {
+  padding: var(--pane-pad);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.seam__pane + .seam__pane {
+  border-top: 1px solid var(--color-hair);
+}
+
+@media (min-width: 940px) {
+  .seam__pane + .seam__pane {
+    border-top: 0;
+    border-left: 1px solid var(--color-hair);
+  }
+}
+
+.seam__pane--design {
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.seam__pane--nodes {
+  background: var(--color-canvas);
+  background-image: radial-gradient(var(--color-hair-2) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+@media (min-width: 940px) {
+  .seam__pane--design { border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+  .seam__pane--nodes { border-radius: 0 var(--radius-xl) var(--radius-xl) 0; }
+}
+
+.seam__label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 18px;
+  margin-bottom: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
+.seam__glyph {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--color-ink);
+}
+
+/* The stage holds the mirrored component. Both stages share a height and a
+   start offset, so their centre lines agree and the mirror wire is straight. */
+.seam__stage {
+  height: var(--stage-h);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.seam__pane--design .seam__stage { justify-content: space-between; padding-right: 22px; }
+.seam__pane--nodes .seam__stage { justify-content: flex-start; padding-left: 22px; }
+
+@media (max-width: 939px) {
+  .seam__stage { height: auto; padding: 0 !important; justify-content: flex-start !important; }
+}
+
+/* The mirror: drawn only in the gutter between the two stages, so both ends
+   meet real edges instead of floating. */
+.seam__mirror {
+  display: none;
+}
+
+@media (min-width: 940px) {
+  .seam__mirror {
+    display: block;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(2 * var(--pane-pad) + 44px);
+    top: calc(var(--pane-pad) + var(--label-block) + (var(--stage-h) / 2) - 26px);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .seam__mirror svg { display: block; width: 100%; height: 20px; }
+
+  .seam__mirror span {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink-2);
+    margin-bottom: 6px;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* A port pin: what a wire actually attaches to. */
+.pin {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 2px solid var(--color-node-ui);
+  background: var(--color-panel);
+  flex: none;
+}
+
+.seam__lower {
+  margin-top: clamp(24px, 3vw, 38px);
+  padding-top: clamp(20px, 2.6vw, 28px);
+  border-top: 1px solid var(--color-hair);
+}
+
+.seam__pane--nodes .seam__lower { border-top-color: var(--color-hair-2); }
+
+.seam__note {
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+/* Design mode furniture */
+.palette {
+  width: 116px;
+  flex: none;
+  border: 1px solid var(--color-hair);
+  border-radius: 10px;
+  background: var(--color-panel);
+  overflow: hidden;
+}
+
+@media (max-width: 1099px) {
+  .palette { display: none; }
+}
+
+.palette__title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-ink-2);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-hair);
+  background: var(--color-canvas);
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+.palette__item + .palette__item { border-top: 1px solid var(--color-hair); }
+.palette__item svg { flex: none; color: var(--color-ink-2); }
+
+.flowpair {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.flowpair svg { flex: none; }
+
+.miniboard {
+  background: var(--color-panel);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 8px 20px rgb(20 22 26 / 7%);
+  padding: 11px;
+  flex: none;
+}
+
+.miniboard__name {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.miniboard__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-ink-2);
+  padding: 3px 0;
+  border-top: 1px solid var(--color-hair);
+}
+
+/* Nodes mode furniture */
+.nodecol {
+  max-width: 280px;
+}
+
+.grammar {
+  margin: 0;
+  border-top: 1px solid var(--color-hair-2);
+}
+
+.grammar__row {
+  display: grid;
+  gap: 2px 18px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-hair-2);
+  align-items: baseline;
+}
+
+@media (min-width: 520px) {
+  .grammar__row { grid-template-columns: 96px minmax(0, 1fr); }
+}
+
+.grammar dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.grammar dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
+}
+
+/* ===================================================================
+   The ink fold — the language specimen
+   =================================================================== */
+.deep {
+  background: var(--color-deep);
+  color: var(--color-deep-ink);
+  position: relative;
+  isolation: isolate;
+}
+
+.deep::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--drift) * -2);
+  background-image: radial-gradient(var(--color-deep-line) 1.1px, transparent 1.1px);
+  background-size: 24px 24px;
+  opacity: 0.85;
+  z-index: -1;
+  transform: translate3d(calc(var(--px) * var(--drift) * -1), calc(var(--py) * var(--drift) * -1), 0);
+  will-change: transform;
+}
+
+.deep .t-section { color: var(--color-deep-ink); }
+.deep .t-lead { color: var(--color-deep-ink-2); }
+
+.specimen {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+/* Below the pipeline width the nodes simply tile; the legend still carries the
+   category names, so nothing depends on the wires being visible. */
+.pipe,
+.pipe__link,
+.pipe__drop {
+  display: none;
+}
+
+@media (min-width: 1080px) {
+  .specimen { display: none; }
+
+  .pipe {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr) 54px minmax(0, 1fr) 54px minmax(0, 1fr);
+    align-items: start;
+    column-gap: 0;
+  }
+
+  .pipe__link {
+    display: block;
+    width: 100%;
+    height: 44px;
+    align-self: center;
+  }
+
+  .pipe__drop {
+    display: block;
+    width: 100%;
+    height: 46px;
+    grid-column: 5;
+  }
+
+  .pipe__foot { grid-column: 5; }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-top: clamp(32px, 5vw, 56px);
+  padding-top: 22px;
+  border-top: 1px solid var(--color-deep-line);
+}
+
+.legend__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-deep-ink-2);
+}
+
+.legend__swatch {
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.legend__name {
+  color: var(--color-deep-ink);
+  font-weight: 600;
+}
+
+/* ===================================================================
+   Compile — node to code lineage
+   =================================================================== */
+.lineage {
+  display: grid;
+  gap: clamp(20px, 3vw, 28px);
+  align-items: center;
+}
+
+@media (min-width: 960px) {
+  .lineage { grid-template-columns: minmax(0, 0.8fr) 84px minmax(0, 1.2fr); }
+}
+
+.lineage__link {
+  display: none;
+  width: 100%;
+  height: 60px;
+}
+
+@media (min-width: 960px) { .lineage__link { display: block; } }
+
+.code {
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-panel);
+  box-shadow: 0 1px 2px rgb(20 22 26 / 8%), 0 12px 32px rgb(20 22 26 / 8%);
+}
+
+.code__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--color-hair);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+.code__owner {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+.code__body {
+  margin: 0;
+  padding: 14px 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.75;
+  overflow-x: auto;
+  color: var(--color-ink-2);
+}
+
+.code__line {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+  padding-inline: 14px;
+  white-space: pre;
+}
+
+.code__no {
+  color: var(--color-ink-2);
+  text-align: right;
+  user-select: none;
+}
+
+/* The one line the highlighted node emitted. Lineage, not syntax colour. */
+.code__line--traced {
+  background: var(--color-node-ui-fill);
+}
+
+.code__line--traced .code__no { color: var(--color-node-ui); }
+
+.kw { color: var(--color-ink); font-weight: 600; }
+.str { color: var(--color-ink-2); }
+
+.filetree {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 2;
+  color: var(--color-ink-2);
+}
+
+.filetree__row { display: flex; gap: 10px; }
+
+/* ===================================================================
+   Ownership diagram — the BYO-backend wall
+   =================================================================== */
+.byo {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--color-hair);
+  border-radius: var(--radius-xl);
+  background: var(--color-panel);
+  overflow: hidden;
+}
+
+@media (min-width: 860px) {
+  .byo { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+}
+
+.byo__side {
+  padding: clamp(22px, 3.4vw, 38px);
+}
+
+.byo__side--yours {
+  background: var(--color-canvas);
+  border-top: 1px solid var(--color-hair);
+}
+
+@media (min-width: 860px) {
+  .byo__side--yours {
+    border-top: 0;
+    /* The wall. A full 1px border, never a stripe. */
+    border-left: 1px solid var(--color-ink);
+  }
+}
+
+.byo__owner {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+  margin-bottom: 14px;
+}
+
+.byo__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.byo__item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-hair);
+  font-size: 14px;
+}
+
+.byo__item:last-child { border-bottom: 0; padding-bottom: 0; }
+.byo__item b { font-weight: 700; font-size: 14.5px; }
+.byo__item span { color: var(--color-ink-2); font-family: var(--font-mono); font-size: 11.5px; margin-left: auto; text-align: right; }
+
+/* ===================================================================
+   Spec table — a datasheet, not six icon cards
+   =================================================================== */
+.spec {
+  border-top: 1px solid var(--color-ink);
+}
+
+.spec__row {
+  display: grid;
+  gap: 4px 24px;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--color-hair);
+  align-items: baseline;
+}
+
+@media (min-width: 760px) {
+  .spec__row { grid-template-columns: 190px minmax(0, 1fr) 210px; }
+}
+
+.spec__key {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+.spec__val {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: -0.01em;
+}
+
+.spec__note {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+@media (min-width: 760px) { .spec__note { text-align: right; } }
+
+/* ===================================================================
+   Honest columns — what V1 is, what it is not
+   =================================================================== */
+.honest {
+  display: grid;
+  gap: clamp(28px, 5vw, 56px);
+}
+
+@media (min-width: 840px) {
+  .honest { grid-template-columns: 1fr 1fr; }
+}
+
+.honest__title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-ink);
+}
+
+.honest__list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.honest__row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.honest__glyph {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: none;
+  width: 14px;
+}
+
+.honest--in .honest__glyph { color: var(--color-node-api); }
+.honest--out .honest__glyph { color: var(--color-ink-3); }
+.honest--out .honest__row { color: var(--color-ink-2); }
+
+/* ===================================================================
+   Access — one red action on open paper
+   =================================================================== */
+.access__form {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+
+@media (min-width: 620px) {
+  .access__form { grid-template-columns: minmax(0, 1fr) 150px auto; }
+}
+
+.field {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--color-ink);
+  background: var(--color-panel);
+  border: 1px solid var(--color-hair-2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  width: 100%;
+  transition: border-color 160ms var(--ease);
+}
+
+.field::placeholder { color: var(--color-ink-2); }
+.field:focus { border-color: var(--color-ink); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ink) 22%, transparent); }
+
+/* ===================================================================
+   Footer
+   =================================================================== */
+.foot {
+  border-top: 1px solid var(--color-hair);
+  padding-block: clamp(40px, 6vw, 64px) 28px;
+  background: color-mix(in srgb, var(--color-panel) 60%, transparent);
+}
+
+.foot__grid {
+  display: grid;
+  gap: clamp(28px, 4vw, 48px);
+}
+
+@media (min-width: 780px) {
+  .foot__grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.foot__col-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-ink-2);
+  margin-bottom: 12px;
+}
+
+.foot__link {
+  display: block;
+  font-size: 14px;
+  color: var(--color-ink-2);
+  padding-block: 4px;
+  width: fit-content;
+  transition: color 160ms var(--ease);
+}
+
+.foot__link:hover { color: var(--color-ink); }
+
+.foot__base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: clamp(28px, 4vw, 44px);
+  padding-top: 20px;
+  border-top: 1px solid var(--color-hair);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}
+
+/* ===================================================================
+   Sub-768 guard is graceful, not broken (guardrail 24 in spirit)
+   =================================================================== */
+@media (max-width: 520px) {
+  .artboard { min-height: 260px; }
+}
+
+/* ===================================================================
+   Reduced motion — everything above resolves to its end state
    =================================================================== */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
+  .canvas-field__grid,
+  .canvas-field__light,
+  .deep::before {
+    transform: none;
+    will-change: auto;
+  }
+
+  .rv {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .wire {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

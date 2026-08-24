@@ -1,25 +1,30 @@
-import { Navbar } from './components/Navbar'
+import { CanvasField } from './components/CanvasField'
+import { usePointerField } from './hooks/usePointerField'
+import { Rail } from './components/Rail'
 import { Hero } from './components/Hero'
-import { HowItWorks } from './components/HowItWorks'
-import { Features } from './components/Features'
-import { NodeShowcase } from './components/NodeShowcase'
-import { TechStack } from './components/TechStack'
-import { ForDesigners } from './components/ForDesigners'
-import { WaitlistCTA } from './components/WaitlistCTA'
+import { TwoModes } from './components/TwoModes'
+import { Language } from './components/Language'
+import { Compile } from './components/Compile'
+import { Ownership } from './components/Ownership'
+import { Scope } from './components/Scope'
+import { Access } from './components/Access'
 import { Footer } from './components/Footer'
 
 function App() {
+  usePointerField()
+
   return (
     <>
-      <Navbar />
+      <CanvasField />
+      <Rail />
       <main>
         <Hero />
-        <HowItWorks />
-        <Features />
-        <NodeShowcase />
-        <TechStack />
-        <ForDesigners />
-        <WaitlistCTA />
+        <TwoModes />
+        <Language />
+        <Compile />
+        <Ownership />
+        <Scope />
+        <Access />
       </main>
       <Footer />
     </>
