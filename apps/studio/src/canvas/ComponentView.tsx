@@ -1,6 +1,6 @@
 import { useCallback, type CSSProperties, type PointerEvent } from 'react';
 import { actionsOf, type Component, type Id, type Snapshot } from '@loom/ir';
-import { componentStyle, layoutSizeStyle, styleToCss } from '@loom/compiler';
+import { componentStyle, layoutSizeStyle, resolveResponsive, styleToCss } from '@loom/compiler';
 import { variantClassName, iconPath } from '@loom/components';
 import { extendSelection } from '../state/store';
 import { ChartPreview } from './ChartPreview';
@@ -25,6 +25,14 @@ interface Props {
   hidden?: ReadonlySet<Id>;
   /** True when the parent holds its children where they were put rather than arranging them. */
   placed?: boolean;
+  /**
+   * The width of the screen being drawn (L3).
+   *
+   * The emitted app gets a media query and lets the browser decide. The canvas cannot: an artboard
+   * has a width of its own, and the browser window's has nothing to do with the phone-sized screen
+   * a designer is looking at. So the canvas resolves the same overrides against the artboard.
+   */
+  screenWidth: number;
 }
 
 function booleanProp(component: Component, key: string): boolean {
@@ -61,13 +69,17 @@ export function ComponentView({
   alsoSelected,
   hidden,
   placed,
+  screenWidth,
 }: Props) {
   const attach = useCallback(
     (node: HTMLElement | null) => registerNode(id, node),
     [id, registerNode],
   );
-  const component = snapshot.components[id];
-  if (!component) return null;
+  const stored = snapshot.components[id];
+  if (!stored) return null;
+  // Everything below styles the *resolved* component, so a phone artboard shows the phone layout
+  // rather than the desktop one with a note about it.
+  const component = resolveResponsive(stored, screenWidth);
   // Hidden while designing (S2): editor-only, and gone from the canvas rather than dimmed —
   // "hide" that still draws the thing is not hiding. The emitted app is untouched; the tree row
   // stays, so it can always be brought back.
@@ -126,11 +138,7 @@ export function ComponentView({
 
   if (component.type === 'Text') {
     return (
-      <span
-        {...shared}
-        ref={attach}
-        style={{ cursor: 'default', ...leafStyle }}
-      >
+      <span {...shared} ref={attach} style={{ cursor: 'default', ...leafStyle }}>
         {textContent(component, 'content')}
       </span>
     );
@@ -239,13 +247,7 @@ export function ComponentView({
       .map((option) => option.trim())
       .filter(Boolean);
     return (
-      <select
-        {...shared}
-        ref={attach}
-        value={options[0] ?? ''}
-        disabled
-        style={leafStyle}
-      >
+      <select {...shared} ref={attach} value={options[0] ?? ''} disabled style={leafStyle}>
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -684,7 +686,11 @@ export function ComponentView({
     const [template, ...ignored] = children;
 
     return (
-      <div {...shared} ref={attach} style={{ ...style, minHeight: children.length ? undefined : 48 }}>
+      <div
+        {...shared}
+        ref={attach}
+        style={{ ...style, minHeight: children.length ? undefined : 48 }}
+      >
         {template ? (
           <ComponentView
             placed={component.layout?.mode === 'free'}
@@ -697,6 +703,7 @@ export function ComponentView({
             onPointerDown={onPointerDown}
             draggingId={draggingId}
             alsoSelected={alsoSelected}
+            screenWidth={screenWidth}
           />
         ) : (
           <span className="canvas-placeholder">
@@ -721,6 +728,7 @@ export function ComponentView({
                 onPointerDown={onPointerDown}
                 draggingId={draggingId}
                 alsoSelected={alsoSelected}
+                screenWidth={screenWidth}
               />
             ))}
           </div>
@@ -820,6 +828,7 @@ export function ComponentView({
           onPointerDown={onPointerDown}
           draggingId={draggingId}
           alsoSelected={alsoSelected}
+          screenWidth={screenWidth}
         />
       ))}
     </div>

@@ -43,6 +43,11 @@ export interface ScaffoldOptions {
   /** The project's token overrides, emitted into its stylesheet. */
   theme?: ThemeOverrides;
   /**
+   * The phone-layout stylesheet (L3), when anything in the project has one. Absent means no file
+   * and no import — a project nobody has given a phone layout carries no bytes for one.
+   */
+  responsiveCss?: string;
+  /**
    * Packages something else decided this project needs — a bucket's SDK, today.
    *
    * Passed in rather than switched on here: which SDK an upload needs is the bucket manifest's
@@ -168,11 +173,22 @@ ReactDOM.createRoot(root).render(
       path: 'src/components.css',
       content: componentsCss(),
     },
+    ...(options.responsiveCss
+      ? [
+          {
+            // Phone overrides (`docs/V1-COMPLETION.md` L3). Its own file rather than a tail on
+            // `components.css`, because that one is the design system and this one is this
+            // project's decisions about its own screens.
+            path: 'src/responsive.css',
+            content: options.responsiveCss,
+          },
+        ]
+      : []),
     {
       path: 'src/index.css',
       content: `@import './theme.css';
 @import './components.css';
-
+${options.responsiveCss ? `@import './responsive.css';\n` : ''}
 * {
   box-sizing: border-box;
 }

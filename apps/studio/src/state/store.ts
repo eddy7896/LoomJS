@@ -19,12 +19,7 @@ import {
   type Snapshot,
   type Style,
 } from '@loom/ir';
-import {
-  createComponent,
-  defFor,
-  DEFAULT_LAYOUT,
-  screenPreset,
-} from '@loom/components';
+import { createComponent, defFor, DEFAULT_LAYOUT, screenPreset } from '@loom/components';
 import { __resetBuildResult } from './build';
 import { ssoLabel } from '@loom/connectors';
 
@@ -258,7 +253,11 @@ export function selectComponent(id: Id | undefined): void {
   }
   // Reveal it: every ancestor opens, so the row is on screen wherever the selection came from.
   const opened = new Set(state.collapsedLayers);
-  for (let cursor = parentOf(state.snapshot, id); cursor; cursor = parentOf(state.snapshot, cursor.id)) {
+  for (
+    let cursor = parentOf(state.snapshot, id);
+    cursor;
+    cursor = parentOf(state.snapshot, cursor.id)
+  ) {
     opened.delete(cursor.id);
   }
   set({ ...state, collapsedLayers: opened, selection: { kind: 'component', id }, also: [] });
@@ -338,11 +337,7 @@ export function setRail(rail: Rail): void {
   // Data and Logs are columns beside the canvas rather than modes of it: switching to either
   // leaves the canvas showing whatever it was showing.
   const keepsMode =
-    rail === 'data' ||
-    rail === 'tools' ||
-    rail === 'code' ||
-    rail === 'logs' ||
-    rail === 'files';
+    rail === 'data' || rail === 'tools' || rail === 'code' || rail === 'logs' || rail === 'files';
   set({ ...state, rail, mode: keepsMode ? state.mode : rail });
 }
 
@@ -389,7 +384,11 @@ export function entryArtboardId(snapshot: Snapshot): Id {
 /** Root component of the artboard currently being edited. */
 /** The root of the screen being worked on. Empty when the project has no screens yet. */
 export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArtboardId): Id {
-  return snapshot.artboards[artboardId]?.root ?? snapshot.artboards[entryArtboardId(snapshot)]?.root ?? '';
+  return (
+    snapshot.artboards[artboardId]?.root ??
+    snapshot.artboards[entryArtboardId(snapshot)]?.root ??
+    ''
+  );
 }
 
 export function parentOf(snapshot: Snapshot, id: Id): Component | undefined {
@@ -487,6 +486,37 @@ export function setThemeToken(token: string, value: string | undefined): void {
 
 export function setLayout(componentId: Id, layout: Partial<Layout>): void {
   dispatch({ type: 'setLayout', componentId, layout });
+}
+
+/**
+ * What this frame becomes on a phone (L3, `docs/V1-COMPLETION.md`).
+ *
+ * One override level, and it is stored as a **difference** rather than a whole second layout: the
+ * document says "on a phone, a column", not the twelve other properties that did not change. A
+ * full copy would mean every later edit to the base silently failed to reach the phone.
+ *
+ * Passing an empty patch removes the override entirely, which is how a designer says "the same as
+ * everywhere else" and gets no rule emitted at all.
+ */
+export function setResponsiveLayout(componentId: Id, patch: Partial<Layout>): void {
+  const layout = state.snapshot.components[componentId]?.layout;
+  if (!layout) return;
+
+  const merged = { ...layout.responsive?.sm, ...patch };
+  const empty = Object.keys(merged).length === 0;
+  setLayout(componentId, { responsive: empty ? undefined : { sm: merged } });
+}
+
+/** The same, for a phone's appearance rather than its arrangement. */
+export function setResponsiveStyle(componentId: Id, patch: Style): void {
+  const style = state.snapshot.components[componentId]?.style ?? {};
+  const merged = { ...style.responsive?.sm, ...patch };
+  const empty = Object.keys(merged).length === 0;
+  dispatch({
+    type: 'setStyle',
+    componentId,
+    style: { ...style, responsive: empty ? undefined : { sm: merged } },
+  });
 }
 
 /** Size is nested inside layout, so a partial update has to carry the other axis along. */

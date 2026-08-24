@@ -1,5 +1,6 @@
 import type { Component } from '@loom/ir';
 import { variantClassName } from '@loom/components';
+import { hasResponsive, responsiveClassName } from './responsive';
 
 /**
  * The `className` an element carries (`docs/27-variants.md`).
@@ -10,6 +11,11 @@ import { variantClassName } from '@loom/components';
  * here would be a second thing to keep in step, and it would eventually not be.
  */
 export function classAttr(component: Component): string {
-  const className = variantClassName(component);
+  const names = [variantClassName(component)];
+  // A phone override is a second class rather than a second attribute, so an element that has both
+  // a variant and a responsive rule carries one `className` a person can read.
+  if (hasResponsive(component)) names.push(responsiveClassName(component.id));
+
+  const className = names.filter(Boolean).join(' ');
   return className ? ` className=${JSON.stringify(className)}` : '';
 }

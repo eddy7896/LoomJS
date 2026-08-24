@@ -200,7 +200,10 @@ export function Canvas() {
     dragReorder.onPointerMove(event);
     const drag = panning.current;
     if (!drag) return;
-    setPan({ x: drag.x + (event.clientX - drag.startX), y: drag.y + (event.clientY - drag.startY) });
+    setPan({
+      x: drag.x + (event.clientX - drag.startX),
+      y: drag.y + (event.clientY - drag.startY),
+    });
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -219,7 +222,9 @@ export function Canvas() {
   };
 
   const selectedComponentId = selection?.kind === 'component' ? selection.id : undefined;
-  const selectedComponent = selectedComponentId ? snapshot.components[selectedComponentId] : undefined;
+  const selectedComponent = selectedComponentId
+    ? snapshot.components[selectedComponentId]
+    : undefined;
   const entryId = entryArtboardId(snapshot);
 
   return (
@@ -321,6 +326,7 @@ export function Canvas() {
                 draggingId={dragReorder.dragging}
                 alsoSelected={alsoSelected}
                 hidden={hiddenInEditor}
+                screenWidth={sizeOf(artboard).width}
               />
             </div>
 

@@ -1,6 +1,7 @@
 import type { Component, Layout, SizeMode } from '@loom/ir';
 import { defFor } from '@loom/components';
-import { setLayout, setLayoutMode, setSize } from '../state/store';
+import { SM_MAX_WIDTH } from '@loom/compiler';
+import { setLayout, setLayoutMode, setResponsiveLayout, setSize } from '../state/store';
 import { Cell, Choice, Glyph, Row, Section } from './Section';
 
 /**
@@ -37,7 +38,9 @@ function Dimension({ component, axis }: { component: Component; axis: 'width' | 
           min={0}
           data-testid={`size-${axis}`}
           value={size.px}
-          onChange={(e) => setSize(component.id, axis, { mode: 'fixed', px: Number(e.target.value) })}
+          onChange={(e) =>
+            setSize(component.id, axis, { mode: 'fixed', px: Number(e.target.value) })
+          }
         />
       ) : null}
       <select
@@ -105,29 +108,58 @@ export function LayoutSection({ component }: { component: Component }) {
         <Dimension component={component} axis="height" />
       </Row>
 
+      {/*
+        What this becomes on a phone (L3). One breakpoint and one control: a frame that stacks
+        across on a desktop almost always has to stack downwards on a phone, and that is the case
+        flex cannot answer on its own. Everything else about the frame carries over unchanged,
+        which is why this stores a difference rather than a second layout.
+
+        Off means no rule is emitted at all, not a rule that happens to match.
+      */}
+      {holds && !free ? (
+        <Row>
+          <Cell mark="▯" title={`On a phone — under ${SM_MAX_WIDTH}px wide`}>
+            <select
+              data-testid="responsive-direction"
+              value={layout.responsive?.sm?.direction ?? ''}
+              onChange={(e) =>
+                setResponsiveLayout(
+                  component.id,
+                  e.target.value ? { direction: e.target.value as Layout['direction'] } : {},
+                )
+              }
+            >
+              <option value="">Same as above</option>
+              <option value="column">Stack downwards</option>
+              <option value="row">Stack across</option>
+            </select>
+          </Cell>
+        </Row>
+      ) : null}
+
       {holds ? (
-      <Row>
-        <Cell mark="⬚" title="Padding — the space inside the frame's own edge">
-          <input
-            type="number"
-            min={0}
-            data-testid="layout-padding"
-            value={layout.padding}
-            onChange={(e) => setLayout(component.id, { padding: Number(e.target.value) })}
-          />
-        </Cell>
-        {free ? null : (
-          <Cell mark="↔" title="Gap — the space between the things inside">
+        <Row>
+          <Cell mark="⬚" title="Padding — the space inside the frame's own edge">
             <input
               type="number"
               min={0}
-              data-testid="layout-gap"
-              value={layout.gap}
-              onChange={(e) => setLayout(component.id, { gap: Number(e.target.value) })}
+              data-testid="layout-padding"
+              value={layout.padding}
+              onChange={(e) => setLayout(component.id, { padding: Number(e.target.value) })}
             />
           </Cell>
-        )}
-      </Row>
+          {free ? null : (
+            <Cell mark="↔" title="Gap — the space between the things inside">
+              <input
+                type="number"
+                min={0}
+                data-testid="layout-gap"
+                value={layout.gap}
+                onChange={(e) => setLayout(component.id, { gap: Number(e.target.value) })}
+              />
+            </Cell>
+          )}
+        </Row>
       ) : null}
 
       {free || !holds ? null : (
@@ -148,7 +180,9 @@ export function LayoutSection({ component }: { component: Component }) {
             className="ins__grow"
             data-testid="layout-justify"
             value={layout.justify}
-            onChange={(e) => setLayout(component.id, { justify: e.target.value as Layout['justify'] })}
+            onChange={(e) =>
+              setLayout(component.id, { justify: e.target.value as Layout['justify'] })
+            }
           >
             {(['start', 'center', 'end', 'between'] as const).map((value) => (
               <option key={value} value={value}>

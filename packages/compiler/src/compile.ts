@@ -21,6 +21,7 @@ import {
 import { migrationFile } from './emit/migrations';
 import { emitContainerFiles } from './emit/container';
 import { emitReadme } from './emit/readme';
+import { responsiveCss } from './emit/responsive';
 import { toolCredentials } from './emit/tools';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
@@ -100,6 +101,7 @@ export function compile(snapshot: Snapshot): CompileResult {
     usesMysql,
     usesFirestore,
     theme: snapshot.theme,
+    responsiveCss: responsiveCss(snapshot),
     extraDependencies: bucketDependencies(buckets.map((bucket) => bucket.moduleId)),
   });
 

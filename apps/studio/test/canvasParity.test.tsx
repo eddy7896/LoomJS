@@ -43,6 +43,8 @@ function draw(component: Component): HTMLElement {
         id={component.id}
         onSelect={() => undefined}
         registerNode={() => undefined}
+        // Desktop width: these assert parity with the base layout, not the phone one.
+        screenWidth={1024}
         onPointerDown={() => undefined}
         draggingId={undefined}
         alsoSelected={[]}
@@ -195,6 +197,8 @@ describe('a List draws what a List renders', () => {
           id={list.id}
           onSelect={() => undefined}
           registerNode={() => undefined}
+          // Desktop width: these assert parity with the base layout, not the phone one.
+          screenWidth={1024}
           onPointerDown={() => undefined}
           draggingId={undefined}
           alsoSelected={[]}
