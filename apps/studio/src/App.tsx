@@ -7,6 +7,7 @@ import { ElementsPanel } from './panels/ElementsPanel';
 import { IconRail } from './panels/IconRail';
 import { DataPanel } from './panels/DataPanel';
 import { LogsPanel } from './panels/LogsPanel';
+import { CodePanel } from './panels/CodePanel';
 import { ToolsPanel } from './panels/ToolsPanel';
 import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
@@ -81,7 +82,9 @@ export default function App({
             then what is wrong. Problems stays put in every section — a rail that hid it would
             make it the one thing you have to go looking for. */}
         <div className="rail">
-          {rail === 'logs' ? (
+          {rail === 'code' ? (
+            <CodePanel />
+          ) : rail === 'logs' ? (
             <LogsPanel />
           ) : rail === 'tools' ? (
             <ToolsPanel />

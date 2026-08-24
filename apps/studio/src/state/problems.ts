@@ -1,5 +1,5 @@
 import type { Problem } from '@loom/compiler';
-import { getState, select, setActiveArtboard, setMode } from './store';
+import { getState, select, selectComponent, setActiveArtboard, setMode } from './store';
 
 /**
  * Revealing a problem (P2, `docs/specs/problems.md`).
@@ -34,4 +34,25 @@ export function revealProblem(problem: Problem): void {
   if (!snapshot.nodes[entityId]) return;
   setMode('nodes');
   select({ kind: 'node', id: entityId });
+}
+
+/**
+ * Show whatever this id belongs to, whichever kind of thing it is.
+ *
+ * A compile refusal carries an entity id and not its kind, because the compiler does not care —
+ * so the lookup happens here rather than making every caller guess. Used by the Code panel, where
+ * a refusal appears in the place someone came to read the code.
+ */
+export function revealEntity(entityId: string): void {
+  const snapshot = getState().snapshot;
+
+  if (snapshot.artboards[entityId]) {
+    setActiveArtboard(entityId);
+    return;
+  }
+  if (snapshot.components[entityId]) {
+    selectComponent(entityId);
+    return;
+  }
+  if (snapshot.nodes[entityId]) select({ kind: 'node', id: entityId });
 }

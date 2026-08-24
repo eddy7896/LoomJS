@@ -2402,3 +2402,104 @@ input[type='color'] {
 .nstep--fn {
   border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
+
+/* The code, as something to read: a tree beside the file it opens. */
+.code {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.code__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1;
+}
+
+.code__tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 34%;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.code__file,
+.code__folder {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.code__file {
+  cursor: pointer;
+}
+
+.code__file.is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.code__folder {
+  color: var(--ink-soft);
+}
+
+.code__view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.code__viewhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.code__viewhead code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+/* Wide code scrolls inside its own box; the panel never scrolls sideways. */
+.code__text {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  font-size: 10px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.code__problem {
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--line));
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 11px;
+}
+
+.code__problem p {
+  margin: 0 0 6px;
+  color: var(--error);
+}
