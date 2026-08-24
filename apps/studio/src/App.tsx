@@ -7,6 +7,7 @@ import { ElementsPanel } from './panels/ElementsPanel';
 import { IconRail } from './panels/IconRail';
 import { DataPanel } from './panels/DataPanel';
 import { LogsPanel } from './panels/LogsPanel';
+import { ToolsPanel } from './panels/ToolsPanel';
 import { ProblemsPanel } from './panels/ProblemsPanel';
 import { Toolbar } from './panels/Toolbar';
 import { PreviewWindow } from './preview/PreviewWindow';
@@ -82,6 +83,8 @@ export default function App({
         <div className="rail">
           {rail === 'logs' ? (
             <LogsPanel />
+          ) : rail === 'tools' ? (
+            <ToolsPanel />
           ) : rail === 'data' ? (
             <DataPanel />
           ) : (

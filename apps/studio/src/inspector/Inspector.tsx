@@ -46,8 +46,13 @@ import {
 } from '../state/store';
 import { removeNode, setNodeConfig } from '../state/graph';
 import { connectedTables, connection } from '../state/connectors';
+import { operationsOf, setToolConfig } from '../state/tools';
 import { groupSelection, groupingProblem, ungroup } from '../state/grouping';
 import {
+  TOOL_MODELS,
+  isRequestTool,
+  toolFor,
+  type ToolNodeConfig,
   aggregatesFor,
   dbNodeFields,
   filterOpsFor,
@@ -895,6 +900,108 @@ function GroupSection({ component }: { component: Component }) {
   );
 }
 
+
+/**
+ * A tool call (T1–T3, `docs/22-api-connectors.md`).
+ *
+ * What is on the node rather than flowing through it: which operation, which model, how long an
+ * answer may be, and — for a request the designer writes — where it goes. Its *inputs* are the
+ * operation's parameters and live on the ports, so they are wired rather than typed here.
+ */
+function ToolSection({ nodeId }: { nodeId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const node = snapshot.nodes[nodeId];
+  const config = (node?.config ?? {}) as Partial<ToolNodeConfig>;
+  const tool = toolFor(String(config.toolId ?? ''));
+  if (!node || !tool) return null;
+
+  const operations = operationsOf(tool.id);
+  const models = TOOL_MODELS[tool.id] ?? [];
+
+  return (
+    <section className="field-group">
+      <h3 className="field-group__title">{tool.label}</h3>
+
+      {operations.length > 0 ? (
+        <Field label="Operation">
+          <select
+            data-testid="tool-operation"
+            value={config.operationId ?? ''}
+            onChange={(event) => setToolConfig(nodeId, { operationId: event.target.value })}
+          >
+            {operations.map((operation) => (
+              <option key={operation.id} value={operation.id}>
+                {operation.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
+
+      {models.length > 0 ? (
+        <>
+          <Field label="Model">
+            <select
+              data-testid="tool-model"
+              value={config.model ?? models[0]}
+              onChange={(event) => setToolConfig(nodeId, { model: event.target.value })}
+            >
+              {models.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Longest answer">
+            <input
+              type="number"
+              data-testid="tool-max-tokens"
+              value={config.maxTokens ?? 1024}
+              onChange={(event) =>
+                setToolConfig(nodeId, { maxTokens: Number(event.target.value) })
+              }
+            />
+          </Field>
+        </>
+      ) : null}
+
+      {isRequestTool(tool.id) ? (
+        <>
+          <Field label="Address">
+            <input
+              data-testid="tool-url"
+              value={config.url ?? ''}
+              placeholder="https://example.com/hook"
+              onChange={(event) => setToolConfig(nodeId, { url: event.target.value })}
+            />
+          </Field>
+          <Field label="Method">
+            <select
+              data-testid="tool-method"
+              value={config.method ?? 'POST'}
+              onChange={(event) => setToolConfig(nodeId, { method: event.target.value })}
+            >
+              {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </>
+      ) : null}
+
+      {/* Said where the call is, because "where does the key go" is asked here and answered
+          nowhere else. */}
+      <p className="panel__hint">
+        Runs on the server. {tool.credential.name} is read there by name — it never reaches the
+        browser.
+      </p>
+    </section>
+  );
+}
+
 /** A graph node: its config drives its port types, so editing here retypes the ports. */
 function NodeInspector({ nodeId }: { nodeId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
@@ -957,6 +1064,8 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
       ) : null}
 
       {node.category === 'db' && node.kind === 'query' ? <QuerySection nodeId={node.id} /> : null}
+
+      {node.category === 'tool' ? <ToolSection nodeId={node.id} /> : null}
 
       {node.category === 'db' && typeof config.table === 'string' ? (
         <TableSchemaSection tableName={config.table} />

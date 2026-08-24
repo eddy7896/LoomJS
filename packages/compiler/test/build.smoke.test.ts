@@ -21,6 +21,7 @@ import {
   mysqlSnapshot,
   postgresOperationsSnapshot,
   ssoSnapshot,
+  toolSnapshot,
   postgresSnapshot,
   submitSequenceSnapshot,
   supabaseSnapshot,
@@ -363,6 +364,73 @@ describe('the container server', () => {
       // And nothing outside the built app is reachable by asking for it.
       const escape = await fetch(`http://localhost:${port}/../package.json`);
       expect(await escape.text()).not.toContain('"devDependencies"');
+    } finally {
+      stub.close();
+    }
+  });
+});
+
+describe('a tool call answers for real', () => {
+  /**
+   * The vendor is a stub; everything else is real (T1, `docs/22-api-connectors.md`).
+   *
+   * The emitted route, the helper it calls through, the headers it sends and the path it reads
+   * the answer from are all the shipped ones — exercised without a key and without a bill, which
+   * is the same bargain the Supabase gate makes.
+   */
+  it('sends what the vendor expects and hands back the answer', async () => {
+    const seen: { headers: Record<string, string | string[] | undefined>; body: string }[] = [];
+
+    const stub = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        seen.push({ headers: req.headers, body: Buffer.concat(chunks).toString('utf8') });
+        res.setHeader('content-type', 'application/json');
+        // The shape Claude answers with: content blocks, the text in one of them.
+        res.end(JSON.stringify({ content: [{ type: 'text', text: 'a stubbed answer' }] }));
+      });
+    });
+
+    const stubPort = takePort();
+    await new Promise<void>((resolve) => stub.listen(stubPort, resolve));
+
+    try {
+      // The tool's base URL is the stub's, so nothing leaves the machine.
+      const snapshot = toolSnapshot('request', '', {
+        url: `http://localhost:${stubPort}/v1/messages`,
+        method: 'POST',
+      });
+
+      const dir = await emitProject(snapshot);
+      await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+      const port = takePort();
+      const child = spawn(npm, ['run', 'dev', '--', '--port', String(port), '--strictPort'], {
+        cwd: dir,
+        shell: true,
+        stdio: 'ignore',
+        env: { ...process.env, TOOL_API_KEY: 'stub-key' },
+      });
+      children.push(child);
+
+      expect(await waitForServer(port)).toBe(true);
+
+      const answer = await fetch(`http://localhost:${port}/api/ask`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { prompt: 'hello' } }),
+      });
+      expect(await answer.json()).toEqual({
+        result: { content: [{ type: 'text', text: 'a stubbed answer' }] },
+      });
+
+      // The key travelled as a header, from the environment — never in the body, never from the
+      // browser.
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.headers.authorization).toBe('Bearer stub-key');
+      expect(seen[0]!.body).toContain('hello');
+      expect(seen[0]!.body).not.toContain('stub-key');
     } finally {
       stub.close();
     }

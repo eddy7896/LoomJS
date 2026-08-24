@@ -10,6 +10,7 @@ import { emitMessagesModule, MESSAGES_MODULE_PATH, usesMessages } from './emit/m
 import { dialectOf, isDocumentStore } from '@loom/connectors';
 import { migrationFile } from './emit/migrations';
 import { emitContainerFiles } from './emit/container';
+import { toolCredentials } from './emit/tools';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
   ssoProvidersUsed,
@@ -109,6 +110,7 @@ export function compile(snapshot: Snapshot): CompileResult {
         ...(usesFirestore ? ['FIREBASE_SERVICE_ACCOUNT'] : []),
         ...(usesDatabase ? ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] : []),
         ...(auth ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] : []),
+        ...toolCredentials(snapshot),
       ].filter((name, index, all) => all.indexOf(name) === index),
     }),
   );
@@ -138,27 +140,38 @@ export function compile(snapshot: Snapshot): CompileResult {
     files.push(migrationFile(migration));
   }
 
+  /**
+   * Every name the deployment has to set — one file, whatever mix of things this project reaches.
+   *
+   * It used to be a chain of `else if`, which meant a project that talked to a database *and*
+   * called a tool was told about one of them. Names only, always: the values live in the env
+   * bucket and are injected at deploy (`docs/specs/connector-credentials.md`).
+   */
+  const envNames: string[] = [];
+
   if (usesFirestore) {
     // The whole key file, as one value: it holds a private key, so it is a name here and a value
-    // only in the deployment (`docs/specs/connector-credentials.md`).
-    files.push({ path: '.env.example', content: `FIREBASE_SERVICE_ACCOUNT=${NEWLINE}` });
+    // only in the deployment.
+    envNames.push('FIREBASE_SERVICE_ACCOUNT');
   } else if (usesSql) {
     // One name, and it carries the password in the middle of it — which is exactly why it is a
-    // name here and a value only in the deployment (`docs/specs/connector-credentials.md`).
-    files.push({ path: '.env.example', content: `DATABASE_URL=${NEWLINE}` });
+    // name here and a value only in the deployment.
+    envNames.push('DATABASE_URL');
   } else if (usesDatabase || auth) {
-    // Names only. The values live in the env bucket and are injected at deploy
-    // (docs/specs/connector-credentials.md).
-    //
     // Which names depends on who the routes are. With users, every request is answered as the
     // person asking, so the publishable key is what the server needs — and the service-role key,
     // which bypasses the rules keeping one person's rows theirs, is not asked for at all.
-    const names = auth
-      ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
-      : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+    envNames.push(...(auth ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']));
+  }
+
+  // A tool's key is the same kind of secret as a database password, and the fact that it belongs
+  // to a fashionable service does not make it a different kind (`docs/22-api-connectors.md`).
+  envNames.push(...toolCredentials(snapshot));
+
+  if (envNames.length > 0) {
     files.push({
       path: '.env.example',
-      content: `${names.map((name) => `${name}=`).join(NEWLINE)}${NEWLINE}`,
+      content: `${envNames.map((name) => `${name}=`).join(NEWLINE)}${NEWLINE}`,
     });
   }
 

@@ -5,5 +5,6 @@ export * from './firestore';
 export * from './ddl';
 export * from './sso';
 export * from './providerSetup';
+export * from './tools';
 export * from './registry';
 export * from './nodes';

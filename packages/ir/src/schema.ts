@@ -461,7 +461,15 @@ export const PortSchema = z.object({
 });
 export type Port = z.infer<typeof PortSchema>;
 
-export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db']);
+/**
+ * `tool` is the fifth, and it was added rather than squeezed into `db` (T1,
+ * `docs/22-api-connectors.md`).
+ *
+ * A tool call is not a database read: it has no table, no row and no schema, and calling it one
+ * would make every rule about tables mean two things. What it shares with `db` is where it runs —
+ * inside an API route, on the server, because the credential must not reach a browser.
+ */
+export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db', 'tool']);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 
 export const NodeSchema = z.object({

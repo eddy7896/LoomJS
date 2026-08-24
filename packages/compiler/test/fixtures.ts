@@ -8,6 +8,7 @@ import { inferBackend } from '@loom/inference';
 import {
   columnPortId,
   createDbNode,
+  createToolNode,
   dbNodePorts,
   filterPortId,
   type TableSchema,
@@ -1641,4 +1642,53 @@ export function mysqlSnapshot(): Snapshot {
       cn_supabase: { ...base.connectors.cn_supabase!, moduleId: 'mysql' },
     },
   };
+}
+
+/**
+ * A project that calls a tool (T1, `docs/22-api-connectors.md`).
+ *
+ * The button asks, the route calls, and a Text shows the answer — which is the whole shape of an
+ * AI feature in loom, and the reason the tool node had to exist.
+ */
+export function toolSnapshot(
+  toolId = 'anthropic',
+  operationId = 'ask',
+  extra: Record<string, unknown> = {},
+): Snapshot {
+  const base = trivialSnapshot();
+  const call = createToolNode('nd_call', { x: 0, y: 0 }, 'cn_tool', toolId, operationId);
+
+  return applyOps(
+    {
+      ...base,
+      connectors: {
+        cn_tool: { id: 'cn_tool', moduleId: toolId, config: {}, credentialRef: 'default' },
+      },
+    },
+    [
+      { type: 'addNode', node: { ...call, config: { ...call.config, ...extra } } },
+      {
+        type: 'addNode',
+        node: {
+          id: 'nd_route',
+          category: 'api',
+          kind: 'route',
+          name: 'Ask',
+          position: { x: 320, y: 0 },
+          config: { method: 'POST', path: 'ask', body: ['nd_call'] },
+          ports: apiPortsFromBody([{ ...call, config: { ...call.config, ...extra } }]),
+        },
+      },
+      {
+        type: 'addComponent',
+        parentId: 'cp_root000001',
+        component: {
+          id: 'cp_answer',
+          type: 'Text',
+          name: 'Answer',
+          props: { content: { kind: 'bound', source: { nodeId: 'nd_route', portId: 'pt_result' } } },
+        },
+      },
+    ],
+  );
 }
