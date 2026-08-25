@@ -1,5 +1,6 @@
 import type { Artboard, Component, Id, Snapshot } from '@loom/ir';
 import { CompileError, type EmitContext } from '../types';
+import { DOCUMENT_CLASS, documentStyle, isDocument, pageOf } from './document';
 import { emitterFor, knownComponentTypes } from '../templates/registry';
 import { pathExpression, type RouteMap } from './routes';
 import {
@@ -14,12 +15,7 @@ import { positionToStyle } from './layout';
 import { indent } from './text';
 import { MESSAGE_FN } from './messages';
 import { authVar, sessionTypeOf } from './auth';
-import {
-  DIVIDE_HELPER_SOURCE,
-  emitDerived,
-  planDerived,
-  usesDivideHelper,
-} from './derived';
+import { DIVIDE_HELPER_SOURCE, emitDerived, planDerived, usesDivideHelper } from './derived';
 import {
   emitScreenStates,
   planScreenStates,
@@ -53,6 +49,14 @@ function ${TEXT_HELPER}(value: unknown): string {
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 `;
+
+/** One more level in, for a tree that has been wrapped. */
+function indentBlock(block: string): string {
+  return block
+    .split('\n')
+    .map((line) => (line ? `  ${line}` : line))
+    .join('\n');
+}
 
 /** Walk one artboard's component tree into a React function component module. */
 export function emitArtboardModule(
@@ -257,7 +261,27 @@ ${element}
 ${indent(depth)}) : null}`;
   }
 
-  const tree = render(artboard.root, 2);
+  const rendered = render(artboard.root, 2);
+
+  /**
+   * A document is wrapped, not restyled (L2, `docs/V1-COMPLETION.md`).
+   *
+   * The wrapper carries the page — its size in millimetres and its margin — and the class the
+   * print stylesheet looks for. Putting that on the root component itself would mean a designer's
+   * own padding and the paper's margin fighting over one property, and whichever they set last
+   * would win by accident.
+   */
+  const tree = isDocument(artboard)
+    ? (() => {
+        const page = pageOf(artboard);
+        const style = Object.entries(documentStyle(page))
+          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+          .join(', ');
+        return `    <div className="${DOCUMENT_CLASS}" style={{ ${style} }}>
+${indentBlock(rendered)}
+    </div>`;
+      })()
+    : rendered;
 
   const imports: string[] = [];
   const reactHooks = reactHooksUsed(

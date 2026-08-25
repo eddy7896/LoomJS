@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Component, Snapshot, Style } from '@loom/ir';
+import { DEFAULT_PAGE, PAGE_PRESETS, type PagePreset } from '@loom/compiler';
 import {
   MATH_BODY_FIELDS,
   MATH_CANVAS_FIELDS,
@@ -22,12 +23,7 @@ import { ActionsSection } from './ActionsSection';
 import { Section } from './Section';
 import { PositionSection } from './PositionSection';
 import { LayoutSection } from './LayoutSection';
-import {
-  AppearanceSection,
-  FillSection,
-  StrokeSection,
-  TypeSection,
-} from './AppearanceSection';
+import { AppearanceSection, FillSection, StrokeSection, TypeSection } from './AppearanceSection';
 import { EffectsSection } from './EffectsSection';
 import { VariantSection } from './VariantSection';
 import {
@@ -38,6 +34,8 @@ import {
   renameArtboard,
   setArtboardParams,
   setArtboardGuard,
+  setArtboardKind,
+  setArtboardPage,
   setArtboardSize,
   setEntryArtboard,
   setFlowPayload,
@@ -75,7 +73,13 @@ import {
   setConditionalStyles,
   setVisibleWhen,
 } from '../state/conditions';
-import { acceptAuto, backendOffer, detachAuto, generateBackend, withdrawAuto } from '../state/autobackend';
+import {
+  acceptAuto,
+  backendOffer,
+  detachAuto,
+  generateBackend,
+  withdrawAuto,
+} from '../state/autobackend';
 
 /**
  * The inspector is **schema-driven**: it renders whatever `@loom/components` declares for the
@@ -191,18 +195,17 @@ function PropField({ component, field }: { component: Component; field: FieldDef
    * look up. The list is the buckets under Files — and when there are none, it says so and points
    * at the place to fix it rather than offering an empty dropdown.
    */
-  if (field.key === 'bucket' && (component.type === 'FileField' || component.type === 'ImageField')) {
+  if (
+    field.key === 'bucket' &&
+    (component.type === 'FileField' || component.type === 'ImageField')
+  ) {
     const choices = bucketChoices(snapshot);
     const current = value?.kind === 'static' ? String(value.value ?? '') : '';
 
     return (
       <Field label={field.label}>
         {choices.length === 0 ? (
-          <button
-            className="field__link"
-            data-testid="no-buckets"
-            onClick={() => setRail('files')}
-          >
+          <button className="field__link" data-testid="no-buckets" onClick={() => setRail('files')}>
             Attach one under Files
           </button>
         ) : (
@@ -319,7 +322,6 @@ function PropField({ component, field }: { component: Component; field: FieldDef
     </Field>
   );
 }
-
 
 /**
  * Auto-backend inference (M5). A frame holding inputs and one button is a form, and a form whose
@@ -585,7 +587,11 @@ function ConditionsSection({ component }: { component: Component }) {
       ) : null}
 
       <Field label="Show when">
-        {picker(component.visibleWhen, (next) => setVisibleWhen(component.id, next), 'visible-when')}
+        {picker(
+          component.visibleWhen,
+          (next) => setVisibleWhen(component.id, next),
+          'visible-when',
+        )}
       </Field>
 
       {conditionals.map((entry, index) => (
@@ -762,6 +768,89 @@ function GuardSection({ artboardId }: { artboardId: string }) {
  * its frame does (padding, direction, background). They were two panels for two rows that stood
  * for one object, and the split made a designer hunt for padding in the wrong place.
  */
+/**
+ * Screen, or a page meant for paper (L2, `docs/V1-COMPLETION.md`).
+ *
+ * A document prints through the browser's own dialog rather than through a PDF library, and the
+ * hint says so plainly. Hiding that would be the wrong kind of polish: the person needs to know
+ * they will see a print dialog, and "Save as PDF" is the option they are looking for in it.
+ */
+function PageSection({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  if (!artboard) return null;
+
+  const isDoc = artboard.kind === 'document';
+  const page = artboard.page ?? DEFAULT_PAGE;
+
+  return (
+    <section className="field-group" data-testid="page-section">
+      <h3 className="field-group__title">Kind</h3>
+      <Field label="This is a">
+        <select
+          data-testid="artboard-kind"
+          value={isDoc ? 'document' : 'screen'}
+          onChange={(e) => setArtboardKind(artboardId, e.target.value as 'screen' | 'document')}
+        >
+          <option value="screen">Screen — a route in the app</option>
+          <option value="document">Document — a page for paper</option>
+        </select>
+      </Field>
+
+      {isDoc ? (
+        <>
+          <p className="panel__hint">
+            Printed by the browser that drew it, so what prints is what you designed. The person
+            gets the print dialog, where &ldquo;Save as PDF&rdquo; is the option they want.
+          </p>
+          <Field label="Paper">
+            <select
+              data-testid="page-preset"
+              value={page.preset ?? 'a4'}
+              onChange={(e) => {
+                const preset = e.target.value as PagePreset;
+                setArtboardPage(artboardId, { ...page, preset, ...PAGE_PRESETS[preset] });
+              }}
+            >
+              {Object.keys(PAGE_PRESETS).map((preset) => (
+                <option key={preset} value={preset}>
+                  {preset.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Orientation">
+            <select
+              data-testid="page-orientation"
+              value={page.orientation ?? 'portrait'}
+              onChange={(e) =>
+                setArtboardPage(artboardId, {
+                  ...page,
+                  orientation: e.target.value as 'portrait' | 'landscape',
+                })
+              }
+            >
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </Field>
+          <Field label="Margin (mm)">
+            <input
+              type="number"
+              min={0}
+              data-testid="page-margin"
+              value={page.margin}
+              onChange={(e) =>
+                setArtboardPage(artboardId, { ...page, margin: Number(e.target.value) })
+              }
+            />
+          </Field>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function ArtboardInspector({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
@@ -779,7 +868,7 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
 
       <section className="field-group">
         <div className="field-group__head">
-          <span className="badge">Screen</span>
+          <span className="badge">{artboard.kind === 'document' ? 'Document' : 'Screen'}</span>
           <code className="mono id">{artboard.id}</code>
         </div>
         <Field label="Name">
@@ -796,7 +885,11 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
         </Field>
       </section>
 
-      <ScreenSizeSection artboardId={artboard.id} />
+      <PageSection artboardId={artboard.id} />
+
+      {/* A document is sized by its paper, so the screen-size control would be a second answer to
+          a question the page has already settled. */}
+      {artboard.kind === 'document' ? null : <ScreenSizeSection artboardId={artboard.id} />}
 
       {/* The frame half: this screen's own arrangement, padding and fill. */}
       {root ? (
@@ -904,7 +997,6 @@ function FlowInspector({ flowId }: { flowId: string }) {
   );
 }
 
-
 /**
  * Group and ungroup (G1).
  *
@@ -920,8 +1012,7 @@ function GroupSection({ component }: { component: Component }) {
   const selection = useEditor((s) => s.selection);
   const also = useEditor((s) => s.also);
 
-  const ids =
-    selection?.kind === 'component' ? [selection.id, ...also] : [];
+  const ids = selection?.kind === 'component' ? [selection.id, ...also] : [];
   const problem = groupingProblem(snapshot, ids);
   const canUngroup = (component.children ?? []).length > 0;
 
@@ -945,7 +1036,6 @@ function GroupSection({ component }: { component: Component }) {
     </section>
   );
 }
-
 
 /**
  * A tool call (T1–T3, `docs/22-api-connectors.md`).
@@ -1004,9 +1094,7 @@ function ToolSection({ nodeId }: { nodeId: string }) {
               type="number"
               data-testid="tool-max-tokens"
               value={config.maxTokens ?? 1024}
-              onChange={(event) =>
-                setToolConfig(nodeId, { maxTokens: Number(event.target.value) })
-              }
+              onChange={(event) => setToolConfig(nodeId, { maxTokens: Number(event.target.value) })}
             />
           </Field>
         </>
@@ -1155,7 +1243,9 @@ function NodeInspector({ nodeId }: { nodeId: string }) {
                   <input
                     type="number"
                     value={Number(current)}
-                    onChange={(e) => setNodeConfig(node.id, { [field.key]: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setNodeConfig(node.id, { [field.key]: Number(e.target.value) })
+                    }
                   />
                 </Field>
               );
@@ -1265,7 +1355,12 @@ function FiltersSection({ nodeId }: { nodeId: string }) {
             <button
               title="Remove"
               data-testid={`filter-${index}-remove`}
-              onClick={() => setDbFilters(nodeId, filters.filter((_, i) => i !== index))}
+              onClick={() =>
+                setDbFilters(
+                  nodeId,
+                  filters.filter((_, i) => i !== index),
+                )
+              }
             >
               ×
             </button>
@@ -1292,8 +1387,8 @@ function FiltersSection({ nodeId }: { nodeId: string }) {
             if (!chosen || chosen.primaryKey || chosen.indexed || chosen.unique) return null;
             return (
               <p className="panel__hint" data-testid={`filter-${index}-unindexed`}>
-                No index on “{chosen.name}”, so this reads every row. Add one from the Data panel
-                if the table will grow.
+                No index on “{chosen.name}”, so this reads every row. Add one from the Data panel if
+                the table will grow.
               </p>
             );
           })()}

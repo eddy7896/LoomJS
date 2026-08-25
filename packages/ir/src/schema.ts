@@ -165,11 +165,14 @@ export const ActionSchema = z.discriminatedUnion('kind', [
    * reads, and navigates nowhere — every property of an action and none of a node. A node whose
    * output nothing consumes is the shape of a mistake.
    *
-   * `csv` takes a bound list. `pdf` takes a document artboard, printed with its own page size.
+   * `csv` takes the rows to write, so `value` is required for it and the compiler refuses one
+   * without it. `pdf` **prints the screen the person is on**, so it takes nothing: getting to the
+   * invoice is what `navigate` is for, and it already carries the params. A second mechanism for
+   * "which document, with what data" would be the same decision made twice.
    */
   z.object({
     kind: z.literal('download'),
-    value: ValueSourceSchema,
+    value: ValueSourceSchema.optional(),
     format: z.enum(['csv', 'pdf']),
     /** What the file is called, without the extension. */
     filename: z.string().optional(),

@@ -6,7 +6,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent,
 } from 'react';
-import type { Id, ScreenSize } from '@loom/ir';
+import type { Artboard, Id } from '@loom/ir';
+import { isDocument, pageOf, pageSize } from '@loom/compiler';
 import { DEFAULT_SCREEN, presetForSize } from '@loom/components';
 import { themeStyle } from '@loom/ui';
 import { useVariantStylesheet } from './useVariantStylesheet';
@@ -102,12 +103,29 @@ export function Canvas() {
   /** The size being dragged, held locally so a resize is one undo step rather than sixty. */
   const [resizing, setResizing] = useState<{ id: Id; width: number; height: number } | null>(null);
 
+  /** 96 CSS pixels to the inch, 25.4 millimetres to the inch. What the browser prints against. */
+  const MM_TO_PX = 96 / 25.4;
+
   const sizeOf = useCallback(
-    (artboard: { id: Id; size?: ScreenSize }): { width: number; height: number } => {
+    (artboard: Artboard): { width: number; height: number } => {
       if (resizing?.id === artboard.id) return { width: resizing.width, height: resizing.height };
+
+      /**
+       * A document is sized by its paper, not by a screen preset (L2). Drawing an A4 invoice at a
+       * browser width would mean designing against a page that paginates differently from the one
+       * that prints, which is the whole failure the page size exists to prevent.
+       */
+      if (isDocument(artboard)) {
+        const paper = pageSize(pageOf(artboard));
+        return {
+          width: Math.round(paper.width * MM_TO_PX),
+          height: Math.round(paper.height * MM_TO_PX),
+        };
+      }
+
       return artboard.size ?? { width: DEFAULT_SCREEN.width, height: DEFAULT_SCREEN.height };
     },
-    [resizing],
+    [resizing, MM_TO_PX],
   );
 
   /** Where each artboard starts, accumulated so screens of different widths still sit in a row. */

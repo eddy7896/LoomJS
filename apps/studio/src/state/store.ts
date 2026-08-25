@@ -5,6 +5,7 @@ import {
   newArtboardId,
   newComponentId,
   newFlowId,
+  type ArtboardKind,
   type Component,
   type FlowPayload,
   type Guard,
@@ -12,6 +13,7 @@ import {
   type Id,
   type Layout,
   type Op,
+  type Page,
   type Param,
   type PropertyValue,
   type ScreenSize,
@@ -20,6 +22,7 @@ import {
   type Style,
 } from '@loom/ir';
 import { createComponent, defFor, DEFAULT_LAYOUT, screenPreset } from '@loom/components';
+import { DEFAULT_PAGE } from '@loom/compiler';
 import { __resetBuildResult } from './build';
 import { ssoLabel } from '@loom/connectors';
 
@@ -765,6 +768,26 @@ export function setArtboardParams(artboardId: Id, params: Param[]): void {
  */
 export function setArtboardSize(artboardId: Id, size: ScreenSize): void {
   dispatch({ type: 'setArtboardSize', artboardId, size });
+}
+
+/**
+ * Screen, or a page meant for paper (L2, `docs/V1-COMPLETION.md`).
+ *
+ * Turning a screen into a document gives it A4 unless it is told otherwise, because a document
+ * with no paper has no size and a designer should not have to answer that question to see one.
+ */
+export function setArtboardKind(artboardId: Id, kind: ArtboardKind, page?: Page): void {
+  dispatch({
+    type: 'setArtboardKind',
+    artboardId,
+    kind,
+    page: kind === 'document' ? (page ?? DEFAULT_PAGE) : undefined,
+  });
+}
+
+/** The paper a document is laid out on. Meaningless on a screen, and the panel does not offer it. */
+export function setArtboardPage(artboardId: Id, page: Page): void {
+  dispatch({ type: 'setArtboardKind', artboardId, kind: 'document', page });
 }
 
 /**

@@ -1,6 +1,7 @@
 import { DEFAULT_LAYOUT } from './schema';
 import type {
   Artboard,
+  ArtboardKind,
   Component,
   ConnectorInstance,
   Flow,
@@ -12,6 +13,7 @@ import type {
   Layout,
   Migration,
   NodeGroup,
+  Page,
   Param,
   ScreenSize,
   Style,
@@ -57,6 +59,11 @@ export type Op =
   | { type: 'setArtboardParams'; artboardId: string; params: Param[] }
   | { type: 'setArtboardSize'; artboardId: string; size: ScreenSize }
   | { type: 'setArtboardGuard'; artboardId: string; guard: Guard | undefined }
+  /**
+   * Screen or document, and the paper if it is one (L2). They travel together because they are one
+   * decision: a document without a page has no size, and a page on a screen means nothing.
+   */
+  | { type: 'setArtboardKind'; artboardId: string; kind: ArtboardKind; page?: Page }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
@@ -252,7 +259,8 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       delete next.nodes[op.nodeId];
       // A node's wires cannot outlive it, and neither can its slot in a container's body.
       for (const [wireId, wire] of Object.entries(next.wires)) {
-        if (wire.from.nodeId === op.nodeId || wire.to.nodeId === op.nodeId) delete next.wires[wireId];
+        if (wire.from.nodeId === op.nodeId || wire.to.nodeId === op.nodeId)
+          delete next.wires[wireId];
       }
       for (const node of Object.values(next.nodes)) {
         const config = node.config as { body?: string[] } | undefined;
@@ -332,6 +340,22 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       // object — a guard nobody can satisfy is not the same fact as no guard.
       if (op.guard) artboard.guard = op.guard;
       else delete artboard.guard;
+      return next;
+    }
+
+    case 'setArtboardKind': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardKind: unknown artboard ${op.artboardId}`);
+
+      // Absent means `screen`, so turning one back drops the key rather than writing the default
+      // into every document that was never a document.
+      if (op.kind === 'screen') {
+        delete artboard.kind;
+        delete artboard.page;
+      } else {
+        artboard.kind = op.kind;
+        if (op.page) artboard.page = op.page;
+      }
       return next;
     }
 

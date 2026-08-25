@@ -22,6 +22,7 @@ import { migrationFile } from './emit/migrations';
 import { emitContainerFiles } from './emit/container';
 import { emitReadme } from './emit/readme';
 import { responsiveCss } from './emit/responsive';
+import { printCss } from './emit/document';
 import { toolCredentials } from './emit/tools';
 import { planGlobals, type GlobalPlan } from './emit/state';
 import {
@@ -102,6 +103,7 @@ export function compile(snapshot: Snapshot): CompileResult {
     usesFirestore,
     theme: snapshot.theme,
     responsiveCss: responsiveCss(snapshot),
+    printCss: printCss(snapshot),
     extraDependencies: bucketDependencies(buckets.map((bucket) => bucket.moduleId)),
   });
 
@@ -215,7 +217,11 @@ export function compile(snapshot: Snapshot): CompileResult {
     // Which names depends on who the routes are. With users, every request is answered as the
     // person asking, so the publishable key is what the server needs — and the service-role key,
     // which bypasses the rules keeping one person's rows theirs, is not asked for at all.
-    envNames.push(...(auth ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']));
+    envNames.push(
+      ...(auth
+        ? ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
+        : ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']),
+    );
   }
 
   // A tool's key is the same kind of secret as a database password, and the fact that it belongs

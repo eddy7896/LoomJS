@@ -1,4 +1,11 @@
-import { actionsOf, type Component, type Id, type Node, type PortRef, type Snapshot } from '@loom/ir';
+import {
+  actionsOf,
+  type Component,
+  type Id,
+  type Node,
+  type PortRef,
+  type Snapshot,
+} from '@loom/ir';
 import { isVariable, nodeTitle } from '@loom/components';
 import { isBucket } from '@loom/connectors';
 import { usesAuth } from './emit/auth';
@@ -124,6 +131,47 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
       artboardId: entityKind === 'component' && entityId ? owner.get(entityId) : undefined,
     });
   };
+
+  // ---- Documents: paper has rules a screen does not (`docs/V1-COMPLETION.md` L2) ----------
+
+  for (const artboard of Object.values(snapshot.artboards)) {
+    if (artboard.kind !== 'document') continue;
+
+    /**
+     * A margin wider than the paper leaves nothing to print on. The browser would silently
+     * produce blank sheets, which is the worst version of this: it looks like the document is
+     * broken rather than like the margin is.
+     */
+    const page = artboard.page;
+    if (page && page.margin * 2 >= Math.min(page.width, page.height)) {
+      add(
+        'document-margin-too-wide',
+        'error',
+        `"${artboard.name}" has a ${page.margin}mm margin on a ${page.width}x${page.height}mm ` +
+          `page, which leaves nothing to print on.`,
+        artboard.id,
+        'artboard',
+      );
+    }
+
+    /**
+     * A document is reached by navigating to it and printing. One that nothing points at is a
+     * page nobody can open — worth a lint row rather than an error, because the flow that reaches
+     * it may be the next thing the designer is about to draw.
+     */
+    const reachable =
+      snapshot.entryArtboard === artboard.id ||
+      Object.values(snapshot.flows).some((flow) => flow.to === artboard.id);
+    if (!reachable) {
+      add(
+        'document-unreachable',
+        'warning',
+        `Nothing navigates to "${artboard.name}", so there is no way to open it and print it.`,
+        artboard.id,
+        'artboard',
+      );
+    }
+  }
 
   // ---- Uploads: a field has to know where the file goes (`docs/29-storage.md`) ----------
 

@@ -30,7 +30,7 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   message: 'Show a message',
   openUrl: 'Open a link',
   copy: 'Copy to clipboard',
-  download: 'Download a file',
+  download: 'Print this screen',
   signIn: 'Sign in',
   signInWith: 'Sign in with…',
   signUp: 'Sign up',
@@ -41,10 +41,9 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
 /**
  * What the picker offers, in the order it offers it.
  *
- * `download` is deliberately **absent** until the emitters for it land (documents, then export).
- * The IR carries the shape so the format does not need a second bump, and the editor does not
- * offer a step that would fail the build — a picker that lists something the compiler refuses is
- * the failure mode this list exists to prevent.
+ * `download` offers **`pdf` only** for now: printing is built (L2) and writing a CSV is not (Q5).
+ * The editor does not offer a step the compiler would refuse — a picker that lists something the
+ * build rejects is the failure mode this list exists to prevent.
  */
 export const ACTION_ORDER: ActionKind[] = [
   'trigger',
@@ -55,6 +54,7 @@ export const ACTION_ORDER: ActionKind[] = [
   'navigate',
   'openUrl',
   'copy',
+  'download',
   'signIn',
   'signInWith',
   'signUp',
@@ -219,6 +219,9 @@ export function canAdd(snapshot: Snapshot, componentId: Id, kind: ActionKind): b
       return fieldChoices(snapshot, componentId).length > 0;
     case 'navigate':
       return screenChoices(snapshot, componentId).length > 0;
+    // Printing a screen only means something on a page laid out for paper.
+    case 'download':
+      return Object.values(snapshot.artboards).some((artboard) => artboard.kind === 'document');
     default:
       return true;
   }
@@ -269,6 +272,13 @@ function defaultAction(snapshot: Snapshot, componentId: Id, kind: ActionKind): A
     }
     case 'message':
       return { kind, text: 'Saved', tone: 'ok' };
+    /**
+     * Printing takes no argument: it prints the screen the person is on, and getting them to the
+     * invoice is what `navigate` already does. `csv` needs rows and has no emitter yet, so the
+     * picker never produces one.
+     */
+    case 'download':
+      return { kind, format: 'pdf' };
     case 'signIn':
     case 'signUp': {
       // A sign-in form is two fields and a button, so the two fields are the guess. Wrong is

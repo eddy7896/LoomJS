@@ -47,6 +47,8 @@ export interface ScaffoldOptions {
    * and no import — a project nobody has given a phone layout carries no bytes for one.
    */
   responsiveCss?: string;
+  /** The print stylesheet (L2), when the project has any document at all. Same rule. */
+  printCss?: string;
   /**
    * Packages something else decided this project needs — a bucket's SDK, today.
    *
@@ -173,6 +175,17 @@ ReactDOM.createRoot(root).render(
       path: 'src/components.css',
       content: componentsCss(),
     },
+    ...(options.printCss
+      ? [
+          {
+            // Paper (`docs/V1-COMPLETION.md` L2): the page size, and hiding everything that is not
+            // the document. Its own file, because it is the only stylesheet that is about a medium
+            // rather than about this project's decisions.
+            path: 'src/print.css',
+            content: options.printCss,
+          },
+        ]
+      : []),
     ...(options.responsiveCss
       ? [
           {
@@ -188,7 +201,7 @@ ReactDOM.createRoot(root).render(
       path: 'src/index.css',
       content: `@import './theme.css';
 @import './components.css';
-${options.responsiveCss ? `@import './responsive.css';\n` : ''}
+${options.printCss ? `@import './print.css';\n` : ''}${options.responsiveCss ? `@import './responsive.css';\n` : ''}
 * {
   box-sizing: border-box;
 }

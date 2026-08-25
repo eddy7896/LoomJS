@@ -17,3 +17,14 @@ export { componentStyle, styleToCss } from './emit/style';
 // The canvas resolves phone overrides itself: an artboard has a width, and a media query does not
 // know about it (`docs/V1-COMPLETION.md` L3).
 export { resolveResponsive, hasResponsive, responsiveCss, SM_MAX_WIDTH } from './emit/responsive';
+// Paper (`docs/V1-COMPLETION.md` L2). The canvas draws a document at its real page size.
+export {
+  DEFAULT_PAGE,
+  PAGE_PRESETS,
+  documentStyle,
+  isDocument,
+  pageOf,
+  pageSize,
+  printCss,
+  type PagePreset,
+} from './emit/document';

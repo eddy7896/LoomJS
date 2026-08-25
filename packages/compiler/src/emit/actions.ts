@@ -160,17 +160,25 @@ function stepFor(action: Action, ctx: EmitContext, id: Id, hasFollowing: boolean
     /**
      * Handing the person a file (`docs/V1-COMPLETION.md` §4.5).
      *
-     * The shape landed with the IR wave; the two emitters land with the phases that need them —
-     * `pdf` with documents (L2), `csv` with export (Q5). Until then this is a **Build-tier
-     * problem** with a sentence saying which phase owns it, rather than a silently dropped step:
-     * an action that compiles to nothing is the worst of the three possible behaviours.
+     * `pdf` prints the screen the person is on, using the browser's own typesetter and the print
+     * stylesheet the project emits (`emit/document.ts`). There is no PDF library, on purpose: a
+     * second renderer is a second place the invoice can look different from the screen it was
+     * designed on. "Save as PDF" is in the dialog on every platform.
+     *
+     * `csv` needs rows, and the emitter for it arrives with export (Q5). Until then it is a
+     * Build-tier problem naming the phase that owns it, rather than a step that silently compiles
+     * to nothing.
      */
-    case 'download':
+    case 'download': {
+      if (action.format === 'pdf') {
+        return { lines: ['window.print();'], async: false };
+      }
       throw new CompileError(
-        `Downloading a ${action.format.toUpperCase()} is not built yet. The action exists in the ` +
-          `document; the code for it arrives with documents and export.`,
+        `Downloading a CSV is not built yet. The action exists in the document; the code for it ` +
+          `arrives with import and export.`,
         id,
       );
+    }
 
     // Auth (spec 10). Like a trigger, these can fail, and a failure stops the sequence: "sign in,
     // then go to the dashboard" must not reach the dashboard on a wrong password. Signing out
