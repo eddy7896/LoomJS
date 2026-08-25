@@ -241,7 +241,11 @@ export function ElementsPanel() {
     });
 
     return grouped;
-  }, [mode, containerId]);
+    // `snapshot`, because two sections are built from the document rather than from the
+    // vocabulary: the project's own components (R1), and whether Sign in has a connection to warn
+    // about. Without it the palette is computed once and never notices either — promoting a frame
+    // left the Components section absent until something unrelated re-rendered the panel.
+  }, [mode, containerId, snapshot]);
 
   const needle = query.trim().toLowerCase();
   const filtered = sections.map((section) => ({
