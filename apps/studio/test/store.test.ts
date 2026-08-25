@@ -213,8 +213,12 @@ describe('editor -> compiler (M2 routing)', () => {
     const detail = files.find((f) => f.path === 'src/artboards/ItemDetail.tsx')!.content;
     const home = files.find((f) => f.path === 'src/artboards/Home.tsx')!.content;
 
-    expect(app).toContain('<Route path="/" element={<Home />} />');
-    expect(app).toContain('<Route path="/item-detail/:id" element={<ItemDetail />} />');
+    // Every screen is wrapped in an error boundary (L1), so the route is asserted by its path
+    // and its component rather than by the whole element.
+    expect(app).toContain('<Route path="/"');
+    expect(app).toContain('<Home />');
+    expect(app).toContain('<Route path="/item-detail/:id"');
+    expect(app).toContain('<ItemDetail />');
     expect(home).toContain('useNavigate()');
     expect(home).toContain('encodeURIComponent(String("42"))');
     expect(detail).toContain('{params.id ?? ""}');

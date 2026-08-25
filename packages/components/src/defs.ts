@@ -280,6 +280,51 @@ export const OUTLET_DEF: ComponentDef = {
   defaultSize: { width: 480, height: 320 },
 };
 
+/**
+ * Paging a read that runs on the server (Q2, `docs/V1-COMPLETION.md`).
+ *
+ * The **only** element whose whole job is to change what a query asks for. Everything else on a
+ * screen displays what came back; this decides which slice comes back at all.
+ *
+ * That is why it is an element rather than a property of the List. A List renders rows and does
+ * not know where they came from — putting the page control on it would mean the thing that
+ * displays a result also steering the request that produced it, and two Lists reading one query
+ * would each have their own idea of which page you were on.
+ *
+ * It holds the page number in local state, so changing it re-runs the read the way any other
+ * input to a reactive pipeline does. No new mechanism.
+ */
+export const PAGER_DEF: ComponentDef = {
+  type: 'Pager',
+  node: {
+    ports: () => [
+      // Out: which page is being asked for. Wire it into the read's `page`.
+      gives('pt_page', 'page', 'page', { kind: 'number' }),
+      // In: how many rows exist altogether — what the database counted, so the last page is the
+      // last page rather than the last page of what happened to be fetched.
+      takes('pt_total', 'total', 'total', { kind: 'number' }),
+    ],
+    fieldState: true,
+  },
+  label: 'Pager',
+  category: 'container',
+  keywords: ['page', 'paging', 'pagination', 'next', 'previous', 'more'],
+  isContainer: false,
+  fields: [
+    // The page it starts on. Zero-based, because that is what an offset is.
+    { key: 'value', label: 'Page', control: 'number', default: 0 },
+    {
+      key: 'pageSize',
+      label: 'Rows per page',
+      control: 'number',
+      default: 100,
+    },
+    { key: 'previousLabel', label: 'Previous label', control: 'text', default: 'Previous' },
+    { key: 'nextLabel', label: 'Next label', control: 'text', default: 'Next' },
+  ],
+  variants: [{ key: 'variant', label: 'Style', options: ['plain', 'compact'], default: 'plain' }],
+};
+
 export const FRAME_DEF: ComponentDef = {
   type: 'Frame',
   node: null, // Structure. A frame arranges what is inside it and has nothing of its own to send.
@@ -1125,6 +1170,7 @@ const DEFS: readonly ComponentDef[] = [
   CHAT_DEF,
   INSTANCE_DEF,
   OUTLET_DEF,
+  PAGER_DEF,
 ];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 

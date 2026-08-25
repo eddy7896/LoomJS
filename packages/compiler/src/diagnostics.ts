@@ -132,6 +132,49 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
     });
   };
 
+  // ---- Pagers: a page size that disagrees with the read (`docs/V1-COMPLETION.md` Q2) --------
+
+  for (const component of Object.values(snapshot.components)) {
+    if (component.type !== 'Pager') continue;
+
+    /**
+     * A pager works out the last page from the total and its own rows-per-page. If that number is
+     * not the read's limit, the arithmetic is wrong — Next stops early, or offers pages that come
+     * back empty. Both look like missing data and neither is.
+     */
+    const total = component.props.total;
+    if (total?.kind !== 'bound') {
+      add(
+        'pager-no-total',
+        'warning',
+        `"${componentLabel(component)}" does not know how many rows there are, so it cannot tell ` +
+          `which page is the last one. Wire a read's total into it.`,
+        component.id,
+        'component',
+      );
+      continue;
+    }
+
+    const route = snapshot.nodes[total.source.nodeId];
+    const body = ((route?.config ?? {}) as { body?: Id[] }).body ?? [];
+    const read = body.map((id) => snapshot.nodes[id]).find((node) => node?.category === 'db');
+    const limit = Number((read?.config as { limit?: unknown } | undefined)?.limit ?? 100);
+
+    const size = component.props.pageSize;
+    const pageSize = size?.kind === 'static' ? Number(size.value) : 100;
+
+    if (Number.isFinite(limit) && Number.isFinite(pageSize) && limit !== pageSize) {
+      add(
+        'pager-size-mismatch',
+        'warning',
+        `"${componentLabel(component)}" pages ${pageSize} rows at a time, but the read it is ` +
+          `wired to fetches ${limit}. Make them the same, or the last page will be wrong.`,
+        component.id,
+        'component',
+      );
+    }
+  }
+
   // ---- Public pages: what can and cannot be prerendered (`docs/V1-COMPLETION.md` L4) --------
 
   for (const artboard of Object.values(snapshot.artboards)) {

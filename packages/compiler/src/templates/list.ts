@@ -3,7 +3,7 @@ import type { ComponentEmitter } from '../types';
 import { layoutToStyle } from '../emit/layout';
 import { styleAttr } from '../emit/style';
 import { indent } from '../emit/text';
-import { staticString, valueExpr } from '../emit/props';
+import { staticString, valueExpr, staticNumber } from '../emit/props';
 
 /**
  * List = the implicit map. It renders its **first child** once per row of the data bound to
@@ -11,17 +11,6 @@ import { staticString, valueExpr } from '../emit/props';
  * template, a property with the `item` kind reads a field of the current row.
  */
 /** A static number prop, falling back when it is bound or nonsense. */
-function staticNumber(
-  component: Parameters<ComponentEmitter['emit']>[0],
-  key: string,
-  fallback: number,
-): number {
-  const value = component.props[key];
-  if (value?.kind !== 'static') return fallback;
-  const parsed = Number(value.value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export const listEmitter: ComponentEmitter = {
   type: 'List',
   emit(component, ctx, depth) {

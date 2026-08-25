@@ -193,6 +193,26 @@ export function ComponentView({
     );
   }
 
+  /**
+   * A pager draws its three parts (Q2), so a designer sees a page control rather than a box.
+   *
+   * The numbers are the honest ones the canvas can know: page one, and a total it has no data for.
+   * The running app computes the last page from what the database counted.
+   */
+  if (component.type === 'Pager') {
+    return (
+      <div {...shared} ref={attach} style={leafStyle}>
+        <button type="button" className="loom-pager__step" disabled>
+          {textContent(component, 'previousLabel', params) || 'Previous'}
+        </button>
+        <span className="loom-pager__where">1 / 1</span>
+        <button type="button" className="loom-pager__step">
+          {textContent(component, 'nextLabel', params) || 'Next'}
+        </button>
+      </div>
+    );
+  }
+
   if (component.type === 'Text') {
     return (
       <span {...shared} ref={attach} style={{ cursor: 'default', ...leafStyle }}>

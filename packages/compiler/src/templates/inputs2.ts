@@ -1,7 +1,7 @@
 import { classAttr } from '../emit/variants';
 import type { ComponentEmitter } from '../types';
 import { indent } from '../emit/text';
-import { staticString } from '../emit/props';
+import { staticString, staticNumber } from '../emit/props';
 import { styleAttr } from '../emit/style';
 import { initialFieldValue, parseOptions } from '../emit/fields';
 
@@ -14,17 +14,6 @@ import { initialFieldValue, parseOptions } from '../emit/fields';
  */
 
 /** A static number prop, falling back when it is bound or nonsense. */
-function staticNumber(
-  component: Parameters<ComponentEmitter['emit']>[0],
-  key: string,
-  fallback: number,
-): number {
-  const value = component.props[key];
-  if (value?.kind !== 'static') return fallback;
-  const parsed = Number(value.value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export const multilineFieldEmitter: ComponentEmitter = {
   type: 'MultilineField',
   emit(component, ctx, depth) {

@@ -107,6 +107,20 @@ export function valueExpr(
   }
 }
 
+/**
+ * Read a static number prop, or fall back.
+ *
+ * Lived as a private copy in two templates and now needs a third, which is the point at which a
+ * duplicate becomes two places to fix the same bug. A non-finite value falls back rather than
+ * emitting `NaN` — a size of NaN renders nothing and looks like missing data.
+ */
+export function staticNumber(component: Component, key: string, fallback: number): number {
+  const value = component.props[key];
+  if (value?.kind !== 'static') return fallback;
+  const parsed = Number(value.value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 /** Read a static string prop, or fall back (used for labels that cannot be dynamic yet). */
 export function staticString(component: Component, key: string, fallback = ''): string {
   const value = component.props[key];

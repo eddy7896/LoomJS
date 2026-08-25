@@ -42,6 +42,7 @@ const STEMS: Record<string, string> = {
   Slider: 'loom-slider',
   Frame: 'loom-frame',
   List: 'loom-list',
+  Pager: 'loom-pager',
   Table: 'loom-table',
   Text: 'loom-text',
   Link: 'loom-link',

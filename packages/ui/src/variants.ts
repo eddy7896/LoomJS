@@ -1139,6 +1139,53 @@ const BOUNDARY = `
 }
 `;
 
+const PAGER = `
+/* ---- Pager (docs/V1-COMPLETION.md Q2) ----------------------------------------------------- */
+
+/*
+ * Previous, where you are, Next. A row, because that is the only arrangement anyone expects.
+ */
+.loom-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loom-pager__where {
+  font-family: var(--loom-font-mono);
+  font-size: var(--loom-text-sm);
+  color: var(--loom-color-muted);
+}
+
+.loom-pager__step {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--loom-color-border);
+  border-radius: var(--loom-radius-sm);
+  background: var(--loom-color-panel);
+  color: var(--loom-color-ink);
+  font: inherit;
+  font-size: var(--loom-text-sm);
+  cursor: pointer;
+}
+
+/* Disabled says "there is nothing that way", which is information rather than a failure. */
+.loom-pager__step:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Smaller, for a pager sitting inside a toolbar rather than under a table. */
+.loom-pager--compact .loom-pager__step {
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+.loom-pager--compact {
+  gap: 4px;
+}
+`;
+
 export function componentsCss(): string {
   return [
     HEADER,
@@ -1152,5 +1199,11 @@ export function componentsCss(): string {
     UPLOAD,
     CHART,
     CALENDAR,
+    // The three below were each defined and then not listed here, so their rules were written and
+    // never emitted — a stylesheet that compiles and does nothing. Nothing caught it because none
+    // of them is a *variant* option, and the variant drift test only checks those.
+    NAV,
+    BOUNDARY,
+    PAGER,
   ].join('\n');
 }
