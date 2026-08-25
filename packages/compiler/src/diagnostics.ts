@@ -11,6 +11,7 @@ import { isBucket } from '@loom/connectors';
 import { usesAuth } from './emit/auth';
 import { compile } from './compile';
 import { CompileError } from './types';
+import { nodesInsideRoutes } from './emit/derived';
 
 /**
  * Problems — the first of the three error tiers (`docs/specs/problems.md`).
@@ -66,12 +67,8 @@ const componentLabel = (component: Component): string => component.name ?? compo
 
 /** Node ids sitting inside some API route's body — their operands are config, not wires. */
 function insideRoutes(snapshot: Snapshot): Set<Id> {
-  const inside = new Set<Id>();
-  for (const node of Object.values(snapshot.nodes)) {
-    if (node.category !== 'api') continue;
-    for (const id of ((node.config ?? {}) as { body?: Id[] }).body ?? []) inside.add(id);
-  }
-  return inside;
+  // Includes what a nested container holds (N2), so a step inside a branch arm is inside the route.
+  return nodesInsideRoutes(snapshot);
 }
 
 /** Which artboard owns each component, so a row can switch screens before selecting. */

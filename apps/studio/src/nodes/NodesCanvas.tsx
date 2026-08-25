@@ -12,7 +12,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { Node, Port } from '@loom/ir';
+import type { Node, Port, Snapshot } from '@loom/ir';
 import { defForNode, mirrorPortsFor, nodeTitle } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
@@ -41,6 +41,27 @@ interface LoomNodeData extends Record<string, unknown> {
   node: Node;
   subtitle: string;
   body: Node[];
+  /** A branch's two arms, labelled. Empty for everything else (N2). */
+  arms: { label: string; steps: Node[] }[];
+}
+
+/**
+ * A branch's arms, in the order a person reads them.
+ *
+ * Labelled rather than positional: a card showing two unnamed lists of steps would make the reader
+ * work out which one runs when the condition holds, which is the whole thing the node is for.
+ */
+function armsOf(node: Node, snapshot: Snapshot): { label: string; steps: Node[] }[] {
+  if (node.kind !== 'branch') return [];
+
+  const config = (node.config ?? {}) as { then?: string[]; else?: string[] };
+  const resolve = (ids: string[] = []): Node[] =>
+    ids.map((id) => snapshot.nodes[id]).filter((step): step is Node => Boolean(step));
+
+  return [
+    { label: 'when it holds', steps: resolve(config.then) },
+    { label: 'otherwise', steps: resolve(config.else) },
+  ];
 }
 
 const PORT_STYLE = { width: 10, height: 10 };
@@ -61,8 +82,40 @@ function PortRow({ port, side }: { port: Port; side: 'in' | 'out' }) {
   );
 }
 
+/**
+ * One step inside a container, wherever it lives.
+ *
+ * Extracted when a Branch needed the same row in each of its two arms (N2): the alternative was
+ * three copies of it, which is three places for the colour rule to drift.
+ */
+function StepRow({ step, index }: { step: Node; index: number }) {
+  const config = step.config as { operationId?: string; table?: string; op?: string } | undefined;
+
+  return (
+    <button
+      // A step is coloured by what it *is*, so a body reads at a glance: a database read, a tool
+      // call and a computation are three different kinds of work and should not look alike
+      // (T2, `docs/22-api-connectors.md`).
+      className={`nstep nstep--${step.category}`}
+      data-testid={`nstep-${step.category}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        select({ kind: 'node', id: step.id });
+      }}
+    >
+      <span className="nstep__index mono">{index + 1}</span>
+      <span>{step.name ?? step.kind}</span>
+      <span className="nstep__op mono">
+        {/* What it does, in its own words: an operation for a tool, an op for a computation, the
+            table for a database step. */}
+        {String(config?.operationId ?? config?.table ?? config?.op ?? step.kind)}
+      </span>
+    </button>
+  );
+}
+
 function LoomNode({ data, selected }: NodeProps) {
-  const { node, subtitle, body } = data as LoomNodeData;
+  const { node, subtitle, body, arms } = data as LoomNodeData;
   const inputs = node.ports.filter((port) => port.direction === 'in');
   const outputs = node.ports.filter((port) => port.direction === 'out');
 
@@ -155,32 +208,24 @@ function LoomNode({ data, selected }: NodeProps) {
         <div className="nnode__body">
           <span className="nnode__body-label">runs on the server</span>
           {body.map((step, index) => (
-            <button
-              key={step.id}
-              // A step is coloured by what it *is*, so a route's body reads at a glance: a
-              // database read, a tool call and a computation are three different kinds of work
-              // and should not look alike (T2, `docs/22-api-connectors.md`).
-              className={`nstep nstep--${step.category}`}
-              data-testid={`nstep-${step.category}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                select({ kind: 'node', id: step.id });
-              }}
-            >
-              <span className="nstep__index mono">{index + 1}</span>
-              <span>{step.name ?? step.kind}</span>
-              <span className="nstep__op mono">
-                {/* What it does, in its own words: an operation for a tool, an op for a
-                    computation, the table for a database step. */}
-                {String(
-                  (step.config as { operationId?: string; table?: string; op?: string } | undefined)
-                    ?.operationId ??
-                    (step.config as { table?: string } | undefined)?.table ??
-                    (step.config as { op?: string } | undefined)?.op ??
-                    step.kind,
-                )}
-              </span>
-            </button>
+            <StepRow key={step.id} step={step} index={index} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* A branch's two arms, each labelled with when it runs (N2). */}
+      {arms.length > 0 ? (
+        <div className="nnode__body">
+          {arms.map((arm) => (
+            <div key={arm.label} className="nnode__arm">
+              <span className="nnode__body-label">{arm.label}</span>
+              {arm.steps.length === 0 ? (
+                // An empty arm is a real answer — "carry on" needs no placeholder step to say so.
+                <span className="nnode__arm-empty">nothing this way</span>
+              ) : (
+                arm.steps.map((step, index) => <StepRow key={step.id} step={step} index={index} />)
+              )}
+            </div>
           ))}
         </div>
       ) : null}
@@ -270,10 +315,23 @@ export function NodesCanvas() {
     return mirrorableComponents(snapshot, activeArtboardId).filter((id) => !materialised.has(id));
   }, [snapshot, activeArtboardId]);
 
+  /**
+   * Every node that lives inside a container, so it is drawn there rather than floating free.
+   *
+   * A Branch's two arms count as well as a body (N2) — a step in an arm is inside the branch, and
+   * one drawn twice is a graph nobody can read.
+   */
   const bodyIds = useMemo(() => {
     const ids = new Set<string>();
     for (const node of Object.values(snapshot.nodes)) {
-      for (const id of ((node.config ?? {}) as { body?: string[] }).body ?? []) ids.add(id);
+      const config = (node.config ?? {}) as {
+        body?: string[];
+        then?: string[];
+        else?: string[];
+      };
+      for (const id of [...(config.body ?? []), ...(config.then ?? []), ...(config.else ?? [])]) {
+        ids.add(id);
+      }
     }
     return ids;
   }, [snapshot.nodes]);
@@ -332,6 +390,8 @@ export function NodesCanvas() {
       data: {
         node,
         subtitle: node.mirrorOf ? 'mirror' : `${node.category}:${node.kind}`,
+        // A branch shows both arms, labelled; everything else shows its one body (N2).
+        arms: armsOf(node, snapshot),
         body: (((node.config ?? {}) as { body?: string[] }).body ?? [])
           .map((id) => snapshot.nodes[id])
           .filter((step): step is Node => Boolean(step)),
@@ -360,6 +420,7 @@ export function NodesCanvas() {
           },
           subtitle: 'mirror',
           body: [],
+          arms: [],
         } satisfies LoomNodeData,
       };
     });

@@ -81,6 +81,14 @@ const CLIENT_KINDS: Record<string, string | undefined> = {
     'Logic reads a field of a request body, so it belongs inside an API route — unless something is wired into it.',
   validate: 'Validate runs on the server, where it cannot be bypassed. Put it inside an API route.',
   gate: 'A Gate stops a request, so it belongs inside an API route.',
+  /**
+   * Both are containers whose bodies are server work — a branch chooses between database writes
+   * and tool calls, and a For each does five hundred of them. Neither is refused because of a
+   * request body, so no wire lifts it: the body is the reason.
+   */
+  branch: 'A Branch chooses between steps that run on the server. Put it inside an API route.',
+  forEach:
+    'A For each runs its steps once per row, on the server. Put it inside an API route — a browser is not where five hundred of anything should happen.',
   code: 'A Code node runs on the server. Put it inside an API route.',
 };
 
@@ -162,11 +170,32 @@ function mathExpr(node: Node, operands: string[]): { expr: string; usesDivide: b
 }
 
 /** Every node id that sits inside some API route's body. */
+/**
+ * The steps a container holds: an API route's body, and a Branch's two arms (N2).
+ *
+ * One place, because a nested container's steps are still steps — a database write inside a branch
+ * arm inside a route runs on the server exactly like one at the top of the body, and anything that
+ * forgot to look inside would refuse it as browser work.
+ */
+export function stepsOf(node: { config?: unknown }): string[] {
+  const config = (node.config ?? {}) as { body?: string[]; then?: string[]; else?: string[] };
+  return [...(config.body ?? []), ...(config.then ?? []), ...(config.else ?? [])];
+}
+
 export function nodesInsideRoutes(snapshot: Snapshot): Set<Id> {
   const inside = new Set<Id>();
+
+  // Depth-first, because a Branch inside a route holds steps of its own and those are inside the
+  // route too. Guarded against a cycle rather than trusting the document not to have one.
+  const walk = (id: Id): void => {
+    if (inside.has(id)) return;
+    inside.add(id);
+    for (const child of stepsOf(snapshot.nodes[id] ?? {})) walk(child);
+  };
+
   for (const node of Object.values(snapshot.nodes)) {
     if (node.category !== 'api') continue;
-    for (const id of ((node.config ?? {}) as { body?: Id[] }).body ?? []) inside.add(id);
+    for (const id of stepsOf(node)) walk(id);
   }
   return inside;
 }

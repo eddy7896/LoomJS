@@ -126,11 +126,28 @@ export function ElementsPanel() {
   // never to the snapshot. Losing it on every reload made the setting not worth having.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
 
-  // A function node added while an API route is selected goes *into* its body — the server side.
+  /**
+   * A function node added while a container is selected goes **inside** it.
+   *
+   * An API route was the only container; a Branch and a For each are two more (N2). Selecting one
+   * and adding a step should put the step where you were looking, which is the same rule the route
+   * already followed — the alternative is a node dropped somewhere else that then has to be
+   * dragged in.
+   */
+  const selected = selection?.kind === 'node' ? snapshot.nodes[selection.id] : undefined;
   const containerId =
-    selection?.kind === 'node' && snapshot.nodes[selection.id]?.category === 'api'
-      ? selection.id
+    selected &&
+    (selected.category === 'api' || selected.kind === 'branch' || selected.kind === 'forEach')
+      ? selected.id
       : undefined;
+
+  /** What a step added into the selected container is called, so the hint can say it. */
+  const containerLabel =
+    selected?.kind === 'branch'
+      ? 'this branch, on the "when it holds" side'
+      : selected?.kind === 'forEach'
+        ? 'this For each, so it runs once per row'
+        : 'the selected API route';
 
   const sections = useMemo(() => {
     if (mode === 'design') {
@@ -223,11 +240,13 @@ export function ElementsPanel() {
           haystack: haystackOf(def.label, def.keywords),
           hint:
             def.category === 'fn' && containerId
-              ? 'Adds a step inside the selected API route'
+              ? `Adds a step inside ${containerLabel}`
               : undefined,
           onAdd: () =>
             def.category === 'fn' && containerId
-              ? addBodyStep(containerId, def.kind)
+              ? // A branch's first arm by default; the other one is chosen on the branch itself,
+                // because "which side" is a decision about the branch rather than about the step.
+                addBodyStep(containerId, def.kind, selected?.kind === 'branch' ? 'then' : 'body')
               : addGraphNode(def.category, def.kind),
         })),
     }));

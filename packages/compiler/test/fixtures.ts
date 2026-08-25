@@ -1892,3 +1892,52 @@ export function publicPageSnapshot(): Snapshot {
     },
   };
 }
+
+/**
+ * A route whose body branches and loops (N2).
+ *
+ * Built for the smoke gate: the generated `if`/`else` and the `for` are the two shapes most likely
+ * to emit something that reads fine and does not parse, and only a real build says so.
+ */
+export function controlFlowSnapshot(): Snapshot {
+  const base = supabaseSnapshot();
+  const route = Object.values(base.nodes).find((node) => node.category === 'api')!;
+  const body = ((route.config ?? {}) as { body?: string[] }).body ?? [];
+
+  const fnNode = (id: string, kind: string, config: Record<string, unknown>): Node => ({
+    id,
+    category: 'fn',
+    kind,
+    position: { x: 0, y: 0 },
+    config,
+    ports: [
+      { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
+      {
+        id: 'pt_result',
+        name: 'result',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'any' },
+      },
+    ],
+  });
+
+  return {
+    ...base,
+    nodes: {
+      ...base.nodes,
+      nd_trim: fnNode('nd_trim', 'compute', { op: 'trim' }),
+      nd_upper: fnNode('nd_upper', 'compute', { op: 'uppercase' }),
+      nd_each: fnNode('nd_each', 'forEach', { limit: 25, body: ['nd_trim'] }),
+      nd_branch: fnNode('nd_branch', 'branch', {
+        condition: 'isFilled',
+        then: ['nd_upper'],
+        else: ['nd_each'],
+      }),
+      [route.id]: {
+        ...route,
+        config: { ...(route.config as object), body: [...body, 'nd_branch'] },
+      },
+    },
+  };
+}

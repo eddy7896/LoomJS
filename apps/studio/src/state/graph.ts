@@ -109,22 +109,40 @@ export function addGlobalNode(): Id {
  * Add a function node into an API route's body. The body is what runs on the server — the
  * container boundary is the network boundary (`docs/specs/binding-trigger-runtime.md`).
  */
-export function addBodyStep(apiNodeId: Id, kind: string): Id | undefined {
+export function addBodyStep(
+  containerId: Id,
+  kind: string,
+  /**
+   * Which list to add it to (N2).
+   *
+   * An API route and a For each have one body; a Branch has two arms. Naming the slot rather than
+   * assuming `body` is what lets one function serve all three — the alternative was a second
+   * near-identical adder per container, which is how two of them end up disagreeing.
+   */
+  slot: 'body' | 'then' | 'else' = 'body',
+): Id | undefined {
   const snapshot = getState().snapshot;
-  const api = snapshot.nodes[apiNodeId];
-  if (!api || api.category !== 'api') return undefined;
+  const container = snapshot.nodes[containerId];
+  if (!container) return undefined;
 
-  const existing = ((api.config ?? {}) as { body?: Id[] }).body ?? [];
+  // A route, a branch or a for each. Anything else has no inside to add to.
+  const holds =
+    container.category === 'api' || container.kind === 'branch' || container.kind === 'forEach';
+  if (!holds) return undefined;
+
+  const config = (container.config ?? {}) as Record<string, unknown>;
+  const existing = (config[slot] as Id[] | undefined) ?? [];
+
   const step = createNode('fn', kind, newNodeId(), {
-    x: api.position.x,
-    y: api.position.y + 160 + existing.length * 40,
+    x: container.position.x,
+    y: container.position.y + 160 + existing.length * 40,
   });
   dispatch({ type: 'addNode', node: step });
 
   dispatch({
     type: 'setNodeConfig',
-    nodeId: apiNodeId,
-    config: { ...((api.config ?? {}) as object), body: [...existing, step.id] },
+    nodeId: containerId,
+    config: { ...config, [slot]: [...existing, step.id] },
   });
   select({ kind: 'node', id: step.id });
   return step.id;

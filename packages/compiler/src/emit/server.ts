@@ -384,8 +384,31 @@ ${checks.join('\n')}
  * (`docs/06-glossary.md`). It runs on the server for the same reason validation does: a check the
  * browser could skip is not a check.
  */
-function emitGateStep(node: Node): string {
-  const config = (node.config ?? {}) as Partial<GateConfig>;
+/**
+ * The hard ceiling on a For each, whatever it was configured with (N2).
+ *
+ * A cap somebody can raise without limit is not a cap. Five hundred is well past what a serverless
+ * request should be doing in one go, and a list longer than this is a job rather than a step —
+ * which is what scheduled work (E3) is for.
+ */
+const FOR_EACH_CAP = 500;
+
+/** Push an already-emitted step in by another level, so a nested body reads as nested. */
+function indentBy(code: string, spaces: number): string {
+  const pad = ' '.repeat(spaces);
+  return code
+    .split('\n')
+    .map((line) => (line ? pad + line : line))
+    .join('\n');
+}
+
+/**
+ * What counts as true, in one place.
+ *
+ * A Gate refuses when it does not hold and a Branch takes the other arm — different jobs, and the
+ * *test* has to be the same one or "is checked" would mean two things two nodes apart.
+ */
+function conditionTest(node: Node, config: Partial<GateConfig>): { subject: string; test: string } {
   const condition = config.condition ?? 'isFilled';
   const field = String(config.field ?? '').trim();
   const comparand = JSON.stringify(String(config.value ?? ''));
@@ -408,14 +431,116 @@ function emitGateStep(node: Node): string {
   const test = tests[condition];
   if (!test) {
     throw new CompileError(
-      `Gate has unknown condition "${condition}". Known: ${Object.keys(tests).join(', ')}.`,
+      `"${node.name ?? node.kind}" has unknown condition "${condition}". Known: ` +
+        `${Object.keys(tests).join(', ')}.`,
+      node.id,
+    );
+  }
+
+  return { subject, test };
+}
+
+function emitGateStep(node: Node): string {
+  const config = (node.config ?? {}) as Partial<GateConfig>;
+  const { subject, test } = conditionTest(node, config);
+
+  return `  {
+    const subject: unknown = ${subject};
+    if (!(${test})) throw new Error(${JSON.stringify(gateMessage(config))});
+  }`;
+}
+
+/**
+ * Choosing between two paths (N2).
+ *
+ * An `if`/`else` around two lists of steps. Each arm reads and writes the same `value` the rest of
+ * the route does, so a branch chains like any other step and whichever arm ran decides what comes
+ * out of it.
+ *
+ * An empty arm is legal and means "do nothing this way", which is a real answer — "send a receipt
+ * if it paid, and otherwise carry on" should not need a placeholder step to say so.
+ */
+function emitBranchStep(node: Node, snapshot: Snapshot): string {
+  const config = (node.config ?? {}) as Partial<GateConfig> & { then?: string[]; else?: string[] };
+  const { subject, test } = conditionTest(node, config);
+
+  const arm = (ids: readonly string[]): string =>
+    ids
+      .map((id) => snapshot.nodes[id])
+      .filter((step): step is Node => Boolean(step))
+      .map((step) => indentBy(emitStep(step, snapshot), 2))
+      .join('\n');
+
+  const yes = arm(config.then ?? []);
+  const no = arm(config.else ?? []);
+
+  return `  {
+    const subject: unknown = ${subject};
+    if (${test}) {
+${yes || '      // nothing this way'}
+    } else {
+${no || '      // nothing this way'}
+    }
+  }`;
+}
+
+/**
+ * Doing something to each of a list (N2).
+ *
+ * Bounded by construction: it walks a list and stops at a cap. There is no condition to loop on
+ * and no way to loop forever, which is what keeps it a data operation rather than control flow.
+ *
+ * **One row failing does not stop the rest.** A run over five hundred rows that dies on the third
+ * and reports nothing is worse than no run at all, so each item is attempted on its own and what
+ * comes out is how many worked and which did not, with the reason attached.
+ *
+ * The body reads `value` like every other step; inside the loop that `value` is the item, which is
+ * why the arm is a block of its own.
+ */
+function emitForEachStep(node: Node, snapshot: Snapshot): string {
+  const config = (node.config ?? {}) as { limit?: unknown; body?: string[] };
+
+  const asked = Number(config.limit ?? FOR_EACH_CAP);
+  const cap = Number.isFinite(asked)
+    ? Math.min(Math.max(1, Math.trunc(asked)), FOR_EACH_CAP)
+    : FOR_EACH_CAP;
+
+  const body = (config.body ?? [])
+    .map((id) => snapshot.nodes[id])
+    .filter((step): step is Node => Boolean(step))
+    .map((step) => indentBy(emitStep(step, snapshot), 4))
+    .join('\n');
+
+  if (!body) {
+    throw new CompileError(
+      `"${node.name ?? 'For each'}" has no steps, so it would walk the list and do nothing to it.`,
       node.id,
     );
   }
 
   return `  {
-    const subject: unknown = ${subject};
-    if (!(${test})) throw new Error(${JSON.stringify(gateMessage(config))});
+    const items = Array.isArray(value) ? (value as unknown[]) : [];
+    const failed: Record<string, unknown>[] = [];
+    let done = 0;
+
+    // Capped, so a list that is longer than anyone expected cannot run away with the request.
+    for (const item of items.slice(0, ${cap})) {
+      try {
+        // The body reads \`value\` like any other step; here it is the item.
+        let value: unknown = item;
+${body}
+        done += 1;
+      } catch (error) {
+        // Kept, not thrown: the other rows are still worth doing, and which ones failed is the
+        // thing whoever ran this actually needs.
+        failed.push({
+          item,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    value = { done, failed, skipped: Math.max(0, items.length - ${cap}) };
   }`;
 }
 
@@ -558,6 +683,9 @@ function emitStep(node: Node, snapshot: Snapshot): string {
   if (node.category === 'tool') return toolStep(node, snapshot);
   if (node.kind === 'validate') return emitValidateStep(node);
   if (node.kind === 'gate') return emitGateStep(node);
+  // Containers: their bodies are steps like any other, walked here (N2).
+  if (node.kind === 'branch') return emitBranchStep(node, snapshot);
+  if (node.kind === 'forEach') return emitForEachStep(node, snapshot);
   if (node.kind === 'math') return emitMathStep(node);
   if (node.kind === 'compare') return emitCompareStep(node);
   if (node.kind === 'logic') return emitLogicStep(node);

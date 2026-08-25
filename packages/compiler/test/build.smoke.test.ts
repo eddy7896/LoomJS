@@ -11,6 +11,7 @@ import {
   authSnapshot,
   calculatorSnapshot,
   conditionalSnapshot,
+  controlFlowSnapshot,
   crudSnapshot,
   everyComponentSnapshot,
   uploadSnapshot,
@@ -151,6 +152,21 @@ describe('emitted app builds for real', () => {
 
     // It is still an app: the bundle is there and hydrates over the rendered markup.
     expect(html).toContain('<script type="module"');
+  });
+
+  /**
+   * The two shapes most likely to emit something that reads fine and does not parse: a nested
+   * `if`/`else` and a `for` whose body shadows `value`. Only a real build answers that.
+   */
+  it('type-checks a route that branches and loops', async () => {
+    const dir = await emitProject(controlFlowSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const api = await readFile(join(dir, 'api', 'notes.ts'), 'utf8');
+    expect(api).toContain('} else {');
+    expect(api).toContain('for (const item of');
+    // Capped at what was asked, which is under the ceiling.
+    expect(api).toContain('.slice(0, 25)');
   });
 
   it('type-checks every component the studio can place', async () => {

@@ -56,6 +56,7 @@ import { emitAuthFunctions } from './emit/authServer';
 import { TENANCY_MODULE_PATH, emitTenancyModule, tenancyOf, validateTenancy } from './emit/tenancy';
 import { emitRlsFiles, validateRls } from './emit/rls';
 import { emitBoundaryFile } from './emit/boundary';
+import { nodesInsideRoutes } from './emit/derived';
 
 /**
  * Compile a snapshot into the file set of a runnable Vite + React + TS app.
@@ -502,13 +503,8 @@ ${tree}
  * build-time gate (`docs/specs/connector-credentials.md`, guardrails 1-4).
  */
 function validateServerOnlyWork(snapshot: Snapshot): void {
-  const insideAnApiBody = new Set<string>();
-  for (const node of Object.values(snapshot.nodes)) {
-    if (node.category !== 'api') continue;
-    for (const id of ((node.config ?? {}) as { body?: string[] }).body ?? []) {
-      insideAnApiBody.add(id);
-    }
-  }
+  // Everything a route holds, however deeply — a branch arm's steps run on the server too (N2).
+  const insideAnApiBody = nodesInsideRoutes(snapshot);
 
   for (const node of Object.values(snapshot.nodes)) {
     // A screen bucket is React local state; inside a stateless function it would vanish the

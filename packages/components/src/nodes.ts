@@ -449,6 +449,87 @@ export function mathInputCount(config: Record<string, unknown>): number {
  * request body (`left` / `right` in config). Same operator vocabulary, resolved from whatever the
  * surrounding environment actually has.
  */
+/**
+ * Choosing, as opposed to stopping (N2, `docs/V1-COMPLETION.md` §10).
+ *
+ * A Gate refuses a request; a Branch picks a path. Those are different jobs, and until now the only
+ * way to say "if it paid, send a receipt, otherwise send a reminder" was two routes and a Gate in
+ * each — which is the same decision written down twice, in two places that drift.
+ *
+ * It is a **container with two bodies**, the same shape an API route already has. Each arm is a
+ * list of steps, so the body model stays linear inside an arm and a graph stays something a person
+ * reads top to bottom. What it emits is an `if`/`else`.
+ */
+export const BRANCH_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'branch',
+  label: 'Branch',
+  group: 'logic',
+  keywords: ['if', 'else', 'otherwise', 'choose', 'either', 'condition', 'when'],
+  isContainer: true,
+  defaultConfig: { field: '', condition: 'isTrue', value: '', then: [], else: [] },
+  fields: [
+    // The same vocabulary a Gate tests with, because "what counts as true" should not mean two
+    // different things two nodes apart.
+    { key: 'field', label: 'Field', control: 'text', default: '' },
+    {
+      key: 'condition',
+      label: 'Condition',
+      control: 'select',
+      options: Object.keys(GATE_CONDITIONS),
+      default: 'isTrue',
+    },
+    { key: 'value', label: 'Value', control: 'text', default: '' },
+  ],
+  ports: () => [
+    port('pt_input', 'input', 'in', 'data', { kind: 'any' }),
+    // Whatever the arm that ran produced. `any`, because the two arms are free to answer with
+    // different shapes and pretending otherwise would refuse the common case.
+    port('pt_result', 'result', 'out', 'data', { kind: 'any' }),
+  ],
+};
+
+/**
+ * Doing something to each of a list (N2).
+ *
+ * `docs/06-glossary.md` says narrowing the query is loom's answer to *where is the loop*, and that
+ * stays true — it is the answer to "which rows". This is the answer to a different question: *do
+ * this to each of these*, which invoicing, reminders and bulk import all ask and none of which a
+ * `limit` addresses.
+ *
+ * **Bounded, and that is the whole line.** It walks a list and it has a cap. It cannot loop on a
+ * condition and it cannot loop forever, so it remains a data operation rather than control flow —
+ * a `while` is the general-purpose-VPL slide guardrail 7 names, and it stays refused.
+ *
+ * One row failing does not stop the rest. A run over five hundred rows that dies on the third and
+ * reports nothing is worse than no run at all, so what comes out is how many worked and which
+ * ones did not.
+ */
+export const FOR_EACH_DEF: NodeDef = {
+  category: 'fn',
+  kind: 'forEach',
+  label: 'For each',
+  group: 'logic',
+  keywords: ['loop', 'each', 'every', 'iterate', 'repeat', 'bulk', 'per row'],
+  isContainer: true,
+  defaultConfig: { limit: 500, body: [] },
+  fields: [
+    {
+      key: 'limit',
+      label: 'At most',
+      control: 'number',
+      default: 500,
+    },
+  ],
+  ports: () => [
+    port('pt_input', 'items', 'in', 'data', { kind: 'list', of: { kind: 'record' } }),
+    // How many worked, and the ones that did not with the reason attached.
+    port('pt_done', 'done', 'out', 'data', { kind: 'number' }),
+    port('pt_failed', 'failed', 'out', 'data', { kind: 'list', of: { kind: 'record' } }),
+    port('pt_result', 'result', 'out', 'data', { kind: 'record' }),
+  ],
+};
+
 export const MATH_DEF: NodeDef = {
   category: 'fn',
   kind: 'math',
@@ -557,6 +638,8 @@ const DEFS: readonly NodeDef[] = [
   API_ROUTE_DEF,
   COMPUTE_DEF,
   GATE_DEF,
+  BRANCH_DEF,
+  FOR_EACH_DEF,
   MATH_DEF,
   COMPARE_DEF,
   LOGIC_DEF,
