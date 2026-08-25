@@ -1941,3 +1941,45 @@ export function controlFlowSnapshot(): Snapshot {
     },
   };
 }
+
+/**
+ * A route that lists and signs files (N3).
+ *
+ * For the smoke gate: the file module is a few hundred lines of generated per-provider code, and
+ * whether it type-checks against the real SDKs is not a question a string assertion can answer.
+ */
+export function fileOpsSnapshot(): Snapshot {
+  const base = supabaseSnapshot();
+  const route = Object.values(base.nodes).find((node) => node.category === 'api')!;
+  const body = ((route.config ?? {}) as { body?: string[] }).body ?? [];
+
+  const fileNode = (id: string, operationId: string): Node => ({
+    id,
+    category: 'file',
+    kind: operationId,
+    name: operationId,
+    position: { x: 0, y: 0 },
+    config: { bucketId: 'cn_files', operationId },
+    ports: [
+      { id: 'pt_key', name: 'file', direction: 'in', portKind: 'data', type: { kind: 'text' } },
+      { id: 'pt_out', name: 'out', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+    ],
+  });
+
+  return {
+    ...base,
+    connectors: {
+      ...base.connectors,
+      cn_files: { id: 'cn_files', moduleId: 'local', config: { directory: '.data/uploads' } },
+    },
+    nodes: {
+      ...base.nodes,
+      nd_list: fileNode('nd_list', 'listFiles'),
+      nd_sign: fileNode('nd_sign', 'signUrl'),
+      [route.id]: {
+        ...route,
+        config: { ...(route.config as object), body: [...body, 'nd_list', 'nd_sign'] },
+      },
+    },
+  };
+}

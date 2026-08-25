@@ -9,3 +9,4 @@ export * from './tools';
 export * from './registry';
 export * from './nodes';
 export * from './buckets';
+export * from './files';

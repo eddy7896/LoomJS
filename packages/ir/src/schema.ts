@@ -618,7 +618,23 @@ export type Port = z.infer<typeof PortSchema>;
  * It carries a rule, which is what makes it a category and not a label: **an `event` node has no
  * data `in` ports.** It is a source. A fourth kind has to satisfy that or it does not belong here.
  */
-export const NodeCategorySchema = z.enum(['ui', 'fn', 'api', 'state', 'db', 'tool', 'event']);
+export const NodeCategorySchema = z.enum([
+  'ui',
+  'fn',
+  'api',
+  'state',
+  'db',
+  'tool',
+  'event',
+  /**
+   * A file in a bucket (N3). Neither a table read nor a typed HTTP call: it has no rows and no
+   * request shape, and calling it either would make every rule about one mean two things.
+   *
+   * What it shares with `db` and `tool` is where it runs — inside an API route, on the server,
+   * because a bucket credential in a browser is a bucket anyone can write to.
+   */
+  'file',
+]);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 
 export const NodeSchema = z.object({

@@ -5,12 +5,19 @@ import {
   type OperandConfig,
   type ValidationField,
 } from '@loom/components';
-import { FILTER_OPS, type DbFilter, type DbNodeConfig, type FilterOp } from '@loom/connectors';
+import {
+  FILTER_OPS,
+  type DbFilter,
+  type DbNodeConfig,
+  type FileNodeConfig,
+  type FilterOp,
+} from '@loom/connectors';
 import type { Node, Snapshot } from '@loom/ir';
 import { dialectOf, isDocumentStore, moduleFor } from '@loom/connectors';
 import { CompileError, type EmittedFile } from '../types';
 import { firestorePrelude, firestoreStep } from './firestore';
 import { ORG_ID_VAR, isScoped, scopeFilter } from './tenancy';
+import { supportsFileOps } from './files';
 import { toolPrelude, toolStep, toolTimeout, usesFormEncoding } from './tools';
 import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
@@ -385,6 +392,84 @@ ${checks.join('\n')}
  * browser could skip is not a check.
  */
 /**
+ * One step against a bucket (N3).
+ *
+ * The bucket is named, never carried: the step says which connector to use and the module resolves
+ * the credential from the environment by name. A step that held a key would be a key in the
+ * document, which guardrail 1 refuses outright.
+ */
+function fileStep(node: Node, snapshot: Snapshot): string {
+  const config = (node.config ?? {}) as Partial<FileNodeConfig>;
+  const bucketId = String(config.bucketId ?? '');
+  const operation = String(config.operationId ?? node.kind);
+
+  if (!bucketId) {
+    throw new CompileError(
+      `"${node.name ?? 'This file step'}" has no bucket chosen, so there is nowhere for it to ` +
+        `look. Attach one under Files and pick it here.`,
+      node.id,
+    );
+  }
+
+  const connector = snapshot.connectors[bucketId];
+  if (!connector) {
+    throw new CompileError(
+      `"${node.name ?? 'This file step'}" points at a bucket that is no longer attached.`,
+      node.id,
+    );
+  }
+  if (!supportsFileOps(connector.moduleId)) {
+    throw new CompileError(
+      `Files cannot be listed or removed on "${connector.moduleId}" yet.`,
+      node.id,
+    );
+  }
+
+  const bucket = JSON.stringify(bucketId);
+  const input = `((value ?? {}) as Record<string, unknown>)`;
+
+  switch (operation) {
+    case 'listFiles': {
+      const limit = Number(config.limit ?? 100);
+      return `  {
+    const under = String(${input}.under ?? ${input}.prefix ?? '');
+    value = await listFiles(${bucket}, under, ${Number.isFinite(limit) ? limit : 100});
+  }`;
+    }
+
+    case 'deleteFile':
+      return `  {
+    await deleteFile(${bucket}, String(${input}.file ?? value ?? ''));
+    value = true;
+  }`;
+
+    case 'signUrl': {
+      const seconds = Number(config.seconds ?? 300);
+      return `  {
+    value = await signUrl(${bucket}, String(${input}.file ?? value ?? ''), ${
+      Number.isFinite(seconds) ? seconds : 300
+    });
+  }`;
+    }
+
+    case 'putFile':
+      return `  {
+    value = await putFile(
+      ${bucket},
+      String(${input}.name ?? 'file'),
+      String(${input}.contents ?? ''),
+    );
+  }`;
+
+    default:
+      throw new CompileError(
+        `"${node.name ?? node.kind}" is not a file operation this build knows.`,
+        node.id,
+      );
+  }
+}
+
+/**
  * The hard ceiling on a For each, whatever it was configured with (N2).
  *
  * A cap somebody can raise without limit is not a cap. Five hundred is well past what a serverless
@@ -681,6 +766,8 @@ function emitStep(node: Node, snapshot: Snapshot): string {
   // A tool call runs on the server for the same reason a database node does: the credential must
   // not reach a browser (`docs/22-api-connectors.md`).
   if (node.category === 'tool') return toolStep(node, snapshot);
+  // A file lives in a bucket, and a bucket credential never reaches a browser (N3).
+  if (node.category === 'file') return fileStep(node, snapshot);
   if (node.kind === 'validate') return emitValidateStep(node);
   if (node.kind === 'gate') return emitGateStep(node);
   // Containers: their bodies are steps like any other, walked here (N2).
@@ -893,6 +980,26 @@ const slot = (index: number): string => '$' + index;
       ? toolPrelude(toolTimeout(snapshot, plan.body), usesFormEncoding(snapshot, plan.body))
       : '';
 
+  /**
+   * The file helpers a route reaches for, and only the ones it uses (N3).
+   *
+   * A route that lists files imports `listFiles` and nothing else — the emitted app builds with
+   * `noUnusedLocals`, so an import block covering every operation would fail the build of a
+   * project that uses one.
+   */
+  const fileOps = [
+    ...new Set(
+      plan.body
+        .filter((node) => node.category === 'file')
+        .map((node) => String((node.config as { operationId?: string })?.operationId ?? node.kind)),
+    ),
+  ].sort();
+  const fileLines =
+    fileOps.length > 0
+      ? `import { ${fileOps.join(', ')} } from '../src/server/files';
+`
+      : '';
+
   const dbPrelude = !usesDb
     ? ''
     : documentNode
@@ -942,7 +1049,7 @@ ${
     content: `// Generated by @loom/compiler from API route "${plan.node.name ?? plan.node.id}" (${plan.node.id}).
 // Runs on the server only. Everything in this file is inside the API node's body.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-${dbPrelude}${toolLines}
+${dbPrelude}${toolLines}${fileLines}
 async function readInput(req: IncomingMessage): Promise<unknown> {
   if (req.method === 'GET') {
     const url = new URL(req.url ?? '/', 'http://localhost');

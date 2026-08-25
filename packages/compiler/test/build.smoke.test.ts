@@ -14,6 +14,7 @@ import {
   controlFlowSnapshot,
   crudSnapshot,
   everyComponentSnapshot,
+  fileOpsSnapshot,
   uploadSnapshot,
   firestoreOperationsSnapshot,
   operatorPipelineSnapshot,
@@ -167,6 +168,20 @@ describe('emitted app builds for real', () => {
     expect(api).toContain('for (const item of');
     // Capped at what was asked, which is under the ceiling.
     expect(api).toContain('.slice(0, 25)');
+  });
+
+  /**
+   * The file module is a few hundred lines of generated per-provider code (N3). Whether it
+   * type-checks against the real SDKs is not a question a string assertion can answer.
+   */
+  it('type-checks a route that lists and signs files', async () => {
+    const dir = await emitProject(fileOpsSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const module = await readFile(join(dir, 'src', 'server', 'files.ts'), 'utf8');
+    expect(module).toContain('export async function listFiles');
+    // One local bucket: no S3 client, no Firebase admin, nothing it does not use.
+    expect(module).not.toContain('@aws-sdk/client-s3');
   });
 
   it('type-checks every component the studio can place', async () => {

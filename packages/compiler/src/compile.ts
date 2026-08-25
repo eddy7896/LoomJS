@@ -56,6 +56,7 @@ import { emitAuthFunctions } from './emit/authServer';
 import { TENANCY_MODULE_PATH, emitTenancyModule, tenancyOf, validateTenancy } from './emit/tenancy';
 import { emitRlsFiles, validateRls } from './emit/rls';
 import { emitBoundaryFile } from './emit/boundary';
+import { emitFilesFile } from './emit/files';
 import { nodesInsideRoutes } from './emit/derived';
 
 /**
@@ -140,6 +141,9 @@ export function compile(snapshot: Snapshot): CompileResult {
   });
 
   files.push(...emitStorage(buckets));
+  // What a project does to a file it did not just receive (N3). Demand-driven like the rest: a
+  // project with no buckets gets none of it.
+  files.push(...emitFilesFile(buckets));
 
   /**
    * The chart arithmetic, once, when anything draws one (`docs/30-charts.md`).
