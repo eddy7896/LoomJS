@@ -17,8 +17,10 @@ describe('database nodes -> server code (M4)', () => {
   it('emits a Supabase read inside the serverless function', () => {
     const api = fileAt(supabaseSnapshot(), 'api/notes.ts');
     expect(api).toContain("import { PostgrestClient } from '@supabase/postgrest-js'");
-    expect(api).toContain(".from(\"notes\")");
-    expect(api).toContain(".select('*')");
+    expect(api).toContain('.from("notes")');
+    // Asks for the size of the whole result as well as the rows, which is what makes
+    // "page 3 of 418" cost nothing extra to know (Q2).
+    expect(api).toContain(`.select("*", { count: 'exact' })`);
   });
 
   it('emits an insert that writes the posted row', () => {
@@ -36,7 +38,9 @@ describe('database nodes -> server code (M4)', () => {
     // `primaryKey` and holds no secret, while a leaked key need not contain the word at all.
     const snapshot = supabaseSnapshot();
     for (const connector of Object.values(snapshot.connectors)) {
-      expect(connector.credentialRef, 'a reference is a name, not a value').toMatch(/^[\w-]{1,40}$/);
+      expect(connector.credentialRef, 'a reference is a name, not a value').toMatch(
+        /^[\w-]{1,40}$/,
+      );
       for (const value of stringsIn(connector.config)) {
         expect(value, 'a value this long in a connector is a key').not.toMatch(/^[\w-]{60,}$/);
         expect(value).not.toMatch(/eyJhbGciOi/); // a JWT, which every Supabase key is
@@ -66,20 +70,26 @@ describe('reading rows into the UI', () => {
 
   it('types the result state from the route, which took it from its body', () => {
     const home = fileAt(supabaseSnapshot(), 'src/artboards/Home.tsx');
+    // A paged read holds what the route answered with — the rows *and* how many there are (Q2).
+    // Typing it as the rows alone would be a lie the emitted app's own `tsc` catches.
     expect(home).toContain(
-      'const [result_nd_read, set_result_nd_read] = useState<Record<string, unknown>[] | null>(null)',
+      'useState<{ rows: Record<string, unknown>[]; total: number; page: number } | null>(null)',
     );
   });
 
   it('renders the List as an implicit map over the rows', () => {
     const home = fileAt(supabaseSnapshot(), 'src/artboards/Home.tsx');
-    expect(home).toContain('(result_nd_read ?? []).map((item_cp_list: Record<string, unknown>');
+    // A paged read answers with `{ rows, total, page }`, so the binding reaches past it to the
+    // rows — what a List binds to is the rows either way (Q2).
+    expect(home).toContain('result_nd_read?.rows ?? []');
+    expect(home).toContain('.map((item_cp_list: Record<string, unknown>');
     expect(home).toContain('item_cp_list["title"] ?? ""');
   });
 
   it('shows the empty text when there are no rows', () => {
     const home = fileAt(supabaseSnapshot(), 'src/artboards/Home.tsx');
-    expect(home).toContain('(result_nd_read ?? []).length === 0');
+    expect(home).toContain('result_nd_read?.rows ?? []');
+    expect(home).toContain('.length === 0');
     expect(home).toContain('{"No notes yet"}');
   });
 });

@@ -217,7 +217,8 @@ describe('booleans and queries', () => {
 
     const api = compile(asRead).files.find((f) => f.path === 'api/createnotes.ts')!.content;
     expect(api).toContain('.order("created_at", { ascending: false })');
-    expect(api).toContain('.limit(5)');
+    // A page rather than a limit (Q2): `range` is inclusive at both ends, so five rows is 0..4.
+    expect(api).toContain('.range(from, from + 5 - 1)');
     expect(api).not.toContain('for (');
   });
 });

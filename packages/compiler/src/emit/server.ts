@@ -257,14 +257,43 @@ ${input}    let query = supabase.from(${name}).select('*', { count: 'exact', hea
   }`;
   }
 
+  /**
+   * What comes back with each row (Q1).
+   *
+   * PostgREST embeds a related resource by naming it in the select — `*,line_items(*)` — and
+   * resolves the join from the foreign key itself. One level: the shape is `select=*,other(*)`
+   * and never `other(deeper(*))`, because depth is where a query builder becomes a query language.
+   */
+  const include = (config.include ?? []).filter(Boolean);
+  const selectList = include.length > 0 ? `*,${include.map((t) => `${t}(*)`).join(',')}` : '*';
+
+  /**
+   * A page of rows, and how many there are altogether (Q2).
+   *
+   * `count: 'exact'` asks PostgREST for the size of the **whole** result, which comes back in the
+   * Content-Range header rather than as rows — so "page 3 of 418" costs nothing extra to know.
+   * `range` is inclusive at both ends, which is why the end is `+ size - 1` and not `+ size`.
+   *
+   * The alternative — fetch everything and slice — is a memory problem with a page control on it,
+   * and it is what a hundred-thousand-row table makes fatal.
+   */
+  const size = Number.isFinite(limit) ? limit : 100;
+
   return `  {
-${input}    let query = supabase
+${input}    // Which page was asked for. Absent is the first, and a nonsense one is the first too:
+    // a negative offset is a request nobody meant and an error nobody can act on.
+    const requested = Number((value as { page?: unknown } | null)?.page ?? 0);
+    const page = Number.isFinite(requested) && requested > 0 ? Math.trunc(requested) : 0;
+    const from = page * ${size};
+
+    let query = supabase
       .from(${name})
-      .select('*')${order}
-      .limit(${Number.isFinite(limit) ? limit : 100});${narrowing}
-    const { data, error } = await query;
+      .select(${JSON.stringify(selectList)}, { count: 'exact' })${order}
+      .range(from, from + ${size} - 1);${narrowing}
+    const { data, error, count: total } = await query;
     if (error) throw new Error(error.message);
-    value = data ?? [];
+    // Both, because they answer different questions: the rows on this page, and how many exist.
+    value = { rows: data ?? [], total: total ?? 0, page };
   }`;
 }
 

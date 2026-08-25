@@ -95,10 +95,17 @@ describe('introspection: PostgREST OpenAPI -> loom types', () => {
 });
 
 describe('typed per-table nodes', () => {
-  it('gives a select node rows and a count', () => {
+  it('gives a select node rows, a count, and the pieces paging needs', () => {
     const ports = dbNodePorts(columnsOf('notes'), 'select');
-    expect(ports.map((p) => p.name)).toEqual(['rows', 'count']);
-    expect(ports[0]!.type).toEqual({ kind: 'list', of: { kind: 'record' } });
+    expect(ports.map((p) => p.name)).toEqual(['page', 'rows', 'count', 'total']);
+
+    const rows = ports.find((p) => p.name === 'rows')!;
+    expect(rows.type).toEqual({ kind: 'list', of: { kind: 'record' } });
+
+    // `total` is what the database counted, not what came back: "1 of 4,182" is a fact about the
+    // table, and `rows.length` is a fact about this response (Q2).
+    expect(ports.find((p) => p.name === 'total')!.direction).toBe('out');
+    expect(ports.find((p) => p.name === 'page')!.direction).toBe('in');
   });
 
   it('gives an insert node one input per writable column, typed as the column is', () => {

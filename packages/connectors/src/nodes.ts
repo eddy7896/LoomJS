@@ -13,13 +13,7 @@ import type { ColumnSchema, TableSchema } from './module';
  * is the primary key from introspection — not a concept a designer has to supply.
  */
 export type DbOperation =
-  | 'select'
-  | 'insert'
-  | 'update'
-  | 'delete'
-  | 'count'
-  | 'upsert'
-  | 'aggregate';
+  'select' | 'insert' | 'update' | 'delete' | 'count' | 'upsert' | 'aggregate';
 
 /**
  * The three operations added in D3, and why each one is a node rather than a query someone writes.
@@ -72,6 +66,45 @@ export interface DbNodeConfig {
   /** Aggregate options: which column, and what to do to it. */
   column?: string;
   fn?: AggregateFn;
+  /**
+   * Related tables to bring back with each row (Q1, `docs/V1-COMPLETION.md`).
+   *
+   * **One level, and no more.** An order with its line items, a student with their grades. Deeper
+   * is where a query builder quietly becomes a query language, and the answer for deeper is a
+   * database view or a Code node — both of which the project already owns.
+   *
+   * Named by table. The relation itself is already a fact the schema carries (D6), so this says
+   * *which* of them to follow rather than restating how they join.
+   */
+  include?: string[];
+}
+
+/**
+ * The tables a read may bring back with it: the ones pointing at this table, and the ones it
+ * points at.
+ *
+ * Both directions, because both are the same question asked from different ends — "the order and
+ * its lines" and "the line and its order" — and a designer should not have to know which way the
+ * foreign key happens to be written.
+ */
+export function relatedTables(tables: readonly TableSchema[], table: string): string[] {
+  const found = new Set<string>();
+
+  for (const candidate of tables) {
+    if (candidate.name === table) {
+      // What this table points at.
+      for (const column of candidate.columns) {
+        if (column.references) found.add(column.references.table);
+      }
+      continue;
+    }
+    // What points at this table.
+    if (candidate.columns.some((column) => column.references?.table === table)) {
+      found.add(candidate.name);
+    }
+  }
+
+  return [...found].sort();
 }
 
 /** The column that identifies a row. Update and delete are impossible without one. */
@@ -126,12 +159,13 @@ export function dbNodeFields(
   ];
 }
 
-const port = (
-  id: string,
-  name: string,
-  direction: Port['direction'],
-  type: TypeRef,
-): Port => ({ id, name, direction, portKind: 'data', type });
+const port = (id: string, name: string, direction: Port['direction'], type: TypeRef): Port => ({
+  id,
+  name,
+  direction,
+  portKind: 'data',
+  type,
+});
 
 /** The column id used for a port, kept stable so wires survive a re-introspect. */
 export const columnPortId = (column: string): string => `pt_col_${column}`;
@@ -184,11 +218,22 @@ export function dbNodePorts(
   }
 
   if (operation === 'select') {
-    // A select yields rows; per-column typing shows up when a row is read downstream.
+    /**
+     * A select yields rows; per-column typing shows up when a row is read downstream.
+     *
+     * `page` and `total` are what make a table of a hundred thousand rows possible (Q2). Without
+     * them the only honest thing a List can do is slice what was already fetched — which is a
+     * memory problem with a page control on it.
+     *
+     * `total` is what the **database** counted, not what came back: "1 of 4,182" is a fact about
+     * the table, and `rows.length` is a fact about this response.
+     */
     return [
       ...supplied(),
+      port('pt_page', 'page', 'in', { kind: 'optional', of: { kind: 'number' } }),
       port('pt_rows', 'rows', 'out', { kind: 'list', of: { kind: 'record' } }),
       port('pt_count', 'count', 'out', { kind: 'number' }),
+      port('pt_total', 'total', 'out', { kind: 'number' }),
     ];
   }
 

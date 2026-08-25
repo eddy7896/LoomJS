@@ -1,5 +1,15 @@
 import { actionsOf } from '@loom/ir';
-import type { Artboard, Component, Id, Node, Port, PortRef, Snapshot, TypeRef, Wire } from '@loom/ir';
+import type {
+  Artboard,
+  Component,
+  Id,
+  Node,
+  Port,
+  PortRef,
+  Snapshot,
+  TypeRef,
+  Wire,
+} from '@loom/ir';
 import { canConnect, tsTypeOf } from '@loom/typesys';
 import { CompileError } from '../types';
 import type { DerivedPlan } from './derived';
@@ -31,8 +41,16 @@ export interface PipelinePlan {
   inputs: { componentId: Id; port: Port }[];
   /** The type the route returns, taken from its `result` port. */
   resultType: TypeRef;
+  /**
+   * True when this route's last step reads a **page** of rows (Q2).
+   *
+   * A paged read answers with `{ rows, total, page }` rather than a bare array, because "how many
+   * are there altogether" is a different question from "what is on this page" and a page control
+   * needs both. Bindings unwrap it: `result` is still the rows.
+   */
+  paged: boolean;
   /** Which output ports something on this artboard binds. Unbound outputs emit no state. */
-  binds: { result: boolean; pending: boolean; error: boolean };
+  binds: { result: boolean; pending: boolean; error: boolean; total: boolean };
   /** Screen buckets this pipeline's result is kept in. The buckets themselves are declared by
    * `emit/state.ts`; a pipeline only knows which ones its success path has to set. */
   states: ScreenStatePlan[];
@@ -63,7 +81,13 @@ export function invalidatedTables(plans: PipelinePlan[]): string[] {
 }
 
 /** Output ports of an API route node that a property may bind to. */
-const OUTPUT_PORTS = { pt_result: 'result', pt_pending: 'pending', pt_error: 'error' } as const;
+const OUTPUT_PORTS = {
+  pt_result: 'result',
+  pt_pending: 'pending',
+  pt_error: 'error',
+  /** How many rows exist altogether, when the route reads a page of them (Q2). */
+  pt_total: 'total',
+} as const;
 type OutputPortId = keyof typeof OUTPUT_PORTS;
 
 const jsIdent = (id: string): string => id.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -78,7 +102,8 @@ function portOf(node: Node, portId: Id): Port | undefined {
 
 function resolvePort(snapshot: Snapshot, ref: PortRef, wireId: Id): { node: Node; port: Port } {
   const node = snapshot.nodes[ref.nodeId];
-  if (!node) throw new CompileError(`Wire "${wireId}" references unknown node ${ref.nodeId}.`, wireId);
+  if (!node)
+    throw new CompileError(`Wire "${wireId}" references unknown node ${ref.nodeId}.`, wireId);
   const port = portOf(node, ref.portId);
   if (!port) {
     throw new CompileError(`Wire "${wireId}" references unknown port ${ref.portId}.`, wireId);
@@ -119,11 +144,7 @@ function componentsOf(snapshot: Snapshot, artboard: Artboard): Set<Id> {
 }
 
 /** The component a mirror node stands for, if it lives on this artboard. */
-function mirrorComponent(
-  snapshot: Snapshot,
-  node: Node,
-  owned: Set<Id>,
-): Component | undefined {
+function mirrorComponent(snapshot: Snapshot, node: Node, owned: Set<Id>): Component | undefined {
   if (node.category !== 'ui' || !node.mirrorOf) return undefined;
   if (!owned.has(node.mirrorOf)) return undefined;
   return snapshot.components[node.mirrorOf];
@@ -156,7 +177,10 @@ export function planPipelines(
 
     for (const child of config.body ?? []) {
       if (!snapshot.nodes[child]) {
-        throw new CompileError(`API route "${node.name ?? node.id}" contains a missing node.`, node.id);
+        throw new CompileError(
+          `API route "${node.name ?? node.id}" contains a missing node.`,
+          node.id,
+        );
       }
     }
 
@@ -187,16 +211,19 @@ export function planPipelines(
     // Inputs: every UI mirror data port wired into one of this node's data inputs. The route's
     // input ports come from its body (a form wires straight into the columns an insert needs).
     const inputs: PipelinePlan['inputs'] = [];
-    for (const inputPort of node.ports.filter((p) => p.direction === 'in' && p.portKind === 'data')) {
+    for (const inputPort of node.ports.filter(
+      (p) => p.direction === 'in' && p.portKind === 'data',
+    )) {
       for (const wire of wiresInto(snapshot, node.id, inputPort.id)) {
         const source = snapshot.nodes[wire.from.nodeId];
         const component = source ? mirrorComponent(snapshot, source, owned) : undefined;
         if (!component || !source) continue;
-        if (portOf(source, wire.from.portId)) inputs.push({ componentId: component.id, port: inputPort });
+        if (portOf(source, wire.from.portId))
+          inputs.push({ componentId: component.id, port: inputPort });
       }
     }
 
-    const binds = { result: false, pending: false, error: false };
+    const binds = { result: false, pending: false, error: false, total: false };
     for (const component of Object.values(snapshot.components)) {
       if (!owned.has(component.id)) continue;
       for (const value of Object.values(component.props)) {
@@ -221,7 +248,9 @@ export function planPipelines(
       if (!table) continue;
       // A count and a total read the table as surely as a select does. Filing them under
       // writes would have every screen re-read itself each time it counted.
-      const reads = stepConfig.operation === 'select' || stepConfig.operation === 'count' ||
+      const reads =
+        stepConfig.operation === 'select' ||
+        stepConfig.operation === 'count' ||
         stepConfig.operation === 'aggregate';
       const side = reads ? tables.reads : tables.writes;
       if (!side.includes(table)) side.push(table);
@@ -230,6 +259,12 @@ export function planPipelines(
     // Writes: the screen buckets this route's result is kept in.
     const states = statesWrittenBy(screenStates, node.id);
     const resultType = portOf(node, 'pt_result')?.type ?? { kind: 'any' };
+
+    // Paged when the step whose output the route returns is a read.
+    const last = body[body.length - 1];
+    const paged =
+      last?.category === 'db' &&
+      (last.config as { operation?: string } | undefined)?.operation === 'select';
 
     const bound = binds.result || binds.pending || binds.error;
 
@@ -252,6 +287,7 @@ export function planPipelines(
       trigger,
       inputs,
       resultType,
+      paged,
       binds,
       states,
       tables,
@@ -314,7 +350,14 @@ export function bindingExpr(
     case 'pt_result':
       // Fall back in the shape the reader expects: an empty list renders as nothing, an empty
       // string renders as nothing, and neither crashes the tree while the call is in flight.
+      //
+      // A paged read answers with `{ rows, total, page }`, so `result` reaches past it to the
+      // rows — what a List binds to is the rows either way (Q2).
+      if (plan.paged) return `(${plan.names.state}?.rows ?? [])`;
       return `${plan.names.state} ?? ${plan.resultType.kind === 'list' ? '[]' : '""'}`;
+    case 'pt_total':
+      // What the database counted, not what came back. "1 of 4,182" is a fact about the table.
+      return `(${plan.names.state}?.total ?? 0)`;
     case 'pt_pending':
       return `${plan.names.pending} ? "true" : "false"`;
     case 'pt_error':
@@ -349,6 +392,7 @@ export function boundTypeOf(
   for (const plan of plans) {
     if (plan.node.id !== source.nodeId) continue;
     if (source.portId === 'pt_result') return plan.resultType;
+    if (source.portId === 'pt_total') return { kind: 'number' };
     if (source.portId === 'pt_pending') return { kind: 'boolean' };
     if (source.portId === 'pt_error') return { kind: 'optional', of: { kind: 'text' } };
   }
@@ -371,8 +415,18 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
   }
 
   for (const plan of plans) {
-    if (plan.binds.result) {
-      const type = tsTypeOf(plan.resultType);
+    if (plan.binds.result || plan.binds.total) {
+      /**
+       * A paged read holds the whole envelope, not just the rows (Q2).
+       *
+       * The rows are what a List binds to and the total is what a page control needs, and they
+       * arrive in one response — so the state is what the route actually answered with, and the
+       * bindings reach into it. Typing it as the rows alone would be a lie the emitted app's own
+       * `tsc` catches.
+       */
+      const type = plan.paged
+        ? `{ rows: ${tsTypeOf(plan.resultType)}; total: number; page: number }`
+        : tsTypeOf(plan.resultType);
       lines.push(
         `  const [${plan.names.state}, set_${plan.names.state}] = useState<${type} | null>(null);`,
       );
@@ -395,7 +449,10 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
       ? `{ input: ${stateNameForComponent(plan.inputs[0]!.componentId)} }`
       : plan.inputs.length > 0
         ? `{ input: { ${plan.inputs
-            .map((input) => `${JSON.stringify(input.port.name)}: ${stateNameForComponent(input.componentId)}`)
+            .map(
+              (input) =>
+                `${JSON.stringify(input.port.name)}: ${stateNameForComponent(input.componentId)}`,
+            )
             .join(', ')} } }`
         : '{}';
 
@@ -412,14 +469,24 @@ export function emitPipelinePrelude(plans: PipelinePlan[]): string[] {
 
     const start = plan.binds.pending ? `    set_${plan.names.pending}(true);\n` : '';
     const clearError = plan.binds.error ? `    set_${plan.names.error}(null);\n` : '';
-    const cast = `as ${tsTypeOf(plan.resultType)} | null`;
+    const rowsType = tsTypeOf(plan.resultType);
+    const cast = `as ${rowsType} | null`;
+    // A paged route answers with the envelope; the state holds it whole (Q2).
+    const resultCast = plan.paged
+      ? `as { rows: ${rowsType}; total: number; page: number } | null`
+      : cast;
+
     const writes = [
-      ...(plan.binds.result
-        ? [`      set_${plan.names.state}((body.result ?? null) ${cast});`]
+      ...(plan.binds.result || plan.binds.total
+        ? [`      set_${plan.names.state}((body.result ?? null) ${resultCast});`]
         : []),
       // The state write happens here, in the same success path: a screen-bucket write is a
-      // `setState` after the call returns, not a second round trip.
-      ...plan.states.map((state) => `      ${state.setter}((body.result ?? null) ${cast});`),
+      // `setState` after the call returns, not a second round trip. A bucket holds the rows
+      // rather than the envelope — what someone put in a variable is the rows.
+      ...plan.states.map(
+        (state) =>
+          `      ${state.setter}((${plan.paged ? '(body.result as { rows?: unknown } | null)?.rows' : 'body.result'} ?? null) ${cast});`,
+      ),
     ];
     // Anything this route changed is now stale everywhere it is read on this screen.
     const invalidate = invalidatedTables(plans)
