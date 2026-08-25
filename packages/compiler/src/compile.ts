@@ -24,6 +24,7 @@ import { emitReadme } from './emit/readme';
 import { responsiveCss } from './emit/responsive';
 import { printCss } from './emit/document';
 import { definitionComponentName, definitionPath, orderDefinitions } from './emit/definition';
+import { groupByShell, shellComponentName, shellPath, validShells } from './emit/shell';
 import {
   APP_ROUTES_PATH,
   ENTRY_SERVER_PATH,
@@ -203,7 +204,27 @@ export function compile(snapshot: Snapshot): CompileResult {
         routes,
         definitionComponentName(definition),
         globals,
-        true,
+        'definition',
+      ),
+    });
+  }
+
+  /**
+   * App shells (R2), emitted like a definition: same walker, no params.
+   *
+   * `validShells` runs first and refuses a layout with no screen slot or more than one, naming the
+   * layout rather than a component id — the thing a designer would go and fix.
+   */
+  for (const layout of validShells(snapshot)) {
+    files.push({
+      path: shellPath(layout),
+      content: emitArtboardModule(
+        snapshot,
+        { id: layout.id, name: layout.name, root: layout.root },
+        routes,
+        shellComponentName(layout),
+        globals,
+        'shell',
       ),
     });
   }
@@ -356,15 +377,39 @@ function emitApp(
     .map((route) => `import ${route.componentName} from './artboards/${route.componentName}';`)
     .join('\n');
 
-  const routeElements = ordered
-    .map((route) => {
-      const artboard = snapshot.artboards[route.artboardId]!;
-      // A guarded screen is wrapped where the router mounts it, so there is no moment where the
-      // screen has rendered and the redirect has not happened yet (`emit/auth.ts`).
-      const element = guardedElement(artboard, `<${route.componentName} />`, routes);
-      return `        <Route path="${route.path}" element={${element}} />`;
-    })
-    .join('\n');
+  const routeFor = (route: RouteInfo, pad: number): string => {
+    const artboard = snapshot.artboards[route.artboardId]!;
+    // A guarded screen is wrapped where the router mounts it, so there is no moment where the
+    // screen has rendered and the redirect has not happened yet (`emit/auth.ts`).
+    const element = guardedElement(artboard, `<${route.componentName} />`, routes);
+    return `${' '.repeat(pad)}<Route path="${route.path}" element={${element}} />`;
+  };
+
+  /**
+   * Screens inside a shell become **children of a pathless layout route** (R2).
+   *
+   * That nesting is the whole feature: react-router keeps the shell mounted and swaps only what is
+   * inside its `<Outlet />`, so a sidebar survives navigation instead of being torn down and
+   * rebuilt — keeping its scroll position, its open sections, and anything it does on mount. A
+   * shell every screen merely *placed* would look identical and do none of that.
+   *
+   * Screens in no shell stay where they were, as siblings.
+   */
+  const { shells, loose } = groupByShell(
+    snapshot,
+    ordered.map((route) => route.artboardId),
+  );
+  const byArtboard = new Map(ordered.map((route) => [route.artboardId, route]));
+
+  const blocks: string[] = [];
+  for (const [layoutId, artboardIds] of shells) {
+    const name = shellComponentName(snapshot.layouts![layoutId]!);
+    const children = artboardIds.map((id) => routeFor(byArtboard.get(id)!, 10)).join('\n');
+    blocks.push(`        <Route element={<${name} />}>\n${children}\n        </Route>`);
+  }
+  for (const id of loose) blocks.push(routeFor(byArtboard.get(id)!, 8));
+
+  const routeElements = blocks.join('\n');
 
   // An app-wide variable has to outlive the screen that wrote it, so its provider sits above the
   // router — the one place every route is inside (`emit/globals.ts`).
@@ -467,8 +512,18 @@ function validateServerOnlyWork(snapshot: Snapshot): void {
 /** Structural checks a flow must pass before any template touches it. */
 function validateFlows(snapshot: Snapshot): void {
   for (const flow of Object.values(snapshot.flows)) {
-    if (!snapshot.artboards[flow.from]) {
-      throw new CompileError(`Flow "${flow.id}" starts at an unknown artboard.`, flow.id);
+    /**
+     * A flow may start from an **app shell** as well as a screen (R2).
+     *
+     * A shell's whole job is navigation — it is the thing holding the sidebar — so refusing it as
+     * a source would mean the one place that navigates most could not say where it goes. It is
+     * still an arrow from here to there; a shell is simply another "here".
+     *
+     * It may never *end* at one: a shell is not a destination, it is what a destination renders
+     * inside.
+     */
+    if (!snapshot.artboards[flow.from] && !snapshot.layouts?.[flow.from]) {
+      throw new CompileError(`Flow "${flow.id}" starts at an unknown screen.`, flow.id);
     }
     const destination = snapshot.artboards[flow.to];
     if (!destination) {

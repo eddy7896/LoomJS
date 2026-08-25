@@ -256,6 +256,30 @@ export const INSTANCE_DEF: ComponentDef = {
   fields: [],
 };
 
+/**
+ * The hole a screen renders into (R2, `docs/V1-COMPLETION.md`).
+ *
+ * A layout is a sidebar, a top bar, and somewhere for the page to go. This is that somewhere. It
+ * draws nothing of its own and exists only inside a layout — which is also what *makes* a subtree
+ * a layout rather than a frame: exactly one Outlet, or it is not a shell.
+ *
+ * It emits react-router's `<Outlet />`, which is the whole reason the shell mounts once and
+ * survives navigation instead of being torn down and rebuilt on every click.
+ */
+export const OUTLET_DEF: ComponentDef = {
+  type: 'Outlet',
+  // Nothing to send and nothing to receive: it is a position, not a thing.
+  node: null,
+  label: 'Screen slot',
+  category: 'container',
+  keywords: ['outlet', 'slot', 'page', 'content', 'shell', 'children'],
+  isContainer: false,
+  // Only meaningful inside a layout, and placed by making one rather than dropped from a list.
+  placeable: false,
+  fields: [],
+  defaultSize: { width: 480, height: 320 },
+};
+
 export const FRAME_DEF: ComponentDef = {
   type: 'Frame',
   node: null, // Structure. A frame arranges what is inside it and has nothing of its own to send.
@@ -1100,6 +1124,7 @@ const DEFS: readonly ComponentDef[] = [
   CALENDAR_DEF,
   CHAT_DEF,
   INSTANCE_DEF,
+  OUTLET_DEF,
 ];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 

@@ -4,6 +4,7 @@ import { DEFAULT_SCREEN, defFor } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import {
   addArtboard,
+  addLayout,
   entryArtboardId,
   moveComponent,
   parentOf,
@@ -92,11 +93,21 @@ export function LayersPanel() {
         {/* Named the same as it was in the toolbar: adding a screen is the same act wherever the
             button lives, and the tree is where screens are. */}
         <button
+          data-testid="add-screen"
           onClick={() =>
             addArtboard(artboards.length === 0 ? 'Home' : `Screen ${artboards.length + 1}`)
           }
         >
           + Screen
+        </button>
+        {/* An app shell is a board like a screen, drawn once and rendered around the pages inside
+            it (R2). It sits beside "+ Screen" because it is the same kind of act. */}
+        <button
+          data-testid="add-shell"
+          title="A frame drawn once, around every screen inside it"
+          onClick={() => addLayout()}
+        >
+          + Shell
         </button>
       </div>
 
@@ -219,7 +230,8 @@ function Row(props: RowProps) {
     component.props.onClick?.kind === 'event'
       ? actionsOf(component.props.onClick.handler).length
       : 0;
-  const conditional = Boolean(component.visibleWhen) || (component.conditionalStyles ?? []).length > 0;
+  const conditional =
+    Boolean(component.visibleWhen) || (component.conditionalStyles ?? []).length > 0;
 
   // A container takes the drop inside it; anything else takes it as the next sibling. That is the
   // whole gesture: "put it in here" versus "put it after this".
@@ -283,7 +295,11 @@ function Row(props: RowProps) {
         )}
 
         <span className="layer__name">{nameOf(component)}</span>
-        {conditional ? <span className="chip" title="Has a condition">?</span> : null}
+        {conditional ? (
+          <span className="chip" title="Has a condition">
+            ?
+          </span>
+        ) : null}
         {steps > 1 ? (
           <span className="chip" title={`${steps} steps on click`}>
             {steps}
@@ -322,7 +338,9 @@ function Row(props: RowProps) {
 
       {isCollapsed
         ? null
-        : children.map((childId) => <Row key={childId} {...props} id={childId} depth={depth + 1} />)}
+        : children.map((childId) => (
+            <Row key={childId} {...props} id={childId} depth={depth + 1} />
+          ))}
     </>
   );
 }

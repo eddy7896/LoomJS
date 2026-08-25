@@ -505,7 +505,6 @@ const CONTENT = `
 .loom-icon--square { border-radius: var(--loom-radius-md); }
 `;
 
-
 const MEDIA = `
 /* ---- Video, audio, carousel, tiles, avatar, embed ------------------------------------------ */
 
@@ -673,7 +672,6 @@ const MEDIA = `
 }
 `;
 
-
 const UPLOAD = `
 /* ---- Upload fields ------------------------------------------------------------------------ */
 
@@ -769,7 +767,6 @@ const UPLOAD = `
 .loom-upload--row { flex-direction: row; align-items: center; }
 .loom-upload--row .loom-upload__preview { max-height: 48px; }
 `;
-
 
 const CHART = `
 /* ---- Charts ------------------------------------------------------------------------------- */
@@ -870,7 +867,6 @@ const CHART = `
 .loom-stat--sm .loom-stat__value { font-size: var(--loom-text-lg); }
 .loom-stat--lg .loom-stat__value { font-size: var(--loom-text-xxl); }
 `;
-
 
 const CALENDAR = `
 /* ---- Calendar ----------------------------------------------------------------------------- */
@@ -1100,6 +1096,23 @@ const CALENDAR = `
  * A function rather than a constant so a project could one day narrow it; today it takes nothing,
  * because every value in it is already a token the project can move.
  */
+const NAV = `
+/* ---- Navigation ------------------------------------------------------------------------ */
+
+/*
+ * The item in a shell's navigation that points at the page currently showing (R2).
+ *
+ * A default rather than a decision: an app shell whose nav gives no sign of where you are is one
+ * people get lost in, and that should be true before anybody styles anything. It is one token
+ * away from being restyled like everything else, and \`aria-current="page"\` carries the same fact
+ * to a screen reader whatever this looks like.
+ */
+.loom-active {
+  color: var(--loom-color-brand);
+  font-weight: 600;
+}
+`;
+
 export function componentsCss(): string {
   return [
     HEADER,

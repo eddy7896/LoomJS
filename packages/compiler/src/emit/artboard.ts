@@ -68,16 +68,22 @@ export function emitArtboardModule(
   componentName: string,
   globals: GlobalPlan[] = [],
   /**
-   * Emit a **reusable component** rather than a screen (R1, `docs/V1-COMPLETION.md`).
+   * What kind of module this is (R1, R2 — `docs/V1-COMPLETION.md`).
    *
-   * The whole difference is where params come from and what the module's signature looks like:
-   * the tree, the styles, the conditions and the nested instances are rendered by exactly the
-   * same walker. A second emitter would be a second place for a Frame to be wrong.
+   * All three are rendered by exactly the same walker: the tree, the styles, the conditions and
+   * the nested instances do not care. A second emitter would be a second place for a Frame to be
+   * wrong. Only two things differ, and they differ per kind:
    *
-   * The caller passes the definition as a synthetic artboard, so the existing param validation
+   *  - `screen` — a route. Params come off the route; module takes nothing.
+   *  - `definition` — a reusable component. Params are React props, and the signature says so.
+   *  - `shell` — an app shell. Params still come off the route, because a layout route sits above
+   *    `/orders/:id` and can legitimately read the id. What it gains instead is that its links
+   *    know whether they point at the page currently showing.
+   *
+   * Definitions and shells are passed as synthetic artboards, so the existing param validation
    * ("this reads a param the thing does not declare") keeps working with no special case.
    */
-  definition = false,
+  kind: 'screen' | 'definition' | 'shell' = 'screen',
 ): string {
   const component = (id: Id): Component => {
     const found = snapshot.components[id];
@@ -99,6 +105,8 @@ export function emitArtboardModule(
     truthy: false,
     message: false,
     link: false,
+    navLink: false,
+    outlet: false,
     auth: false,
     upload: false,
   };
@@ -156,7 +164,7 @@ export function emitArtboardModule(
     paramExpr: (name) => {
       // A reusable component is handed its params as React props; a screen reads them off the
       // route. Same property value, different source (R1).
-      if (definition) return `(${name} ?? "")`;
+      if (kind === 'definition') return `(${name} ?? "")`;
       hooks.params = true;
       return `${PARAMS_VAR}.${name} ?? ""`;
     },
@@ -224,8 +232,22 @@ export function emitArtboardModule(
       return TEXT_HELPER;
     },
     requireLink: () => {
+      /**
+       * Inside a shell, a link is **navigation** and has to say which page is showing (R2).
+       *
+       * `NavLink` is react-router's answer and it is the accessible one: it sets
+       * `aria-current="page"` on the active item, which is what a screen reader announces. A class
+       * alone would only be visible to people who can see it.
+       */
+      if (kind === 'shell') {
+        hooks.navLink = true;
+        return 'NavLink';
+      }
       hooks.link = true;
       return 'Link';
+    },
+    requireOutlet: () => {
+      hooks.outlet = true;
     },
     requireAuth: () => {
       hooks.auth = true;
@@ -235,9 +257,11 @@ export function emitArtboardModule(
     pathExpr: (flowId, componentId) => {
       const flow = snapshot.flows[flowId];
       if (!flow) throw new CompileError(`Unknown flow "${flowId}".`, componentId);
+      // `artboard.id` is the shell's id when this module is a shell, so a nav link's flow starts
+      // where the link is either way (R2).
       if (flow.from !== artboard.id) {
         throw new CompileError(
-          `Flow "${flowId}" starts on a different artboard than the component using it.`,
+          `Flow "${flowId}" starts somewhere other than the screen the component is on.`,
           componentId,
         );
       }
@@ -323,7 +347,7 @@ ${indentBlock(rendered)}
    */
   const declaredParams = artboard.params ?? [];
   const signature =
-    definition && declaredParams.length > 0
+    kind === 'definition' && declaredParams.length > 0
       ? `{ ${declaredParams.map((param) => param.name).join(', ')} }: { ${declaredParams
           .map((param) => `${param.name}?: ${tsTypeOf(param.type)}`)
           .join('; ')} }`
@@ -335,7 +359,8 @@ ${indentBlock(rendered)}
    * compiles and a diff shows only what changed.
    */
   if (usedDefinitions.size > 0) {
-    const prefix = definition ? './' : '../components/';
+    // A component reaches another through `./`; a screen and a shell each sit one folder over.
+    const prefix = kind === 'definition' ? './' : '../components/';
     const lines = [...usedDefinitions]
       .map((id) => definitionComponentName(snapshot.definitions![id]!))
       .sort()
@@ -354,6 +379,8 @@ ${indentBlock(rendered)}
 
   const routerHooks = [
     hooks.link ? 'Link' : null,
+    hooks.navLink ? 'NavLink' : null,
+    hooks.outlet ? 'Outlet' : null,
     hooks.navigate ? 'useNavigate' : null,
     hooks.params ? 'useParams' : null,
   ]

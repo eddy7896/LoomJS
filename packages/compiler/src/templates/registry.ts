@@ -1,6 +1,7 @@
 import type { ComponentEmitter } from '../types';
 import { buttonEmitter } from './button';
 import { instanceEmitter } from './instance';
+import { outletEmitter } from './outlet';
 import { frameEmitter } from './frame';
 import { listEmitter } from './list';
 import { tableEmitter } from './table';
@@ -34,6 +35,7 @@ import { calendarEmitter, chatEmitter } from './calendar';
  */
 const EMITTERS: ComponentEmitter[] = [
   instanceEmitter,
+  outletEmitter,
   frameEmitter,
   textEmitter,
   buttonEmitter,

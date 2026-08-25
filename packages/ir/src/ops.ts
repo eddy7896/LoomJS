@@ -12,6 +12,7 @@ import type {
   Condition,
   ConditionalStyle,
   Layout,
+  LayoutDefinition,
   Migration,
   Meta,
   NodeGroup,
@@ -83,6 +84,18 @@ export type Op =
     }
   | { type: 'addInstance'; parentId: string; instance: Component }
   | { type: 'renameDefinition'; definitionId: string; name: string }
+  /**
+   * Create an app shell (R2).
+   *
+   * The whole subtree arrives in **one op**, because a shell is not a shell until it has a slot —
+   * an intermediate state with a root and no Outlet is one the compiler refuses, and undo should
+   * not be able to stop there.
+   */
+  | { type: 'addLayout'; layout: LayoutDefinition; components: Component[] }
+  | { type: 'renameLayout'; layoutId: string; name: string }
+  | { type: 'removeLayout'; layoutId: string }
+  /** Put a screen inside a shell, or take it back out. */
+  | { type: 'setArtboardLayout'; artboardId: string; layoutId: string | undefined }
   | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
@@ -403,6 +416,38 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       if (!parent) throw new Error(`addInstance: unknown parent ${op.parentId}`);
       next.components[op.instance.id] = op.instance;
       parent.children = [...(parent.children ?? []), op.instance.id];
+      return next;
+    }
+
+    case 'addLayout': {
+      for (const component of op.components) next.components[component.id] = component;
+      next.layouts = { ...(next.layouts ?? {}), [op.layout.id]: op.layout };
+      return next;
+    }
+
+    case 'renameLayout': {
+      const layout = next.layouts?.[op.layoutId];
+      if (!layout) throw new Error(`renameLayout: unknown layout ${op.layoutId}`);
+      layout.name = op.name;
+      return next;
+    }
+
+    case 'removeLayout': {
+      if (!next.layouts?.[op.layoutId]) return next;
+      // Every screen inside it goes back to being a whole page. A dangling `layoutId` would be a
+      // screen that renders into a shell nobody can find.
+      for (const artboard of Object.values(next.artboards)) {
+        if (artboard.layoutId === op.layoutId) delete artboard.layoutId;
+      }
+      delete next.layouts[op.layoutId];
+      return next;
+    }
+
+    case 'setArtboardLayout': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardLayout: unknown artboard ${op.artboardId}`);
+      if (op.layoutId) artboard.layoutId = op.layoutId;
+      else delete artboard.layoutId;
       return next;
     }
 

@@ -5,6 +5,7 @@ import {
   newArtboardId,
   newComponentId,
   newDefinitionId,
+  newLayoutId,
   newFlowId,
   type ArtboardKind,
   type Component,
@@ -356,7 +357,7 @@ export function undo(): void {
     future: [state.snapshot, ...state.future],
     selection: stillExists(previous, state.selection),
     also: state.also.filter((id) => previous.components[id]),
-    activeArtboardId: previous.artboards[state.activeArtboardId]
+    activeArtboardId: isBoard(previous, state.activeArtboardId)
       ? state.activeArtboardId
       : Object.keys(previous.artboards)[0]!,
   });
@@ -372,7 +373,7 @@ export function redo(): void {
     future: state.future.slice(1),
     selection: stillExists(next, state.selection),
     also: state.also.filter((id) => next.components[id]),
-    activeArtboardId: next.artboards[state.activeArtboardId]
+    activeArtboardId: isBoard(next, state.activeArtboardId)
       ? state.activeArtboardId
       : Object.keys(next.artboards)[0]!,
   });
@@ -388,12 +389,26 @@ export function entryArtboardId(snapshot: Snapshot): Id {
 
 /** Root component of the artboard currently being edited. */
 /** The root of the screen being worked on. Empty when the project has no screens yet. */
+/**
+ * The root of whatever board is being edited.
+ *
+ * An **app shell is a board too** (R2): a designer draws a sidebar into it the same way they draw
+ * into a screen, so the active board can be either. Doing it here rather than at each call site is
+ * what makes the whole editing path — placing, dropping, the elements tree — work on a shell
+ * without any of them knowing shells exist.
+ */
 export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArtboardId): Id {
   return (
     snapshot.artboards[artboardId]?.root ??
+    snapshot.layouts?.[artboardId]?.root ??
     snapshot.artboards[entryArtboardId(snapshot)]?.root ??
     ''
   );
+}
+
+/** Is this id a board that can be edited — a screen, or a shell? */
+export function isBoard(snapshot: Snapshot, id: Id): boolean {
+  return Boolean(snapshot.artboards[id] ?? snapshot.layouts?.[id]);
 }
 
 export function parentOf(snapshot: Snapshot, id: Id): Component | undefined {
@@ -852,6 +867,57 @@ export function addInstance(definitionId: Id): Id | undefined {
   return placed.id;
 }
 
+/**
+ * Create an app shell (R2, `docs/V1-COMPLETION.md`).
+ *
+ * It arrives as a row with a sidebar-shaped frame and the screen slot beside it, because that is
+ * what an app shell is nine times out of ten, and an empty box with instructions is a worse start
+ * than a wrong guess a designer can drag.
+ */
+export function addLayout(name = 'App shell'): Id {
+  const layoutId = newLayoutId();
+
+  const root = createComponent('Frame', newComponentId());
+  const sidebar = createComponent('Frame', newComponentId());
+  const outlet = createComponent('Outlet', newComponentId());
+
+  root.name = name;
+  root.layout = { ...DEFAULT_LAYOUT, direction: 'row', gap: 0, padding: 0 };
+  root.children = [sidebar.id, outlet.id];
+
+  sidebar.name = 'Sidebar';
+  sidebar.layout = {
+    ...DEFAULT_LAYOUT,
+    size: { width: { mode: 'fixed', px: 220 }, height: { mode: 'fill' } },
+  };
+
+  outlet.name = 'Screen';
+  outlet.layout = {
+    ...DEFAULT_LAYOUT,
+    size: { width: { mode: 'fill' }, height: { mode: 'fill' } },
+  };
+
+  dispatch({
+    type: 'addLayout',
+    layout: { id: layoutId, name, root: root.id },
+    components: [root, sidebar, outlet],
+  });
+  return layoutId;
+}
+
+export function renameLayout(layoutId: Id, name: string): void {
+  dispatch({ type: 'renameLayout', layoutId, name });
+}
+
+export function removeLayout(layoutId: Id): void {
+  dispatch({ type: 'removeLayout', layoutId });
+}
+
+/** Put a screen inside a shell, or take it back out. */
+export function setArtboardLayout(artboardId: Id, layoutId: Id | undefined): void {
+  dispatch({ type: 'setArtboardLayout', artboardId, layoutId });
+}
+
 export function renameDefinition(definitionId: Id, name: string): void {
   dispatch({ type: 'renameDefinition', definitionId, name });
 }
@@ -898,7 +964,7 @@ export function removeArtboard(artboardId: Id): void {
   const remaining = Object.keys(state.snapshot.artboards)[0]!;
   set({
     ...state,
-    activeArtboardId: state.snapshot.artboards[state.activeArtboardId]
+    activeArtboardId: isBoard(state.snapshot, state.activeArtboardId)
       ? state.activeArtboardId
       : remaining,
     selection: stillExists(state.snapshot, state.selection),

@@ -97,6 +97,8 @@ export interface EmitContext {
   pathExpr: (flowId: Id, componentId: Id) => string;
   /** Declare that this module renders a router `<Link>`; returns the component name to emit. */
   requireLink: () => string;
+  /** Declare that this shell renders the slot its screens appear in (R2). */
+  requireOutlet: () => void;
   /**
    * Declare that this screen reads or changes who is signed in; returns the local holding the
    * session (spec 10). It carries no token — only who the server says is here.

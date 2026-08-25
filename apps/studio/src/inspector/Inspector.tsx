@@ -37,6 +37,7 @@ import {
   promoteToDefinition,
   renameDefinition,
   setDefinitionParams,
+  setArtboardLayout,
   setArtboardKind,
   setArtboardMeta,
   setArtboardPage,
@@ -1035,6 +1036,53 @@ function ComponentSection({ component }: { component: Component }) {
   );
 }
 
+/**
+ * Which app shell a screen renders inside (R2, `docs/V1-COMPLETION.md`).
+ *
+ * The dropdown is deliberately on the **screen**, not a list of screens on the shell: a designer
+ * asks "what does this page sit in", and the answer belongs where the question is. The shell is
+ * drawn once and does not need to know who is using it.
+ */
+function ShellSection({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  const shells = Object.values(snapshot.layouts ?? {});
+  if (!artboard) return null;
+
+  return (
+    <section className="field-group" data-testid="shell-section">
+      <h3 className="field-group__title">Shell</h3>
+      {shells.length === 0 ? (
+        <p className="panel__hint">
+          No shells yet. Add one with <strong>+ Shell</strong> in the screens list to draw a sidebar
+          once instead of on every page.
+        </p>
+      ) : (
+        <>
+          <Field label="Renders inside">
+            <select
+              data-testid="artboard-shell"
+              value={artboard.layoutId ?? ''}
+              onChange={(e) => setArtboardLayout(artboardId, e.target.value || undefined)}
+            >
+              <option value="">On its own — the whole page</option>
+              {shells.map((shell) => (
+                <option key={shell.id} value={shell.id}>
+                  {shell.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="panel__hint">
+            The shell stays mounted while you move between the screens inside it, so a sidebar keeps
+            its place instead of being rebuilt on every click.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ArtboardInspector({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
@@ -1085,6 +1133,9 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
           <EffectsSection component={root} />
         </>
       ) : null}
+
+      {/* Which shell this screen renders inside (R2). */}
+      <ShellSection artboardId={artboard.id} />
 
       <GuardSection artboardId={artboard.id} />
 

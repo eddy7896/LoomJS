@@ -48,7 +48,20 @@ export const linkEmitter: ComponentEmitter = {
 
     if (navigate?.kind === 'navigate') {
       const Link = ctx.requireLink();
-      return `${indent(depth)}<${Link}${attrs} to={${ctx.pathExpr(navigate.flowId, component.id)}}>{${labelExpr}}</${Link}>`;
+      const to = ctx.pathExpr(navigate.flowId, component.id);
+
+      /**
+       * Inside a shell this is a `NavLink`, which needs its class as a function to know whether it
+       * is the page currently showing (R2). `aria-current="page"` comes free with it and is the
+       * half that matters for a screen reader; `loom-active` is the half a designer can see.
+       */
+      if (Link === 'NavLink') {
+        const base = classAttr(component).replace(/^ className=/, '') || '""';
+        const className = `{({ isActive }) => \`\${${base}}\${isActive ? " loom-active" : ""}\`}`;
+        return `${indent(depth)}<NavLink className=${className}${styleAttr(component, ctx)} to={${to}}>{${labelExpr}}</NavLink>`;
+      }
+
+      return `${indent(depth)}<${Link}${attrs} to={${to}}>{${labelExpr}}</${Link}>`;
     }
 
     const href = component.props.href;
@@ -61,7 +74,8 @@ export const linkEmitter: ComponentEmitter = {
       );
     }
 
-    const newTab = component.props.newTab?.kind === 'static' && component.props.newTab.value === true;
+    const newTab =
+      component.props.newTab?.kind === 'static' && component.props.newTab.value === true;
     // `noopener,noreferrer` always: without it the opened page can reach back through
     // `window.opener` and navigate the app somewhere else.
     const target = newTab ? ` target="_blank" rel="noopener noreferrer"` : '';

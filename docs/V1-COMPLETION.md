@@ -501,7 +501,7 @@ component rather than a group.
 _Done-when:_ a header is defined once, placed on three screens, edited once, all three change — in
 the Preview, asserted in Playwright.
 
-**R2 — App shell / nested layouts.** `LayoutDefinition` holding a subtree with one `Outlet`;
+**R2 — App shell / nested layouts.** ✅ _(done)_ `LayoutDefinition` holding a subtree with one `Outlet`;
 artboards opt in via `layoutId`; `emit/routes.ts` emits a react-router layout route; active nav
 state derived from the current route.
 **Node side:** the graph gains a **layout scope**. `graphNodesFor(snapshot, scopeId)` today takes an
