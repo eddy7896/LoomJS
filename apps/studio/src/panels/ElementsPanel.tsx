@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   COMPONENT_CATEGORIES,
   NODE_GROUPS,
-  componentDefs,
+  placeableDefs,
   nodeDefs,
   type ComponentDef,
   type NodeDef,
 } from '@loom/components';
 import { useEditor } from '../state/useEditor';
-import { addComponent } from '../state/store';
+import { addInstance, addComponent } from '../state/store';
 import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
 import { startPaletteDrag, type PaletteDrag } from '../canvas/paletteDrag';
 import { SSO_PROVIDERS } from '@loom/connectors';
@@ -135,7 +135,7 @@ export function ElementsPanel() {
     if (mode === 'design') {
       const elements = COMPONENT_CATEGORIES.map((category) => ({
         title: category.label,
-        entries: componentDefs()
+        entries: placeableDefs()
           .filter((def: ComponentDef) => def.category === category.id)
           .map((def) => ({
             key: def.type,
@@ -156,8 +156,34 @@ export function ElementsPanel() {
        * They are ordinary Buttons. Nothing here is a new component type, and everything about one
        * can be edited afterwards like any other.
        */
+      /**
+       * The project's own components (R1, `docs/V1-COMPLETION.md`).
+       *
+       * Its own section rather than a row in "Containers", because these are not element *types* —
+       * they are things this project made, and a project with none should not see an empty
+       * category suggesting it is missing something.
+       */
+      const definitions = Object.values(snapshot.definitions ?? {});
+      const components =
+        definitions.length === 0
+          ? []
+          : [
+              {
+                title: 'Components',
+                entries: definitions.map((definition) => ({
+                  key: definition.id,
+                  label: definition.name,
+                  haystack: haystackOf(definition.name, ['component', 'reusable', 'instance']),
+                  hint: 'Defined once, here and everywhere else it is placed',
+                  onAdd: () => addInstance(definition.id),
+                  drag: { type: 'Instance', defId: definition.id },
+                })),
+              },
+            ];
+
       return [
         ...elements,
+        ...components,
         {
           title: 'Sign in',
           // Signing people in needs a connection, and finding that out from Problems after
@@ -265,7 +291,6 @@ export function ElementsPanel() {
           }
         />
       ))}
-
     </aside>
   );
 }

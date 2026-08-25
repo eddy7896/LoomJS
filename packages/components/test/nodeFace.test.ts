@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canMirror,
   componentDefs,
   createComponent,
   mirrorPortsFor,
@@ -74,11 +75,36 @@ describe('every element declares its face in Nodes mode', () => {
     }
   });
 
-  it('keeps `canMirror` and the ports in step', () => {
+  it('offers no ports at all for an element that declared it has none', () => {
     for (const def of componentDefs()) {
-      const ports = mirrorPortsFor(createComponent(def.type, 'cp_probe'));
-      // An element with a face has ports; one declared `null` has none. Nothing in between.
-      expect(ports.length > 0, `${def.type}`).toBe(def.node !== null);
+      if (def.node !== null) continue;
+      expect(mirrorPortsFor(createComponent(def.type, 'cp_probe')), def.type).toEqual([]);
+    }
+  });
+
+  /**
+   * `canMirror` answers "did this element declare a face", which is a fact about the vocabulary.
+   * It deliberately does **not** answer "does this particular component have ports right now":
+   * an Instance's ports are its definition's params, so one that points at nothing has none yet
+   * and still belongs in Nodes mode the moment it points at something.
+   */
+  it('reports a face wherever one is declared', () => {
+    for (const def of componentDefs()) {
+      expect(canMirror(def.type), def.type).toBe(def.node !== null);
+    }
+  });
+
+  /**
+   * Every element whose ports do **not** depend on the project has some, or the face is a
+   * declaration with nothing behind it. Instance is the one documented exception.
+   */
+  it('backs a declared face with real ports, unless the ports come from the project', () => {
+    for (const def of componentDefs()) {
+      if (def.node === null || def.type === 'Instance') continue;
+      expect(
+        mirrorPortsFor(createComponent(def.type, 'cp_probe')).length,
+        `${def.type} declares a face and exposes nothing`,
+      ).toBeGreaterThan(0);
     }
   });
 });
@@ -122,5 +148,36 @@ describe('the gaps N0 closed', () => {
     for (const type of ['Frame', 'Shape', 'Tiles']) {
       expect(portsOf(type), type).toEqual([]);
     }
+  });
+
+  /**
+   * The case that made a node face take the project rather than a type string (R1). Nothing about
+   * the word "Instance" says what it accepts; the answer is in the definition it points at.
+   */
+  it("takes an instance's ports from the definition it points at", () => {
+    const snapshot = {
+      definitions: {
+        def_header: {
+          id: 'def_header',
+          name: 'Header',
+          root: 'cp_x',
+          params: [{ name: 'title', type: { kind: 'text' as const } }],
+        },
+      },
+    } as never;
+
+    const instance = {
+      type: 'Instance',
+      props: { defId: { kind: 'static' as const, value: 'def_header' } },
+    };
+    const ports = mirrorPortsFor(instance, snapshot);
+
+    expect(ports).toHaveLength(1);
+    expect(ports[0]!.name).toBe('title');
+    expect(ports[0]!.propKey).toBe('title');
+    expect(ports[0]!.direction).toBe('in');
+
+    // Pointing at nothing yet is not an error; it is an instance with nothing to accept.
+    expect(mirrorPortsFor(instance)).toEqual([]);
   });
 });

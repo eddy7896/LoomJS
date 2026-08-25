@@ -33,6 +33,14 @@ interface Props {
    * a designer is looking at. So the canvas resolves the same overrides against the artboard.
    */
   screenWidth: number;
+  /**
+   * The params in scope, when drawing inside an instance of a reusable component (R1).
+   *
+   * Without it the canvas would draw `{title}` where the header's title goes, which is true and
+   * useless: the designer placed a header with a title and wants to see the title. The emitted app
+   * passes the same values as real props.
+   */
+  params?: ReadonlyMap<string, string>;
 }
 
 function booleanProp(component: Component, key: string): boolean {
@@ -40,7 +48,11 @@ function booleanProp(component: Component, key: string): boolean {
   return value?.kind === 'static' ? Boolean(value.value) : false;
 }
 
-function textContent(component: Component, key: string): string {
+function textContent(
+  component: Component,
+  key: string,
+  params?: ReadonlyMap<string, string>,
+): string {
   const value = component.props[key];
 
   if (value?.kind === 'static') {
@@ -53,7 +65,7 @@ function textContent(component: Component, key: string): string {
   // These resolve at run time; the canvas shows the *source*, never a fake value. Drawing nothing
   // is what made a Text inside a List look like an empty box — it reads a column, and a column
   // has a name worth showing while the screen is being arranged.
-  if (value?.kind === 'param') return `{${value.name}}`;
+  if (value?.kind === 'param') return params?.get(value.name) ?? `{${value.name}}`;
   if (value?.kind === 'item') return `{${value.field}}`;
   if (value?.kind === 'bound') return '(bound)';
   return '';
@@ -70,6 +82,7 @@ export function ComponentView({
   hidden,
   placed,
   screenWidth,
+  params,
 }: Props) {
   const attach = useCallback(
     (node: HTMLElement | null) => registerNode(id, node),
@@ -136,10 +149,54 @@ export function ComponentView({
     ...placement,
   };
 
+  /**
+   * An instance draws **what it points at** (R1).
+   *
+   * The definition's tree is rendered here, with the instance's overrides in scope as params, so
+   * a header placed on three screens looks like a header on all three rather than like a box with
+   * a name on it. The emitted app does the same thing with real React props.
+   */
+  if (component.type === 'Instance') {
+    const chosen = component.props.defId;
+    const defId = chosen?.kind === 'static' ? String(chosen.value ?? '') : '';
+    const definition = snapshot.definitions?.[defId];
+
+    if (!definition) {
+      return (
+        <div {...shared} ref={attach} style={{ ...leafStyle, padding: 8, opacity: 0.6 }}>
+          <span>No component chosen</span>
+        </div>
+      );
+    }
+
+    const scope = new Map<string, string>();
+    for (const param of definition.params ?? []) {
+      const override = component.props[param.name];
+      if (override?.kind === 'static') scope.set(param.name, String(override.value ?? ''));
+    }
+
+    return (
+      <div {...shared} ref={attach} style={{ ...style, display: 'contents' }}>
+        <ComponentView
+          snapshot={snapshot}
+          id={definition.root}
+          onSelect={onSelect}
+          registerNode={registerNode}
+          onPointerDown={onPointerDown}
+          draggingId={draggingId}
+          alsoSelected={alsoSelected}
+          hidden={hidden}
+          screenWidth={screenWidth}
+          params={scope}
+        />
+      </div>
+    );
+  }
+
   if (component.type === 'Text') {
     return (
       <span {...shared} ref={attach} style={{ cursor: 'default', ...leafStyle }}>
-        {textContent(component, 'content')}
+        {textContent(component, 'content', params)}
       </span>
     );
   }
@@ -154,7 +211,7 @@ export function ComponentView({
         // Clicks select in the editor; the emitted app is where the handler actually runs.
         onDoubleClick={(event) => event.preventDefault()}
       >
-        {textContent(component, 'label')}
+        {textContent(component, 'label', params)}
       </button>
     );
   }
@@ -168,8 +225,8 @@ export function ComponentView({
         ref={attach}
         type={component.type === 'NumberField' ? 'number' : 'text'}
         readOnly
-        value={textContent(component, 'value')}
-        placeholder={textContent(component, 'placeholder')}
+        value={textContent(component, 'value', params)}
+        placeholder={textContent(component, 'placeholder', params)}
         style={leafStyle}
       />
     );
@@ -179,7 +236,7 @@ export function ComponentView({
   // the same style block the compiler reads, translated to SVG the same way — a canvas that drew
   // a plain box where the app draws an ellipse is the disagreement this file exists to prevent.
   if (component.type === 'Shape') {
-    const kind = textContent(component, 'shape') || 'rectangle';
+    const kind = textContent(component, 'shape', params) || 'rectangle';
     const paint = leafStyle as { background?: string; border?: string; borderRadius?: string };
     const stroke = paint.border?.split(' ') ?? [];
     const strokeWidth = Number.parseFloat(stroke[0] ?? '0') || 0;
@@ -236,13 +293,13 @@ export function ComponentView({
     return (
       <label {...shared} ref={attach} style={leafStyle}>
         <input type="checkbox" readOnly checked={booleanProp(component, 'value')} />
-        <span>{textContent(component, 'label')}</span>
+        <span>{textContent(component, 'label', params)}</span>
       </label>
     );
   }
 
   if (component.type === 'Select') {
-    const options = textContent(component, 'options')
+    const options = textContent(component, 'options', params)
       .split(',')
       .map((option) => option.trim())
       .filter(Boolean);
@@ -264,8 +321,8 @@ export function ComponentView({
         ref={attach as unknown as (node: HTMLTextAreaElement | null) => void}
         readOnly
         rows={numberProp(component, 'rows', 4)}
-        value={textContent(component, 'value')}
-        placeholder={textContent(component, 'placeholder')}
+        value={textContent(component, 'value', params)}
+        placeholder={textContent(component, 'placeholder', params)}
         style={leafStyle}
       />
     );
@@ -278,7 +335,7 @@ export function ComponentView({
         ref={attach}
         type="date"
         readOnly
-        value={textContent(component, 'value')}
+        value={textContent(component, 'value', params)}
         style={leafStyle}
       />
     );
@@ -305,7 +362,7 @@ export function ComponentView({
   // it read as one question. A canvas that drew loose circles would be judging a different thing.
   if (component.type === 'RadioGroup') {
     const options = listOf(component, 'options');
-    const question = textContent(component, 'label');
+    const question = textContent(component, 'label', params);
     return (
       <fieldset {...shared} ref={attach} style={leafStyle}>
         {question ? <legend>{question}</legend> : null}
@@ -327,8 +384,8 @@ export function ComponentView({
    * somebody clicked an element they were trying to select is the tool getting in the way.
    */
   if (component.type === 'FileField' || component.type === 'ImageField') {
-    const value = textContent(component, 'value');
-    const label = textContent(component, 'label') || 'Choose a file';
+    const value = textContent(component, 'value', params);
+    const label = textContent(component, 'label', params) || 'Choose a file';
     return (
       <div {...shared} ref={attach} style={leafStyle}>
         <span className="loom-upload__pick">{label}</span>
@@ -337,7 +394,7 @@ export function ComponentView({
         ) : null}
         {/* Where it lands, said on the canvas: a field pointing at no bucket is the one mistake
             here that only shows up as a refusal at build time. */}
-        {!textContent(component, 'bucket') ? (
+        {!textContent(component, 'bucket', params) ? (
           <span className="canvas-placeholder__note">No bucket</span>
         ) : null}
       </div>
@@ -364,15 +421,17 @@ export function ComponentView({
   }
 
   if (component.type === 'Stat') {
-    const raw = textContent(component, 'value');
+    const raw = textContent(component, 'value', params);
     return (
       <div {...shared} ref={attach} style={leafStyle}>
-        <span className="loom-stat__label">{textContent(component, 'label') || 'Total'}</span>
+        <span className="loom-stat__label">
+          {textContent(component, 'label', params) || 'Total'}
+        </span>
         {/* A bound value has nothing to show yet, so the canvas shows a plausible one rather than
             an empty space where the number will be. */}
         <span className="loom-stat__value">{raw || '1,248'}</span>
-        {textContent(component, 'note') ? (
-          <span className="loom-stat__note">{textContent(component, 'note')}</span>
+        {textContent(component, 'note', params) ? (
+          <span className="loom-stat__note">{textContent(component, 'note', params)}</span>
         ) : null}
       </div>
     );
@@ -385,8 +444,8 @@ export function ComponentView({
    * missing is the data, which is missing in the editor for every element that reads rows.
    */
   if (component.type === 'Calendar') {
-    const agenda = textContent(component, 'variant') === 'agenda';
-    const monday = textContent(component, 'weekStart') !== 'sunday';
+    const agenda = textContent(component, 'variant', params) === 'agenda';
+    const monday = textContent(component, 'weekStart', params) !== 'sunday';
     const weekdays = monday
       ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
       : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -400,7 +459,7 @@ export function ComponentView({
       <div {...shared} ref={attach} style={{ minWidth: 220, minHeight: 200, ...style }}>
         {agenda ? (
           <span className="loom-calendar__empty">
-            {textContent(component, 'empty') || 'Nothing yet'}
+            {textContent(component, 'empty', params) || 'Nothing yet'}
           </span>
         ) : (
           <>
@@ -453,21 +512,23 @@ export function ComponentView({
       <div {...shared} ref={attach} style={{ minWidth: 200, minHeight: 160, ...style }}>
         <div className="loom-chat__log">
           <span className="loom-chat__empty">
-            {textContent(component, 'empty') || 'No messages yet'}
+            {textContent(component, 'empty', params) || 'No messages yet'}
           </span>
         </div>
         <div className="loom-chat__compose">
           <span className="loom-chat__draft">
-            {textContent(component, 'placeholder') || 'Write a message'}
+            {textContent(component, 'placeholder', params) || 'Write a message'}
           </span>
-          <span className="loom-chat__send">{textContent(component, 'sendLabel') || 'Send'}</span>
+          <span className="loom-chat__send">
+            {textContent(component, 'sendLabel', params) || 'Send'}
+          </span>
         </div>
       </div>
     );
   }
 
   if (component.type === 'Image') {
-    const src = textContent(component, 'src');
+    const src = textContent(component, 'src', params);
     // A picture with no address yet is a *place* for one: an empty img is a broken icon, and a
     // designer arranging a page needs to see the box it will occupy.
     if (!src) {
@@ -478,7 +539,7 @@ export function ComponentView({
           className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
           style={{ ...leafStyle, minWidth: 80, minHeight: 60 }}
         >
-          {textContent(component, 'alt') || 'Image'}
+          {textContent(component, 'alt', params) || 'Image'}
         </div>
       );
     }
@@ -487,7 +548,7 @@ export function ComponentView({
         {...shared}
         ref={attach as unknown as (node: HTMLImageElement | null) => void}
         src={src}
-        alt={textContent(component, 'alt')}
+        alt={textContent(component, 'alt', params)}
         style={leafStyle}
       />
     );
@@ -504,8 +565,8 @@ export function ComponentView({
    * somebody is arranging a screen is the tool interrupting the work.
    */
   if (component.type === 'Video') {
-    const src = textContent(component, 'src');
-    const poster = textContent(component, 'poster');
+    const src = textContent(component, 'src', params);
+    const poster = textContent(component, 'poster', params);
     if (!src && !poster) {
       return (
         <div
@@ -536,7 +597,7 @@ export function ComponentView({
   }
 
   if (component.type === 'Audio') {
-    const src = textContent(component, 'src');
+    const src = textContent(component, 'src', params);
     return (
       <audio
         {...shared}
@@ -562,7 +623,11 @@ export function ComponentView({
     return (
       <div {...shared} ref={attach} style={{ minWidth: 120, minHeight: 80, ...style }}>
         {first ? (
-          <img className="loom-carousel__slide" src={first} alt={textContent(component, 'alt')} />
+          <img
+            className="loom-carousel__slide"
+            src={first}
+            alt={textContent(component, 'alt', params)}
+          />
         ) : (
           <span className="canvas-placeholder">Carousel</span>
         )}
@@ -588,8 +653,8 @@ export function ComponentView({
 
   if (component.type === 'Avatar') {
     const size = numberProp(component, 'size', 40);
-    const src = textContent(component, 'src');
-    const name = textContent(component, 'name');
+    const src = textContent(component, 'src', params);
+    const name = textContent(component, 'name', params);
     const initials = name
       .trim()
       .split(/\s+/)
@@ -629,8 +694,8 @@ export function ComponentView({
         className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
         style={{ minWidth: 160, minHeight: 90, ...style }}
       >
-        <span>{textContent(component, 'title') || 'Embed'}</span>
-        <span className="canvas-placeholder__note">{textContent(component, 'src')}</span>
+        <span>{textContent(component, 'title', params) || 'Embed'}</span>
+        <span className="canvas-placeholder__note">{textContent(component, 'src', params)}</span>
       </div>
     );
   }
@@ -645,7 +710,7 @@ export function ComponentView({
         href={undefined}
         style={{ cursor: 'default', ...leafStyle }}
       >
-        {textContent(component, 'label') || 'Link'}
+        {textContent(component, 'label', params) || 'Link'}
       </a>
     );
   }
@@ -667,7 +732,7 @@ export function ComponentView({
         aria-hidden="true"
         style={leafStyle}
       >
-        <path d={iconPath(textContent(component, 'name') || 'check')} />
+        <path d={iconPath(textContent(component, 'name', params) || 'check')} />
       </svg>
     );
   }
@@ -704,10 +769,11 @@ export function ComponentView({
             draggingId={draggingId}
             alsoSelected={alsoSelected}
             screenWidth={screenWidth}
+            params={params}
           />
         ) : (
           <span className="canvas-placeholder">
-            {textContent(component, 'empty') || 'Nothing yet'}
+            {textContent(component, 'empty', params) || 'Nothing yet'}
           </span>
         )}
 
@@ -729,6 +795,7 @@ export function ComponentView({
                 draggingId={draggingId}
                 alsoSelected={alsoSelected}
                 screenWidth={screenWidth}
+                params={params}
               />
             ))}
           </div>
@@ -755,7 +822,7 @@ export function ComponentView({
           className={`canvas-placeholder ${variantClassName(component) ?? ''}`.trim()}
           style={leafStyle}
         >
-          <span>{textContent(component, 'empty') || 'Nothing yet'}</span>
+          <span>{textContent(component, 'empty', params) || 'Nothing yet'}</span>
           <span className="canvas-placeholder__note">Columns come from the first row</span>
         </div>
       );
@@ -829,6 +896,7 @@ export function ComponentView({
           draggingId={draggingId}
           alsoSelected={alsoSelected}
           screenWidth={screenWidth}
+          params={params}
         />
       ))}
     </div>

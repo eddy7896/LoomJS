@@ -1,4 +1,4 @@
-import type { Component, Layout, Port, PropertyValue, TypeRef } from '@loom/ir';
+import type { Component, Layout, Port, PropertyValue, Snapshot, TypeRef } from '@loom/ir';
 import { ICON_NAMES } from './icons';
 import type { VariantAxis } from './variants';
 
@@ -62,12 +62,26 @@ export interface MirrorPort extends Port {
  * declared they rendered per row and had no port to receive rows; upload fields held state the
  * studio did not know about. One declaration, beside the element it describes, is the fix.
  */
+/** What a node face is allowed to look at when it types its ports. */
+export interface NodeFaceContext {
+  /** The element's static props. A bound prop has no value until the app runs. */
+  props: Record<string, unknown>;
+  /**
+   * The project, when the caller has it.
+   *
+   * Only an **Instance** needs it: its ports are its definition's params, and the definition lives
+   * in the snapshot rather than on the instance. Everything else ignores it, and a caller with no
+   * snapshot to hand still gets the right answer for those.
+   */
+  snapshot?: Snapshot;
+}
+
 export interface NodeFace {
   /**
    * Ports this element exposes, derived from its **static props**, so a Select types its port as
    * an enum of the options someone actually typed rather than as bare text.
    */
-  ports: (props: Record<string, unknown>) => readonly MirrorPort[];
+  ports: (context: NodeFaceContext) => readonly MirrorPort[];
   /** Its value lives in local state in the emitted app — the inputs, and the upload fields. */
   fieldState?: boolean;
   /** It renders its template once per row of a bound list. */
@@ -113,7 +127,7 @@ const takesSource = (): readonly MirrorPort[] => [
  * `text` when the options are bound or empty is honest rather than lossy: the type is genuinely
  * unknown until the app runs.
  */
-const givesChoice = (props: Record<string, unknown>): readonly MirrorPort[] => {
+const givesChoice = ({ props }: NodeFaceContext): readonly MirrorPort[] => {
   const raw = typeof props.options === 'string' ? props.options : '';
   const values = raw
     .split(',')
@@ -160,6 +174,15 @@ export interface ComponentDef {
   variants?: readonly VariantAxis[];
   /** True when the type can start a flow from a click (its `onClick` accepts a navigate handler). */
   acceptsClickFlow?: boolean;
+  /**
+   * Absent means the palette offers it. `false` means the element exists but is **not something
+   * you drop from a list of types** — an Instance is created by promoting a frame or by placing a
+   * definition, and one with no definition behind it has nothing to render.
+   *
+   * Read by the palette and by the vocabulary tests, so "every type compiles when freshly placed"
+   * keeps meaning what it says.
+   */
+  placeable?: boolean;
   defaultLayout?: Layout;
   /**
    * A fixed starting size, in px, for a type with no content to size itself from. Drawing the
@@ -190,6 +213,47 @@ const FIELD_STYLE_AXIS: VariantAxis = {
   label: 'Style',
   options: ['outline', 'filled', 'underline'],
   default: 'outline',
+};
+
+/**
+ * A reusable component, placed (R1, `docs/V1-COMPLETION.md`).
+ *
+ * The instance holds a reference and its overrides, never a copy of the tree. That is the whole
+ * point: a header defined once and placed on three screens is one thing in three places, and
+ * editing it edits all three. A copy would be three things that happened to look alike until
+ * somebody changed one.
+ *
+ * `defId` is not a `field`, because it is not something to type into a box — it is chosen when
+ * the element is placed, and changing it would make this a different component.
+ */
+export const INSTANCE_DEF: ComponentDef = {
+  type: 'Instance',
+  node: {
+    /**
+     * Its ports **are its definition's params**. This is the case that made a node face take the
+     * project rather than a type string: nothing about the word "Instance" says what it accepts,
+     * and the answer lives in the definition it points at.
+     */
+    ports: ({ props, snapshot }) => {
+      const defId = typeof props.defId === 'string' ? props.defId : '';
+      const definition = snapshot?.definitions?.[defId];
+      if (!definition) return [];
+
+      return (definition.params ?? []).map((param) =>
+        takes(`pt_${param.name}`, param.name, param.name, param.type),
+      );
+    },
+  },
+  label: 'Component',
+  category: 'container',
+  keywords: ['instance', 'symbol', 'reusable', 'shared'],
+  // Its children live in the definition, not here. An instance with children of its own would be
+  // two answers to what it contains.
+  isContainer: false,
+  // Placed from the Components list, never from the element palette: without a definition behind
+  // it there is nothing to render, so offering a blank one would offer a build error.
+  placeable: false,
+  fields: [],
 };
 
 export const FRAME_DEF: ComponentDef = {
@@ -1035,6 +1099,7 @@ const DEFS: readonly ComponentDef[] = [
   STAT_DEF,
   CALENDAR_DEF,
   CHAT_DEF,
+  INSTANCE_DEF,
 ];
 const BY_TYPE = new Map(DEFS.map((d) => [d.type, d]));
 

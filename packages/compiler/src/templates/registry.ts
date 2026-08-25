@@ -1,5 +1,6 @@
 import type { ComponentEmitter } from '../types';
 import { buttonEmitter } from './button';
+import { instanceEmitter } from './instance';
 import { frameEmitter } from './frame';
 import { listEmitter } from './list';
 import { tableEmitter } from './table';
@@ -32,6 +33,7 @@ import { calendarEmitter, chatEmitter } from './calendar';
  * adding an emitter here, never branching inside the walker.
  */
 const EMITTERS: ComponentEmitter[] = [
+  instanceEmitter,
   frameEmitter,
   textEmitter,
   buttonEmitter,

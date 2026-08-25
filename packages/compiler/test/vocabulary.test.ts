@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { componentDefs, createComponent } from '@loom/components';
+import { componentDefs, placeableDefs, createComponent } from '@loom/components';
 import { SCHEMA_VERSION, applyOp, createEmptyProject, type Snapshot } from '@loom/ir';
 import { compile, knownComponentTypes } from '../src/index';
 
@@ -43,7 +43,9 @@ describe('vocabulary <-> templates', () => {
      * bug it was written for: the broken close was in a calendar's `agenda` shape, which nothing
      * had drawn. A variant that changes the emitted markup is a variant that can break it.
      */
-    for (const def of componentDefs()) {
+    // Only what the palette offers: an Instance is created by promoting a frame, and one with no
+    // definition behind it has nothing to render (R1).
+    for (const def of placeableDefs()) {
       if (def.type === 'Frame') continue;
       const shapes = def.variants?.find((axis) => axis.key === 'variant')?.options ?? [''];
 
@@ -74,7 +76,9 @@ describe('vocabulary <-> templates', () => {
       root,
     });
 
-    for (const def of componentDefs()) {
+    // Only what the palette offers: an Instance is created by promoting a frame, and one with no
+    // definition behind it has nothing to render (R1).
+    for (const def of placeableDefs()) {
       if (def.type === 'Frame') continue;
       snapshot = applyOp(snapshot, {
         type: 'addComponent',

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { applyOps, type Component, type Snapshot } from '@loom/ir';
-import { componentDefs, createComponent, hasFieldState, mirrorPortsFor } from '@loom/components';
+import {
+  componentDefs,
+  placeableDefs,
+  createComponent,
+  hasFieldState,
+  mirrorPortsFor,
+} from '@loom/components';
 import { compile } from '../src/index';
 import { formSnapshot, masterDetailSnapshot } from './fixtures';
 
@@ -37,7 +43,9 @@ describe('the palette and the templates agree', () => {
 
   it('a freshly placed element of every type compiles', () => {
     // The same rule an action follows: what you just placed must not break the build.
-    for (const def of componentDefs()) {
+    // Only what the palette offers: an Instance is created by promoting a frame, and one with no
+    // definition behind it has nothing to render (R1).
+    for (const def of placeableDefs()) {
       if (def.type === 'Frame') continue;
       expect(() => place(def.type), def.type).not.toThrow();
     }

@@ -4,6 +4,7 @@ import {
   createEmptyProject,
   newArtboardId,
   newComponentId,
+  newDefinitionId,
   newFlowId,
   type ArtboardKind,
   type Component,
@@ -784,6 +785,79 @@ export function setArtboardKind(artboardId: Id, kind: ArtboardKind, page?: Page)
     kind,
     page: kind === 'document' ? (page ?? DEFAULT_PAGE) : undefined,
   });
+}
+
+/**
+ * Promote a frame to a reusable component (R1, `docs/V1-COMPLETION.md`).
+ *
+ * The frame **becomes** the definition's root and an instance takes its place — it is not copied.
+ * A copy would leave two trees that look alike until somebody edits one, which is the exact thing
+ * this feature exists to prevent.
+ *
+ * Only a frame, because only a container has a tree worth reusing: promoting a lone Text would
+ * produce a component whose whole body is one word, and the vocabulary already has that.
+ */
+export function promoteToDefinition(componentId: Id, name = 'Component'): Id | undefined {
+  const component = state.snapshot.components[componentId];
+  if (!component || !defFor(component.type)?.isContainer) return undefined;
+
+  // A screen's own root is the screen. Promoting it would leave an artboard whose root is an
+  // instance of itself, which is a project that cannot be reasoned about.
+  const isScreenRoot = Object.values(state.snapshot.artboards).some(
+    (artboard) => artboard.root === componentId,
+  );
+  if (isScreenRoot) return undefined;
+
+  const definitionId = newDefinitionId();
+  const instance = createComponent('Instance', newComponentId());
+
+  dispatch({
+    type: 'promoteToDefinition',
+    definition: { id: definitionId, name, root: componentId },
+    instance: {
+      ...instance,
+      name,
+      props: { defId: { kind: 'static', value: definitionId } },
+      // The instance stands where the frame stood, so promoting does not move anything.
+      position: component.position,
+    },
+  });
+  select({ kind: 'component', id: instance.id });
+  return definitionId;
+}
+
+/**
+ * Place one of the project's own components, wherever the palette would have put an element.
+ *
+ * Deliberately the same insertion rule as everything else in the palette: an instance is placed
+ * the way a Button is, because to the person doing it that is what it is.
+ */
+export function addInstance(definitionId: Id): Id | undefined {
+  const definition = state.snapshot.definitions?.[definitionId];
+  if (!definition) return undefined;
+
+  const parentId = insertionParent(state.snapshot, state.selection);
+  if (!parentId) return undefined;
+
+  const instance = createComponent('Instance', newComponentId());
+  const placed = {
+    ...instance,
+    name: definition.name,
+    props: { defId: { kind: 'static' as const, value: definitionId } },
+    ...(isFree(state.snapshot, parentId) ? { position: nextSpot(parentId) } : {}),
+  };
+
+  dispatch({ type: 'addInstance', parentId, instance: placed });
+  select({ kind: 'component', id: placed.id });
+  return placed.id;
+}
+
+export function renameDefinition(definitionId: Id, name: string): void {
+  dispatch({ type: 'renameDefinition', definitionId, name });
+}
+
+export function setDefinitionParams(definitionId: Id, params: Param[]): void {
+  dispatch({ type: 'setDefinitionParams', definitionId, params });
 }
 
 /**

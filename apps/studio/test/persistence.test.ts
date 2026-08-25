@@ -49,14 +49,31 @@ describe('restoring a saved project', () => {
     expect(result.snapshot).toEqual(saved);
   });
 
-  it('refuses a document from another schema version, naming both', () => {
-    const future = JSON.stringify({ ...createTrivialSnapshot(), schemaVersion: SCHEMA_VERSION + 1 });
+  it('refuses a document from a newer build, naming both', () => {
+    const future = JSON.stringify({
+      ...createTrivialSnapshot(),
+      schemaVersion: SCHEMA_VERSION + 1,
+    });
     const result = restoreProject(memoryStore(future));
     expect(result.status).toBe('refused');
     if (result.status !== 'refused') return;
     // A designer has to be able to tell "too new" from "corrupt" without reading a stack trace.
     expect(result.reason).toContain(`version ${SCHEMA_VERSION + 1}`);
-    expect(result.reason).toContain(`version ${SCHEMA_VERSION}`);
+    expect(result.reason).toContain(String(SCHEMA_VERSION));
+  });
+
+  /**
+   * The other half of the guard, which had never run: there was only ever one version, so it could
+   * only refuse. An older document this build understands is carried forward instead of thrown
+   * away — the IR wave added nothing but optional fields, so there is nothing to lose.
+   */
+  it('opens an older document instead of refusing it', () => {
+    const old = JSON.stringify({ ...createTrivialSnapshot(), schemaVersion: 1 });
+    const result = restoreProject(memoryStore(old));
+
+    expect(result.status).toBe('restored');
+    if (result.status !== 'restored') return;
+    expect(result.snapshot.schemaVersion).toBe(SCHEMA_VERSION);
   });
 
   it('refuses unreadable JSON and a document that does not validate', () => {

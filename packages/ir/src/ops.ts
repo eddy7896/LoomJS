@@ -3,6 +3,7 @@ import type {
   Artboard,
   ArtboardKind,
   Component,
+  ComponentDefinition,
   ConnectorInstance,
   Flow,
   FlowPayload,
@@ -67,6 +68,22 @@ export type Op =
   | { type: 'setArtboardKind'; artboardId: string; kind: ArtboardKind; page?: Page }
   /** Crawlable without a session, and what a crawler is told about it (L4). */
   | { type: 'setArtboardMeta'; artboardId: string; isPublic: boolean; meta?: Meta }
+  /**
+   * Promote a frame to a reusable component (R1).
+   *
+   * The frame **stops being on the artboard** and becomes the definition's root; an instance takes
+   * its place. Copying it would leave two trees that look alike until somebody edits one, which is
+   * the thing this feature exists to prevent.
+   */
+  | {
+      type: 'promoteToDefinition';
+      definition: ComponentDefinition;
+      /** The instance that replaces the promoted frame where it stood. */
+      instance: Component;
+    }
+  | { type: 'addInstance'; parentId: string; instance: Component }
+  | { type: 'renameDefinition'; definitionId: string; name: string }
+  | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
@@ -359,6 +376,49 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         artboard.kind = op.kind;
         if (op.page) artboard.page = op.page;
       }
+      return next;
+    }
+
+    case 'promoteToDefinition': {
+      const { definition, instance } = op;
+      const root = next.components[definition.root];
+      if (!root) throw new Error(`promoteToDefinition: unknown component ${definition.root}`);
+
+      // Whoever held the frame now holds the instance, in the same slot — promoting something
+      // should not move it.
+      for (const candidate of Object.values(next.components)) {
+        const children = candidate.children;
+        if (!children) continue;
+        const at = children.indexOf(definition.root);
+        if (at !== -1) children[at] = instance.id;
+      }
+
+      next.definitions = { ...(next.definitions ?? {}), [definition.id]: definition };
+      next.components[instance.id] = instance;
+      return next;
+    }
+
+    case 'addInstance': {
+      const parent = next.components[op.parentId];
+      if (!parent) throw new Error(`addInstance: unknown parent ${op.parentId}`);
+      next.components[op.instance.id] = op.instance;
+      parent.children = [...(parent.children ?? []), op.instance.id];
+      return next;
+    }
+
+    case 'renameDefinition': {
+      const definition = next.definitions?.[op.definitionId];
+      if (!definition) throw new Error(`renameDefinition: unknown definition ${op.definitionId}`);
+      definition.name = op.name;
+      return next;
+    }
+
+    case 'setDefinitionParams': {
+      const definition = next.definitions?.[op.definitionId];
+      if (!definition) {
+        throw new Error(`setDefinitionParams: unknown definition ${op.definitionId}`);
+      }
+      definition.params = op.params;
       return next;
     }
 

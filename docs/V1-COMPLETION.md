@@ -491,7 +491,7 @@ shipped broken. Verified red by reintroducing the Image bug.
 
 ### Track R — Structure _(the 10/10 unlock)_
 
-**R1 — Reusable components.** `ComponentDefinition` + `Instance` + per-instance overrides;
+**R1 — Reusable components.** ✅ _(done)_ `ComponentDefinition` + `Instance` + per-instance overrides;
 promote-a-frame gesture; a definitions list in the Elements panel; the compiler emits one real React
 component per definition and JSX instances with props.
 **Node side:** an `Instance` mirrors with one `in` port per definition param and one `out` trigger

@@ -1,4 +1,4 @@
-import type { Component, Id, Node, NodeCategory, Port, TypeRef } from '@loom/ir';
+import type { Component, Id, Node, NodeCategory, Port, Snapshot, TypeRef } from '@loom/ir';
 import { defFor, staticProps, type FieldDef, type MirrorPort } from './defs';
 
 /**
@@ -618,9 +618,12 @@ export function apiPortsFromBody(body: Node[]): Port[] {
  * It takes the **component**, not its type, because a port's type can depend on how the element is
  * configured — a Select's value is one of the options someone typed, not bare text.
  */
-export function mirrorPortsFor(component: Pick<Component, 'type' | 'props'>): MirrorPort[] {
+export function mirrorPortsFor(
+  component: Pick<Component, 'type' | 'props'>,
+  snapshot?: Snapshot,
+): MirrorPort[] {
   const face = defFor(component.type)?.node;
-  return face ? [...face.ports(staticProps(component))] : [];
+  return face ? [...face.ports({ props: staticProps(component), snapshot })] : [];
 }
 
 /**

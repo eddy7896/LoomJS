@@ -55,6 +55,22 @@ export interface EmitContext {
   renderChild: (id: Id, depth: number) => string;
   /** Declare that this module needs `useParams()`; returns the local variable name. */
   requireParams: () => string;
+  /**
+   * The expression a declared param reads from.
+   *
+   * A screen's params come off the route (`useParams()`); a **reusable component's** come in as
+   * React props (R1). The two are the same idea — a value the thing is given rather than one it
+   * holds — so they are the same `param` property value, and only where it is read from differs.
+   */
+  paramExpr: (name: string, componentId: Id) => string;
+  /**
+   * Declare that this module places a reusable component; returns the name to render (R1).
+   *
+   * The import is added by the module walker rather than by the instance template, because only
+   * the walker knows where the module it is writing sits — a screen reaches a component through
+   * `../components/`, and a component reaches another through `./`.
+   */
+  requireDefinition: (definitionId: Id, componentId: Id) => string;
   /** Declare that this module needs `useNavigate()`; returns the local variable name. */
   requireNavigate: () => string;
   /** The current row variable, when emitting inside a List template; undefined outside one. */

@@ -72,11 +72,11 @@ export function valueExpr(
       const declared = (ctx.artboard.params ?? []).some((p) => p.name === value.name);
       if (!declared) {
         throw new CompileError(
-          `Property "${key}" reads param "${value.name}", which artboard "${ctx.artboard.name}" does not declare.`,
+          `Property "${key}" reads param "${value.name}", which "${ctx.artboard.name}" does not declare.`,
           componentId,
         );
       }
-      return `${ctx.requireParams()}.${value.name} ?? ""`;
+      return ctx.paramExpr(value.name, componentId);
     }
     case 'bound': {
       const field = fieldStateExpr(ctx, value.source, componentId);

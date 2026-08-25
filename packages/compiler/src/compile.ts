@@ -23,6 +23,7 @@ import { emitContainerFiles } from './emit/container';
 import { emitReadme } from './emit/readme';
 import { responsiveCss } from './emit/responsive';
 import { printCss } from './emit/document';
+import { definitionComponentName, definitionPath, orderDefinitions } from './emit/definition';
 import {
   APP_ROUTES_PATH,
   ENTRY_SERVER_PATH,
@@ -180,6 +181,32 @@ export function compile(snapshot: Snapshot): CompileResult {
       ].filter((name, index, all) => all.indexOf(name) === index),
     }),
   );
+
+  /**
+   * Reusable components (R1), before the screens that place them.
+   *
+   * Emitted through the **same walker** as an artboard, with the definition passed as a synthetic
+   * artboard whose params are its params. One tree renderer, so a Frame cannot be right on a
+   * screen and wrong inside a component.
+   */
+  for (const definition of orderDefinitions(snapshot)) {
+    files.push({
+      path: definitionPath(definition),
+      content: emitArtboardModule(
+        snapshot,
+        {
+          id: definition.id,
+          name: definition.name,
+          root: definition.root,
+          params: definition.params,
+        },
+        routes,
+        definitionComponentName(definition),
+        globals,
+        true,
+      ),
+    });
+  }
 
   const messages = usesMessages(snapshot);
   files.push({

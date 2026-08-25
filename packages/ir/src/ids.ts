@@ -7,7 +7,21 @@ import { nanoid } from 'nanoid';
  * Ids are prefixed for readability in the snapshot JSON: `cp_V1StGXR8_Z`.
  */
 
-export type IdPrefix = 'pj' | 'ab' | 'cp' | 'nd' | 'wr' | 'fl' | 'pt' | 'cn' | 'au' | 'mg' | 'ng';
+export type IdPrefix =
+  | 'pj'
+  | 'ab'
+  | 'cp'
+  | 'nd'
+  | 'wr'
+  | 'fl'
+  | 'pt'
+  | 'cn'
+  | 'au'
+  | 'mg'
+  | 'ng'
+  /** A reusable component definition (R1) and an app shell layout (R2). */
+  | 'def'
+  | 'lay';
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${nanoid(10)}`;
@@ -16,6 +30,8 @@ export function newId(prefix: IdPrefix): string {
 export const newProjectId = (): string => newId('pj');
 export const newArtboardId = (): string => newId('ab');
 export const newComponentId = (): string => newId('cp');
+export const newDefinitionId = (): string => newId('def');
+export const newLayoutId = (): string => newId('lay');
 export const newNodeId = (): string => newId('nd');
 export const newWireId = (): string => newId('wr');
 export const newFlowId = (): string => newId('fl');

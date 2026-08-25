@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { componentDefs, createComponent, type ComponentDef } from '@loom/components';
+import { placeableDefs, createComponent, type ComponentDef } from '@loom/components';
 import { createEmptyProject, newComponentId, type Component, type Snapshot } from '@loom/ir';
 import { ComponentView } from '../src/canvas/ComponentView';
 
@@ -68,7 +68,7 @@ function isEmptyBox(element: HTMLElement): boolean {
   );
 }
 
-const leaves = componentDefs().filter((def) => !def.isContainer);
+const leaves = placeableDefs().filter((def) => !def.isContainer);
 
 describe('every element draws something', () => {
   it.each(leaves.map((def) => [def.type, def] as const))('%s', (_type, def: ComponentDef) => {

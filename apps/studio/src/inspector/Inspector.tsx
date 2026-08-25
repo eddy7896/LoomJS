@@ -34,6 +34,9 @@ import {
   renameArtboard,
   setArtboardParams,
   setArtboardGuard,
+  promoteToDefinition,
+  renameDefinition,
+  setDefinitionParams,
   setArtboardKind,
   setArtboardMeta,
   setArtboardPage,
@@ -136,6 +139,9 @@ export function Inspector() {
       {/* Grouping, where the selection is (G1). The keys are ⌘G and ⇧⌘G, and a button that says
           so beats a shortcut nobody was told about. */}
       <GroupSection component={component} />
+
+      {/* Reusable components (R1): promote a frame, or edit the one this instance points at. */}
+      <ComponentSection component={component} />
 
       {/* Which kind of element this is — the first decision, and the one that settles most of the
           others (`docs/27-variants.md`). */}
@@ -928,6 +934,103 @@ function PublicSection({ artboardId }: { artboardId: string }) {
           </Field>
         </>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * Making a frame reusable, and editing one that already is (R1, `docs/V1-COMPLETION.md`).
+ *
+ * Promoting **moves** the frame into the definition rather than copying it — the thing on the
+ * screen becomes an instance of what it just became. A copy would leave two trees that look alike
+ * until somebody edits one, which is the failure this exists to prevent.
+ */
+function ComponentSection({ component }: { component: Component }) {
+  const snapshot = useEditor((s) => s.snapshot);
+
+  if (component.type === 'Instance') {
+    const chosen = component.props.defId;
+    const defId = chosen?.kind === 'static' ? String(chosen.value ?? '') : '';
+    const definition = snapshot.definitions?.[defId];
+    const params = definition?.params ?? [];
+
+    return (
+      <section className="field-group" data-testid="instance-section">
+        <h3 className="field-group__title">Component</h3>
+        <Field label="Name">
+          <input
+            data-testid="definition-name"
+            value={definition?.name ?? ''}
+            onChange={(e) =>
+              definition ? renameDefinition(definition.id, e.target.value) : undefined
+            }
+          />
+        </Field>
+        <p className="panel__hint">
+          Defined once. Editing it here changes every screen it is placed on.
+        </p>
+
+        {params.length === 0 ? (
+          <p className="panel__hint">
+            It takes nothing yet. A param is how one placement differs from another — a title, a
+            label — and it becomes a real prop in the emitted code.
+          </p>
+        ) : (
+          params.map((param) => (
+            <Field key={param.name} label={param.name}>
+              <input
+                data-testid={`instance-param-${param.name}`}
+                value={
+                  component.props[param.name]?.kind === 'static'
+                    ? String((component.props[param.name] as { value: unknown }).value ?? '')
+                    : ''
+                }
+                onChange={(e) =>
+                  setProp(component.id, param.name, { kind: 'static', value: e.target.value })
+                }
+              />
+            </Field>
+          ))
+        )}
+
+        {definition ? (
+          <Field label="Params">
+            <button
+              data-testid="add-definition-param"
+              onClick={() =>
+                setDefinitionParams(definition.id, [
+                  ...params,
+                  { name: `param${params.length + 1}`, type: { kind: 'text' } },
+                ])
+              }
+            >
+              + Add a param
+            </button>
+          </Field>
+        ) : null}
+      </section>
+    );
+  }
+
+  // Only a container has a tree worth reusing, and a screen's own root is the screen.
+  if (!defFor(component.type)?.isContainer) return null;
+  const isScreenRoot = Object.values(snapshot.artboards).some(
+    (artboard) => artboard.root === component.id,
+  );
+  if (isScreenRoot) return null;
+
+  return (
+    <section className="field-group" data-testid="promote-section">
+      <h3 className="field-group__title">Component</h3>
+      <p className="panel__hint">
+        Make this reusable, and every screen that places it stays in step with this one.
+      </p>
+      <button
+        data-testid="promote-to-component"
+        onClick={() => promoteToDefinition(component.id, component.name ?? 'Component')}
+      >
+        Make a component
+      </button>
     </section>
   );
 }
