@@ -10,6 +10,7 @@ import type { Node, Snapshot } from '@loom/ir';
 import { dialectOf, isDocumentStore, moduleFor } from '@loom/connectors';
 import { CompileError, type EmittedFile } from '../types';
 import { firestorePrelude, firestoreStep } from './firestore';
+import { ORG_ID_VAR, isScoped, scopeFilter } from './tenancy';
 import { toolPrelude, toolStep, toolTimeout, usesFormEncoding } from './tools';
 import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
@@ -54,9 +55,7 @@ function emitFilters(node: Node, filters: readonly DbFilter[]): string {
         const literal = String(filter.value ?? '');
         // `contains` is a wildcard match; the others compare the value as given.
         const argument =
-          filter.operator === 'contains'
-            ? JSON.stringify(`%${literal}%`)
-            : JSON.stringify(literal);
+          filter.operator === 'contains' ? JSON.stringify(`%${literal}%`) : JSON.stringify(literal);
         return `    query = query.${op.postgrest}(${column}, ${argument});`;
       }
 
@@ -64,9 +63,7 @@ function emitFilters(node: Node, filters: readonly DbFilter[]): string {
       // or a search field would blank the list before anyone had typed in it.
       const read = `input[${column}]`;
       const argument =
-        filter.operator === 'contains'
-          ? `"%" + String(${read}) + "%"`
-          : `${read} as never`;
+        filter.operator === 'contains' ? `"%" + String(${read}) + "%"` : `${read} as never`;
       return `    if (${read} !== undefined && ${read} !== null && ${read} !== "") {
       query = query.${op.postgrest}(${column}, ${argument});
     }`;
@@ -88,6 +85,13 @@ function connectorFor(node: Node, snapshot: Snapshot): { moduleId: string } {
 }
 
 function emitDbStep(node: Node, snapshot: Snapshot): string {
+  /**
+   * Rows belonging to an organisation are narrowed to the one asking (O1).
+   *
+   * Done **here, on the server**, where the org came from the membership table rather than from
+   * the request — a filter the browser could choose is a filter the browser could drop.
+   */
+  const tenancy = snapshot.tenancy;
   const config = (node.config ?? {}) as Partial<DbNodeConfig>;
   const connector = connectorFor(node, snapshot);
 
@@ -116,9 +120,41 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
   const name = JSON.stringify(table);
   const key = JSON.stringify(primaryKeyName(node, snapshot, table));
 
+  /**
+   * A write has to land on a row in the caller's organisation, not merely on a row with the right
+   * id (O1).
+   *
+   * Without it an id is enough, and one scraped or guessed from anywhere lets a caller change or
+   * remove another organisation's row. Narrowing the read and leaving the write open is half a
+   * boundary, which is not one.
+   */
+  const scopeEq =
+    tenancy && isScoped(tenancy, table)
+      ? `
+      .eq(${JSON.stringify(tenancy.tenantColumn)}, ${ORG_ID_VAR})`
+      : '';
+  const scopeGuard =
+    tenancy && isScoped(tenancy, table)
+      ? `
+    if (!${ORG_ID_VAR}) throw new Error('You are not in an organisation.');`
+      : '';
+
   if (config.operation === 'insert') {
+    /**
+     * A new row lands in the organisation that made it, stamped here rather than sent up.
+     *
+     * Taking it from the request would let a client file a row into somebody else's organisation,
+     * which is the same class of hole as reading theirs.
+     */
+    const stamp =
+      tenancy && isScoped(tenancy, table)
+        ? `
+    if (!${ORG_ID_VAR}) throw new Error('You are not in an organisation.');
+    row[${JSON.stringify(tenancy.tenantColumn)}] = ${ORG_ID_VAR};`
+        : '';
+
     return `  {
-    const row = (value ?? {}) as Record<string, unknown>;
+    const row = (value ?? {}) as Record<string, unknown>;${stamp}
     const { data, error } = await supabase.from(${name}).insert(row).select().single();
     if (error) throw new Error(error.message);
     value = data;
@@ -144,13 +180,18 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
     const id = input[${key}];
     if (id === undefined || id === null || id === "") {
       throw new Error("Update needs the row it is changing.");
-    }
+    }${scopeGuard}
     const patch: Record<string, unknown> = {};
     for (const [column, entry] of Object.entries(input)) {
       // Undefined means "not shown on this form", which is different from "set it to null".
       if (column !== ${key} && entry !== undefined) patch[column] = entry;
     }
-    const { data, error } = await supabase.from(${name}).update(patch).eq(${key}, id).select().single();
+    const { data, error } = await supabase
+      .from(${name})
+      .update(patch)
+      .eq(${key}, id)${scopeEq}
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     value = data;
   }`;
@@ -162,8 +203,13 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
     const id = input[${key}];
     if (id === undefined || id === null || id === "") {
       throw new Error("Delete needs the row it is removing.");
-    }
-    const { data, error } = await supabase.from(${name}).delete().eq(${key}, id).select().single();
+    }${scopeGuard}
+    const { data, error } = await supabase
+      .from(${name})
+      .delete()
+      .eq(${key}, id)${scopeEq}
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     value = data;
   }`;
@@ -188,7 +234,14 @@ function emitDbStep(node: Node, snapshot: Snapshot): string {
     : '';
 
   const filters = config.filters ?? [];
-  const narrowing = filters.length > 0 ? `\n${emitFilters(node, filters)}` : '';
+  /**
+   * The designer's own filters, then the organisation's (O1).
+   *
+   * Last, and unconditionally: a scope that a `filters.length` check could skip is a scope that
+   * disappears the moment somebody removes their own filter.
+   */
+  const scope = tenancy && isScoped(tenancy, table) ? scopeFilter(tenancy) : '';
+  const narrowing = (filters.length > 0 ? `\n${emitFilters(node, filters)}` : '') + scope;
   const input = filters.some((filter) => filter.source === 'input')
     ? '    const input = (value ?? {}) as Record<string, unknown>;\n'
     : '';
@@ -229,7 +282,15 @@ function primaryKeyName(node: Node, snapshot: Snapshot, table: string): string {
   if (!needsKey) return 'id';
 
   const connector = config.connectorId ? snapshot.connectors[config.connectorId] : undefined;
-  const schema = (connector?.config as { schema?: { tables?: { name: string; columns?: { name: string; primaryKey?: boolean }[] }[] } } | undefined)?.schema;
+  const schema = (
+    connector?.config as
+      | {
+          schema?: {
+            tables?: { name: string; columns?: { name: string; primaryKey?: boolean }[] }[];
+          };
+        }
+      | undefined
+  )?.schema;
   const found = schema?.tables?.find((candidate) => candidate.name === table);
   const key = found?.columns?.find((column) => column.primaryKey);
 
@@ -288,7 +349,6 @@ ${checks.join('\n')}
     value = row;
   }`;
 }
-
 
 /**
  * A Gate. The condition holds or the request ends — the pipeline's one piece of control flow
@@ -356,8 +416,8 @@ const NEWLINE = String.fromCharCode(10);
 function needsSource(config: Partial<OperandConfig>): boolean {
   return Boolean(
     String(config.left ?? '').trim() ||
-      config.rightKind === 'field' ||
-      String(config.into ?? '').trim(),
+    config.rightKind === 'field' ||
+    String(config.into ?? '').trim(),
   );
 }
 
@@ -530,14 +590,17 @@ ${source
   );
 }
 
-export function emitApiFunction(
-  plan: PipelinePlan,
-  snapshot: Snapshot,
-  auth = false,
-): EmittedFile {
+export function emitApiFunction(plan: PipelinePlan, snapshot: Snapshot, auth = false): EmittedFile {
   const steps = plan.body.map((node) => emitStep(node, snapshot));
   const routeName = plan.routePath.replace('/api/', '');
   const usesDb = plan.body.some((node) => node.category === 'db');
+
+  /** Does anything in this route touch a table whose rows belong to an organisation? (O1) */
+  const scopesAnything = plan.body.some(
+    (node) =>
+      node.category === 'db' &&
+      isScoped(snapshot.tenancy, String((node.config as { table?: string })?.table ?? '')),
+  );
   const sqlNode = plan.body.find(
     (node) => node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId),
   );
@@ -661,7 +724,8 @@ const slot = (index: number): string => '$' + index;
   })();
 
   const mysqlNode = plan.body.find(
-    (node) => node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId) === 'mysql',
+    (node) =>
+      node.category === 'db' && dialectOf(connectorFor(node, snapshot).moduleId) === 'mysql',
   );
 
   const toolNodes = plan.body.filter((node) => node.category === 'tool');
@@ -675,16 +739,16 @@ const slot = (index: number): string => '$' + index;
   const dbPrelude = !usesDb
     ? ''
     : documentNode
-    ? firestorePrelude(steps)
-    : mysqlNode
-    ? mysqlPrelude
-    : sqlNode
-    ? sqlPrelude
-    : auth
-      ? `import { PostgrestClient } from '@supabase/postgrest-js';
+      ? firestorePrelude(steps)
+      : mysqlNode
+        ? mysqlPrelude
+        : sqlNode
+          ? sqlPrelude
+          : auth
+            ? `import { PostgrestClient } from '@supabase/postgrest-js';
 import { accessTokenFor } from '../src/server/auth';
-`
-      : `import { PostgrestClient } from '@supabase/postgrest-js';
+${scopesAnything ? "import { orgFor } from '../src/server/org';\n" : ''}`
+            : `import { PostgrestClient } from '@supabase/postgrest-js';
 
 // Credentials are read by NAME from the environment; the value never enters the document,
 // the snapshot, or this file (docs/05-guardrails.md #1).
@@ -704,7 +768,15 @@ const supabase = new PostgrestClient(\`\${process.env.SUPABASE_URL ?? ''}/rest/v
     const supabase = new PostgrestClient(\`\${process.env.SUPABASE_URL ?? ''}/rest/v1\`, {
       headers: { apikey: anonKey, Authorization: \`Bearer \${token ?? anonKey}\` },
     });
-
+${
+  scopesAnything
+    ? `
+    // Which organisation is asking (O1). Resolved from the membership table with this request's
+    // own session — never taken from the request itself, which the caller controls.
+    const ${ORG_ID_VAR} = (await orgFor(req, res))?.id ?? null;
+`
+    : ''
+}
 `
       : '';
 

@@ -53,6 +53,7 @@ import {
   validateGuards,
 } from './emit/auth';
 import { emitAuthFunctions } from './emit/authServer';
+import { TENANCY_MODULE_PATH, emitTenancyModule, tenancyOf, validateTenancy } from './emit/tenancy';
 
 /**
  * Compile a snapshot into the file set of a runnable Vite + React + TS app.
@@ -82,6 +83,13 @@ export function compile(snapshot: Snapshot): CompileResult {
   // (`docs/specs/app-auth.md`).
   const auth = usesAuth(snapshot);
   if (auth) requireAuthConnector(snapshot);
+
+  /**
+   * Organisations (O1). A project says which tables hold them; the emitted app resolves the
+   * current one **server-side** from the membership table on every session request.
+   */
+  const tenancy = tenancyOf(snapshot);
+  validateTenancy(snapshot, auth);
 
   // App-wide variables are planned once for the whole project: a global's identity is its name,
   // and the screen that writes it is rarely the screen that reads it (`emit/state.ts`).
@@ -252,8 +260,11 @@ export function compile(snapshot: Snapshot): CompileResult {
   }
 
   if (auth) {
-    files.push({ path: AUTH_MODULE_PATH, content: emitAuthModule() });
-    files.push(...emitAuthFunctions(ssoProvidersUsed(snapshot)));
+    files.push({ path: AUTH_MODULE_PATH, content: emitAuthModule(Boolean(tenancy)) });
+    files.push(...emitAuthFunctions(ssoProvidersUsed(snapshot), Boolean(tenancy)));
+    if (tenancy) {
+      files.push({ path: TENANCY_MODULE_PATH, content: emitTenancyModule(tenancy) });
+    }
   }
 
   if (globals.length > 0) {

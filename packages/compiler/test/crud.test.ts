@@ -55,7 +55,12 @@ describe('what update and delete emit', () => {
 
   it('finds the row by its key and patches the rest', () => {
     const api = fileAt(project, 'api/editnote.ts');
-    expect(api).toContain('.update(patch).eq("id", id).select().single()');
+    // The parts, not the exact chain: a tenanted project adds an organisation clause between
+    // the key and the select, and asserting the whole line would break on a change to a
+    // different feature.
+    expect(api).toContain('.update(patch)');
+    expect(api).toContain('.eq("id", id)');
+    expect(api).toContain('.single()');
     // Sending the key back as a column would ask the database to rewrite the row it is finding by.
     expect(api).toContain('if (column !== "id" && entry !== undefined) patch[column] = entry;');
   });
@@ -66,14 +71,24 @@ describe('what update and delete emit', () => {
 
   it('deletes by key and returns what it removed', () => {
     const api = fileAt(project, 'api/removenote.ts');
-    expect(api).toContain('.delete().eq("id", id).select().single()');
+    expect(api).toContain('.delete()');
+    expect(api).toContain('.eq("id", id)');
+    expect(api).toContain('.single()');
     expect(api).toContain('Delete needs the row it is removing.');
   });
 
   it('refuses a table with no primary key, rather than rewriting every row', () => {
     const keyless = {
       name: 'events',
-      columns: [{ name: 'label', type: { kind: 'text' as const }, required: true, primaryKey: false, generated: false }],
+      columns: [
+        {
+          name: 'label',
+          type: { kind: 'text' as const },
+          required: true,
+          primaryKey: false,
+          generated: false,
+        },
+      ],
     };
     const broken = applyOps(crudSnapshot(), [
       {
@@ -103,7 +118,9 @@ describe('search is a filter whose value the screen supplies', () => {
   it('treats an empty box as no narrowing at all', () => {
     // Otherwise the list would be blank before anyone had typed in it.
     const api = fileAt(project, 'api/notes.ts');
-    expect(api).toContain('input["title"] !== undefined && input["title"] !== null && input["title"] !== ""');
+    expect(api).toContain(
+      'input["title"] !== undefined && input["title"] !== null && input["title"] !== ""',
+    );
   });
 
   it('re-reads as the person types, because the input is a dependency', () => {
@@ -140,7 +157,9 @@ describe('a write invalidates a read of the same table', () => {
   });
 
   it('names it in the reactive read, which is what makes the list catch up', () => {
-    expect(code).toMatch(/useEffect\(\(\) => \{\s*void run_nd_read\(\);\s*\}, \[run_nd_read, rows_notes\]\)/);
+    expect(code).toMatch(
+      /useEffect\(\(\) => \{\s*void run_nd_read\(\);\s*\}, \[run_nd_read, rows_notes\]\)/,
+    );
   });
 
   it('emits no counter when nothing writes the table it reads', () => {
@@ -177,7 +196,9 @@ describe('paging a list', () => {
 
   it('never strands you on a page that no longer exists', () => {
     // Deleting the last row of the last page is the case that breaks a naive counter.
-    expect(home(crudSnapshot({ pageSize: 2 }))).toContain('Math.min(page_cp_list, pages_page_cp_list - 1)');
+    expect(home(crudSnapshot({ pageSize: 2 }))).toContain(
+      'Math.min(page_cp_list, pages_page_cp_list - 1)',
+    );
   });
 });
 

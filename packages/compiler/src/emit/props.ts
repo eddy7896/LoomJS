@@ -2,7 +2,7 @@ import type { Component, Id, PortRef, PropertyValue } from '@loom/ir';
 import { hasFieldState } from '@loom/components';
 import { CompileError, type EmitContext } from '../types';
 import { bindingExpr, stateNameForComponent } from './pipeline';
-import { sessionExpr } from './auth';
+import { orgExpr, sessionExpr } from './auth';
 
 /**
  * A property value becomes a JS expression.
@@ -84,6 +84,9 @@ export function valueExpr(
       // Who is signed in is read straight off the auth context — no pipeline, no state of its own.
       const session = sessionExpr(ctx, value.source, componentId);
       if (session) return session;
+      // Which organisation they are in, from the same round trip (O1).
+      const org = orgExpr(ctx, value.source, componentId);
+      if (org) return org;
       return bindingExpr(ctx.plans, ctx.derived, ctx.states, value.source, componentId);
     }
     case 'item': {

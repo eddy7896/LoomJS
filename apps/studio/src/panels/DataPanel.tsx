@@ -22,6 +22,7 @@ import {
 } from '../state/connectors';
 import { SchemaList } from './SchemaTable';
 import { NewTable } from './SchemaEditor';
+import { TenancyPanel } from './TenancyPanel';
 import { DataWorkPanel } from './DataWorkPanel';
 import { ProvidersPanel } from './ProvidersPanel';
 
@@ -157,6 +158,9 @@ export function DataPanel() {
             tables={tables}
             editing={editing === 'sql' || editing === 'shape' ? editing : undefined}
           />
+
+          {/* Whether rows belong to an organisation, beside the tables that hold them (O1). */}
+          <TenancyPanel tables={tables} />
 
           {/* Reading a table, and putting one on a screen, belong beside the schema that says
               what the tables are — not in the Nodes palette next to Compute (D9). */}

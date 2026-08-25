@@ -527,7 +527,7 @@ _Done-when:_ one "create invoice" pipeline is invoked from three screens.
 
 ### Track O — Tenancy and access
 
-**O1 — Organizations.** Tenancy setup in the Data panel: pick or generate the org table, the
+**O1 — Organizations.** ✅ _(done)_ Tenancy setup in the Data panel: pick or generate the org table, the
 membership table and the tenant column; the emitted app resolves **current org** from the session
 the way it already resolves current user.
 **Node side:** the `state / currentOrg` node (§4.3). Reads only. Its `role` port is typed

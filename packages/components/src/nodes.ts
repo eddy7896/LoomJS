@@ -269,6 +269,35 @@ export const CURRENT_USER_DEF: NodeDef = {
 };
 
 /**
+ * Which organisation the person is in (O1, `docs/V1-COMPLETION.md`).
+ *
+ * Beside `Current user`, and for the same reason: it is app state nobody sets. The **server**
+ * decides it, from the membership table, using the requester's own session — a client that could
+ * name its own organisation could name somebody else's.
+ *
+ * Read-only, and deliberately so. "Switch organisation" is a different act from "read which one I
+ * am in", and it arrives with invites and membership (O4).
+ */
+export const CURRENT_ORG_DEF: NodeDef = {
+  category: 'state',
+  kind: 'currentOrg',
+  label: 'Current org',
+  group: 'data',
+  keywords: ['organisation', 'organization', 'tenant', 'company', 'workspace', 'school', 'team'],
+  defaultConfig: {},
+  fields: [],
+  ports: () => [
+    port('pt_id', 'id', 'out', 'data', { kind: 'text' }),
+    port('pt_name', 'name', 'out', 'data', { kind: 'text' }),
+    // Typed `text` until roles are a named set (O2), at which point this narrows to that enum.
+    port('pt_role', 'role', 'out', 'data', { kind: 'text' }),
+    // Nobody is in one yet — a signed-in person with no membership. Worth showing rather than
+    // rendering an empty screen that looks broken.
+    port('pt_none', 'no org', 'out', 'data', { kind: 'boolean' }),
+  ],
+};
+
+/**
  * A variable, as opposed to the other thing in the `state` category.
  *
  * Everything that means "a bucket someone writes into" has to ask this rather than the category:
@@ -535,6 +564,7 @@ const DEFS: readonly NodeDef[] = [
   VALIDATE_DEF,
   STATE_WRITE_DEF,
   CURRENT_USER_DEF,
+  CURRENT_ORG_DEF,
 ];
 const BY_KIND = new Map(DEFS.map((def) => [`${def.category}:${def.kind}`, def]));
 

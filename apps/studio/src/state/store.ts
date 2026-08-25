@@ -22,6 +22,7 @@ import {
   type SizeMode,
   type Snapshot,
   type Style,
+  type Tenancy,
 } from '@loom/ir';
 import { createComponent, defFor, DEFAULT_LAYOUT, screenPreset } from '@loom/components';
 import { DEFAULT_PAGE } from '@loom/compiler';
@@ -910,6 +911,16 @@ export function addShell(name = 'App shell'): Id {
 
 export function removeDefinition(definitionId: Id): void {
   dispatch({ type: 'removeDefinition', definitionId });
+}
+
+/**
+ * Which of this project's tables hold the organisations, and whose rows belong to one (O1).
+ *
+ * Undefined turns it off — a single-tenant app, which is most of them, and which pays nothing for
+ * any of this.
+ */
+export function setTenancy(tenancy: Tenancy | undefined): void {
+  dispatch({ type: 'setTenancy', tenancy });
 }
 
 /** Put a screen inside a shell, or take it back out. */

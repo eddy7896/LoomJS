@@ -19,6 +19,7 @@ import type {
   Param,
   ScreenSize,
   Style,
+  Tenancy,
   Node,
   PropertyValue,
   Snapshot,
@@ -94,6 +95,8 @@ export type Op =
   | { type: 'removeDefinition'; definitionId: string }
   /** Put a screen inside a shell, or take it back out. */
   | { type: 'setArtboardShell'; artboardId: string; shellId: string | undefined }
+  /** Which tables hold the organisations, and whose rows belong to one (O1). */
+  | { type: 'setTenancy'; tenancy: Tenancy | undefined }
   | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
@@ -432,6 +435,12 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         if (artboard.shellId === op.definitionId) delete artboard.shellId;
       }
       delete next.definitions[op.definitionId];
+      return next;
+    }
+
+    case 'setTenancy': {
+      if (op.tenancy) next.tenancy = op.tenancy;
+      else delete next.tenancy;
       return next;
     }
 

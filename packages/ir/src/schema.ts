@@ -784,6 +784,17 @@ export const TenancySchema = z.object({
   tenantColumn: z.string().min(1),
   /** The column on the membership row holding the role. */
   roleColumn: z.string().min(1).optional(),
+  /**
+   * The tables whose rows belong to an organisation, named rather than guessed at.
+   *
+   * loom could try to infer this from which tables have the column, and that is exactly the sort
+   * of magic this must not do: guess too widely and a shared lookup table returns nothing for
+   * everybody; guess too narrowly and one table quietly serves every organisation's rows to
+   * everyone. Both failures look like a data problem and neither is.
+   *
+   * Empty means nothing is scoped yet — the org is resolved and readable, and no query is narrowed.
+   */
+  scopedTables: z.array(z.string()).optional(),
 });
 export type Tenancy = z.infer<typeof TenancySchema>;
 
