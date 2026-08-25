@@ -1,4 +1,12 @@
-import type { Artboard, Id, Node, PortRef, Snapshot, TypeRef } from '@loom/ir';
+import {
+  actionsOf,
+  type Artboard,
+  type Id,
+  type Node,
+  type PortRef,
+  type Snapshot,
+  type TypeRef,
+} from '@loom/ir';
 import {
   COMPUTE_OPS,
   isVariable,
@@ -7,6 +15,8 @@ import {
   MATH_OPERATORS,
 } from '@loom/components';
 import { tsTypeOf } from '@loom/typesys';
+import { authVar } from './auth';
+import { isCurrentOrg } from './tenancy';
 import { CompileError } from '../types';
 import { stateNameForComponent, type PipelinePlan } from './pipeline';
 import { stateFallback, statesWrittenBy, type ScreenStatePlan } from './state';
@@ -35,6 +45,8 @@ export interface DerivedPlan {
   type: TypeRef;
   /** Set when a trigger is wired into `run`; the name of the function that recomputes. */
   runName: string | undefined;
+  /** True when this derivation reads the session — the module has to hold `useAuth()` (O2). */
+  readsSession?: boolean;
   /**
    * Whether anything reads this derivation *by name* — a bound property, or another derivation.
    * A derivation that only feeds a screen bucket needs no local of its own, and emitting one would
@@ -53,12 +65,33 @@ export const derivedName = (nodeId: Id): string => `derived_${jsIdent(nodeId)}`;
 const CLIENT_KINDS: Record<string, string | undefined> = {
   compute: undefined,
   math: undefined,
-  compare: 'Compare works on the fields of a request body, so it belongs inside an API route.',
-  logic: 'Logic works on the fields of a request body, so it belongs inside an API route.',
+  /**
+   * Compare and Logic read **fields of a request body** by name, and there is no body in the
+   * browser — so outside a route they are refused, unless their input is wired.
+   *
+   * A wired input is a different thing entirely: the value comes down the wire rather than out of
+   * a request, and the comparison is ordinary arithmetic on something already on the screen.
+   * "Only for admins" is exactly that — the current org's role against a name — and refusing it
+   * would mean the one comparison every multi-tenant app needs was the one it could not make
+   * (O2).
+   */
+  compare:
+    'Compare reads a field of a request body, so it belongs inside an API route — unless something is wired into it.',
+  logic:
+    'Logic reads a field of a request body, so it belongs inside an API route — unless something is wired into it.',
   validate: 'Validate runs on the server, where it cannot be bypassed. Put it inside an API route.',
   gate: 'A Gate stops a request, so it belongs inside an API route.',
   code: 'A Code node runs on the server. Put it inside an API route.',
 };
+
+/**
+ * Kinds whose refusal is lifted by having something wired in.
+ *
+ * Not the whole list: a Validate or a Gate runs on the server because that is where it *cannot be
+ * bypassed*, and a wire does not change that. These two are refused only because a request body
+ * does not exist in a browser, which a wire genuinely answers.
+ */
+const WIRED_IS_ENOUGH = new Set(['compare', 'logic']);
 
 /** Dividing by zero yields Infinity, which is a plausible wrong number; NaN is visibly wrong. */
 export const DIVIDE_HELPER = 'safeDivide';
@@ -167,12 +200,37 @@ function inputPortsOf(node: Node): string[] {
  * `plans` is read to resolve a derivation fed by an API route's result, and its `binds.result` is
  * set when that happens — the route's state has to exist for the derivation to read it.
  */
+/**
+ * The session values a derivation may read (O2).
+ *
+ * Deliberately the same expressions the *binding* path emits, so a role compared in a Compare node
+ * and a role shown in a Text are reading one thing. A second way to spell it would eventually
+ * disagree with the first.
+ */
+function sessionOperand(source: Node, portId: string): string | undefined {
+  const auth = authVar();
+
+  if (isCurrentOrg(source)) {
+    if (portId === 'pt_role') return `(${auth}.org?.role ?? "")`;
+    if (portId === 'pt_id') return `(${auth}.org?.id ?? "")`;
+    if (portId === 'pt_name') return `(${auth}.org?.name ?? "")`;
+    return undefined;
+  }
+
+  if (portId === 'pt_email') return `(${auth}.user?.email ?? "")`;
+  if (portId === 'pt_id') return `(${auth}.user?.id ?? "")`;
+  if (portId === 'pt_signedIn') return `(${auth}.user !== null)`;
+  return undefined;
+}
+
 export function planDerived(
   snapshot: Snapshot,
   artboard: Artboard,
   plans: PipelinePlan[],
   states: ScreenStatePlan[] = [],
 ): DerivedPlan[] {
+  /** Set when anything derived reads the session, so the module knows to ask for it. */
+  let readsSession = false;
   const inside = nodesInsideRoutes(snapshot);
   const owned = componentsOf(snapshot, artboard);
 
@@ -197,6 +255,34 @@ export function planDerived(
       }
     }
   }
+  /**
+   * A **condition** is demand too, and it was not counted.
+   *
+   * `visibleWhen` and a conditional style read a boolean the same way a bound property reads a
+   * value — the only difference is where the reference is written down. Without this, a
+   * derivation used by nothing but a condition is never planned, and the screen fails to compile
+   * with "reads a node this screen does not produce a value from" while pointing at a node that
+   * is right there. Found while wiring roles (O2), where "visible to admins" is a Compare that
+   * exactly nothing else reads.
+   */
+  const wantCondition = (condition: { source: PortRef } | undefined): void => {
+    if (!condition) return;
+    const target = snapshot.nodes[condition.source.nodeId];
+    if (target && isDerivable(target)) {
+      wanted.push(target.id);
+      boundDirectly.add(target.id);
+    }
+  };
+  for (const component of Object.values(snapshot.components)) {
+    if (!owned.has(component.id)) continue;
+    wantCondition(component.visibleWhen);
+    for (const entry of component.conditionalStyles ?? []) wantCondition(entry.when);
+    for (const value of Object.values(component.props)) {
+      if (value.kind !== 'event') continue;
+      for (const action of actionsOf(value.handler)) wantCondition(action.when);
+    }
+  }
+
   for (const state of states) {
     for (const writer of state.writers) {
       if (writer.kind === 'derived' && isDerivable(writer.node)) wanted.push(writer.node.id);
@@ -224,7 +310,9 @@ export function planDerived(
     if (!node || !isDerivable(node)) return;
 
     const reason = CLIENT_KINDS[node.kind];
-    if (reason !== undefined) throw new CompileError(reason, nodeId);
+    // Wired means it reads a value, not a request body — see CLIENT_KINDS.
+    const wired = WIRED_IS_ENOUGH.has(node.kind) && Boolean(wireInto(nodeId, 'pt_input'));
+    if (reason !== undefined && !wired) throw new CompileError(reason, nodeId);
 
     state.set(nodeId, 'visiting');
     for (const portId of inputPortsOf(node)) {
@@ -274,11 +362,25 @@ export function planDerived(
     }
 
     if (source.category === 'state' && !isVariable(source)) {
-      // The current user is read where it is shown, not computed from. Nothing needs it yet, and
-      // inventing a way to fold a session into an expression would be a mechanism with no demand.
+      /**
+       * Folding the session into an expression (O2).
+       *
+       * This used to be refused, with a comment saying nothing needed it yet — roles are that
+       * demand. "Only for admins" is a comparison against `Current org`'s role, and a comparison
+       * is what a Compare node is. The alternative was a second way to say a condition living in
+       * the inspector, which is the inline expression language loom refuses.
+       *
+       * Read-only, and it stays read-only: these are values the server decided.
+       */
+      const session = sessionOperand(source, from.portId);
+      if (session) {
+        readsSession = true;
+        return session;
+      }
+
       throw new CompileError(
-        `"${node.name ?? node.id}" reads the current user, which only a property or a condition ` +
-          `can do. Bind the current user to what should show it.`,
+        `"${node.name ?? node.id}" reads a part of the session that cannot be compared. The id, ` +
+          `the email and the role can be.`,
         node.id,
       );
     }
@@ -321,7 +423,11 @@ export function planDerived(
       if (from && isDerivable(snapshot.nodes[from.nodeId])) readByName.add(from.nodeId);
       return operandExpr(node, portId, index, ports.length);
     });
-    return node.kind === 'math' ? mathExpr(node, operands).expr : computeExpr(node, operands[0]!);
+    if (node.kind === 'math') return mathExpr(node, operands).expr;
+    // A wired Compare in the browser: the value came down the wire, the other side is the literal
+    // the node was configured with (O2).
+    if (node.kind === 'compare') return compareExpr(node, operands[0]!);
+    return computeExpr(node, operands[0]!);
   });
 
   // 4. Decide whether each is held or recomputed, and which buckets its run sets.
@@ -336,10 +442,63 @@ export function planDerived(
       expr: expressions[index]!,
       type: node.ports.find((port) => port.id === 'pt_result')?.type ?? { kind: 'any' },
       runName: triggered ? `run_${name}` : undefined,
+      readsSession,
       bound: readByName.has(node.id),
       writes: statesWrittenBy(states, node.id).map((state) => state.setter),
     };
   });
+}
+
+/** Does anything on this screen fold the session into a value? Then the module needs `useAuth()`. */
+export function derivedReadsSession(derived: readonly DerivedPlan[]): boolean {
+  return derived.some((entry) => entry.readsSession === true);
+}
+
+/**
+ * A comparison, in the browser.
+ *
+ * Only the wired shape: the left side is what came down the wire, the right side is what the node
+ * was configured with. Comparing two *body fields* is still a server thing and still refused,
+ * because there is no body here to read them from.
+ */
+const COMPARE_JS: Record<string, string> = {
+  equals: '===',
+  notEquals: '!==',
+  greaterThan: '>',
+  lessThan: '<',
+  atLeast: '>=',
+  atMost: '<=',
+};
+
+function compareExpr(node: Node, left: string): string {
+  const config = (node.config ?? {}) as { operator?: string; rightKind?: string; right?: unknown };
+  const operator = COMPARE_JS[config.operator ?? 'equals'];
+  if (!operator) {
+    throw new CompileError(
+      `Compare node has an unknown comparison "${String(config.operator)}".`,
+      node.id,
+    );
+  }
+
+  if (config.rightKind && config.rightKind !== 'value') {
+    throw new CompileError(
+      `"${node.name ?? node.id}" compares against a field of a request body, which does not ` +
+        `exist in the browser. Compare against a value, or put it inside an API route.`,
+      node.id,
+    );
+  }
+
+  const right = String(config.right ?? '');
+  // Numeric comparisons on text would be string ordering, which is a wrong answer that looks
+  // right for single digits and then does not.
+  const literal =
+    operator === '===' || operator === '!=='
+      ? JSON.stringify(right)
+      : Number.isFinite(Number(right))
+        ? String(Number(right))
+        : JSON.stringify(right);
+
+  return `(${left} ${operator} ${literal})`;
 }
 
 /** The starting value of a triggered derivation, before its trigger has ever fired. */

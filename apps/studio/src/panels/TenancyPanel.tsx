@@ -1,5 +1,5 @@
 import { useEditor } from '../state/useEditor';
-import { setTenancy } from '../state/store';
+import { setRoles, setTenancy } from '../state/store';
 import type { TableSchema } from '@loom/connectors';
 
 /**
@@ -93,6 +93,31 @@ export function TenancyPanel({ tables }: { tables: readonly TableSchema[] }) {
             </option>
           ))}
         </select>
+      </div>
+
+      {/*
+        The roles this app knows (O2). An option set and nothing more: what a role may *do* is
+        decided by the policies and by the conditions on the canvas, and a second place that also
+        decided it is how an authorization bug gets somewhere to hide.
+      */}
+      <div className="field">
+        <span className="field__label">Roles</span>
+        <input
+          data-testid="tenancy-roles"
+          value={(snapshot.roles ?? []).join(', ')}
+          placeholder="admin, teacher, parent"
+          onChange={(e) => setRoles(e.target.value.split(','))}
+        />
+      </div>
+
+      <div className="field">
+        <span className="field__label">The column holding the role</span>
+        <input
+          data-testid="tenancy-role-column"
+          value={tenancy.roleColumn ?? ''}
+          placeholder="role"
+          onChange={(e) => setTenancy({ ...tenancy, roleColumn: e.target.value || undefined })}
+        />
       </div>
 
       <div className="field">

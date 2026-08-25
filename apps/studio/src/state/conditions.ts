@@ -1,6 +1,6 @@
 import type { Condition, ConditionalStyle, Id, Node, Snapshot } from '@loom/ir';
 import { artboardOf, dispatch, getState, rootComponentId } from './store';
-import { ensureMirror, mirrorNodeFor } from './graph';
+import { addGraphNode, connect, ensureMirror, mirrorNodeFor, setNodeConfig } from './graph';
 
 /**
  * Conditions in the editor (P1, `docs/specs/conditions.md`).
@@ -88,6 +88,26 @@ export function conditionSources(snapshot: Snapshot, artboardId: Id): ConditionS
     }
   }
 
+  /**
+   * The roles this project knows (O2).
+   *
+   * Offered as "Role is admin" and **materialised into real nodes** when picked — a `Current org`
+   * and a Compare, wired. The alternative was a role check that lived only in the inspector, which
+   * is the second way of saying a condition that `docs/10` refuses: a condition reads a boolean,
+   * and the thing that makes booleans in loom is a node.
+   *
+   * Making it two clicks and a trip to Nodes mode would be the same feature nobody uses. This is
+   * the pattern the sign-in buttons already follow (`docs/19`).
+   */
+  for (const role of snapshot.roles ?? []) {
+    sources.push({
+      key: `role:${role}`,
+      label: `Role is ${role}`,
+      nodeId: '',
+      portId: 'pt_result',
+    });
+  }
+
   return sources.sort((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -109,9 +129,50 @@ export function conditionFromKey(key: string, test: Condition['test']): Conditio
     return { source: { nodeId, portId: 'pt_value' }, ...(test === 'not' ? { test } : {}) };
   }
 
+  if (key.startsWith('role:')) {
+    const nodeId = ensureRoleCheck(key.slice('role:'.length));
+    if (!nodeId) return undefined;
+    return { source: { nodeId, portId: 'pt_result' }, ...(test === 'not' ? { test } : {}) };
+  }
+
   const [nodeId, portId] = key.split(':');
   if (!nodeId || !portId) return undefined;
   return { source: { nodeId, portId }, ...(test === 'not' ? { test } : {}) };
+}
+
+/**
+ * The nodes behind "Role is admin", made once and reused.
+ *
+ * Two screens both asking about admins get the same Compare rather than one each: the graph is
+ * something a person reads, and four identical nodes saying the same thing is noise they have to
+ * see past.
+ */
+function ensureRoleCheck(role: string): Id | undefined {
+  const snapshot = getState().snapshot;
+
+  const existing = Object.values(snapshot.nodes).find(
+    (node) =>
+      node.category === 'fn' &&
+      node.kind === 'compare' &&
+      (node.config as { right?: unknown } | undefined)?.right === role,
+  );
+  if (existing) return existing.id;
+
+  const org =
+    Object.values(snapshot.nodes).find(
+      (node) => node.category === 'state' && node.kind === 'currentOrg',
+    )?.id ?? addGraphNode('state', 'currentOrg', { x: 24, y: 360 });
+
+  const compare = addGraphNode('fn', 'compare', { x: 300, y: 360 });
+  setNodeConfig(compare, { operator: 'equals', rightKind: 'value', right: role });
+
+  const wired = connect(
+    { nodeId: org, portId: 'pt_role' },
+    { nodeId: compare, portId: 'pt_input' },
+  );
+  if (!wired.ok) return undefined;
+
+  return compare;
 }
 
 export function setVisibleWhen(componentId: Id, condition: Condition | undefined): void {

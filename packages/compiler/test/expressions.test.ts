@@ -524,14 +524,52 @@ describe('function nodes outside an API route run in the browser', () => {
     expect(home(unread)).not.toContain('derived_nd_compute');
   });
 
-  it('says why a record-shaped step cannot run in the browser', () => {
+  /**
+   * Compare and Logic read *named fields of a request body*, and a browser has no body — so they
+   * are refused outside a route unless something is wired into them (O2).
+   *
+   * A wired input is a different thing: the value came down the wire, and the comparison is
+   * ordinary arithmetic on something already on the screen. "Only for admins" is exactly that.
+   */
+  it('lets a wired Compare run in the browser, because a wire is not a request body', () => {
     const base = derivedSnapshot('length');
-    // Compare reads named fields of a request body, so outside a route it has nothing to read.
     const asCompare = {
+      ...base,
+      nodes: {
+        ...base.nodes,
+        nd_compute: {
+          ...base.nodes.nd_compute!,
+          kind: 'compare',
+          config: { operator: 'equals', rightKind: 'value', right: 'admin' },
+        },
+      },
+    };
+    expect(() => compile(asCompare)).not.toThrow();
+  });
+
+  it('still refuses one that compares against a field of a request body', () => {
+    const base = derivedSnapshot('length');
+    const bodyField = {
+      ...base,
+      nodes: {
+        ...base.nodes,
+        nd_compute: {
+          ...base.nodes.nd_compute!,
+          kind: 'compare',
+          config: { operator: 'equals', rightKind: 'field', right: 'total' },
+        },
+      },
+    };
+    expect(() => compile(bodyField)).toThrow(/does not exist in the browser/);
+  });
+
+  it('still refuses an unwired Compare, which has nothing to read at all', () => {
+    const base = applyOps(derivedSnapshot('length'), [{ type: 'removeWire', wireId: 'wr_in' }]);
+    const unwired = {
       ...base,
       nodes: { ...base.nodes, nd_compute: { ...base.nodes.nd_compute!, kind: 'compare' } },
     };
-    expect(() => compile(asCompare)).toThrow(/Compare works on the fields of a request body/);
+    expect(() => compile(unwired)).toThrow(/belongs inside an API route/);
   });
 
   it('refuses a Compute with nothing wired into it, naming the node', () => {

@@ -534,7 +534,7 @@ the way it already resolves current user.
 `enum(Snapshot.roles)` once O2 lands, `text` before that.
 _Done-when:_ two orgs exist, two users sign in, each sees only their org's rows.
 
-**O2 — Roles.** `Snapshot.roles` as a named option set; `requireRole` on a guard; a `role` condition
+**O2 — Roles.** ✅ _(done)_ `Snapshot.roles` as a named option set; `requireRole` on a guard; a `role` condition
 for element visibility; the role read from the membership row, never from the client.
 **Node side:** no new node. The `role` condition source feeds the existing Gate, and `currentOrg`'s
 `role` port narrows to an enum — composition happens in nodes, as conditions already do.

@@ -138,9 +138,39 @@ export const authVar = (): string => AUTH_VAR;
  * worst possible way to find out.
  */
 export function validateGuards(snapshot: Snapshot): void {
+  const roles = new Set(snapshot.roles ?? []);
+
   for (const artboard of Object.values(snapshot.artboards)) {
     const guard = artboard.guard;
     if (!guard) continue;
+
+    /**
+     * A guard naming a role nobody has is a screen nobody can open (O2).
+     *
+     * It compiles, it runs, and it redirects every single person — which looks like a broken
+     * route rather than like a typo in a role name, and is found by being bounced out of your own
+     * admin screen.
+     */
+    for (const role of guard.requireRole ?? []) {
+      if (roles.has(role)) continue;
+      throw new CompileError(
+        roles.size === 0
+          ? `"${artboard.name}" is only for the "${role}" role, but this project has no roles ` +
+              `yet — so nobody could open it. Add the roles under Data, or drop the restriction.`
+          : `"${artboard.name}" is only for the "${role}" role, which this project does not ` +
+              `have. It has ${[...roles].map((name) => `"${name}"`).join(', ')}.`,
+        artboard.id,
+      );
+    }
+
+    /** Roles are read from the membership row, so a role guard needs somewhere to read it from. */
+    if ((guard.requireRole ?? []).length > 0 && !snapshot.tenancy) {
+      throw new CompileError(
+        `"${artboard.name}" is only for certain roles, but this project is not organised by ` +
+          `tenant — so there is no membership to read a role from.`,
+        artboard.id,
+      );
+    }
 
     const destination = snapshot.artboards[guard.redirectTo];
     if (!destination) {
@@ -180,7 +210,17 @@ export function guardedElement(artboard: Artboard, element: string, routes: Rout
   if (!destination) {
     throw new CompileError(`"${artboard.name}" guards to an unknown screen.`, artboard.id);
   }
-  return `<RequireSignIn redirectTo="${destination.path}">${element}</RequireSignIn>`;
+  /**
+   * "Only for these roles" (O2). Absent means any signed-in person.
+   *
+   * A router-level convenience, and the emitted component says so in its own comment: what the
+   * database returns is decided by its policies, not by whether this screen mounted. This keeps
+   * somebody from landing on a screen built for a different job and seeing its empty shape.
+   */
+  const roles = guard.requireRole;
+  const rolesProp = roles ? ` roles={${JSON.stringify(roles)}}` : '';
+
+  return `<RequireSignIn redirectTo="${destination.path}"${rolesProp}>${element}</RequireSignIn>`;
 }
 
 /**
@@ -310,14 +350,34 @@ export function useAuth(): Auth {
  */
 export function RequireSignIn({
   redirectTo,
+  roles,
   children,
 }: {
   redirectTo: string;
+  /** When given, the person's role in their organisation has to be one of these (O2). */
+  roles?: string[];
   children: ReactNode;
 }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to={redirectTo} replace />;
+  const auth = useAuth();
+  if (auth.loading) return null;
+  if (!auth.user) return <Navigate to={redirectTo} replace />;
+${
+  tenanted
+    ? `
+  /**
+   * The role comes from the session, which the server read out of the membership table — the
+   * browser is told it and never says it.
+   *
+   * This is still a router-level convenience rather than a boundary: it keeps somebody from
+   * landing on a screen built for a different job. What the *database* hands back is decided by
+   * its own policies, and those are the thing that actually refuses.
+   */
+  if (roles && roles.length > 0 && !roles.includes(auth.org?.role ?? '')) {
+    return <Navigate to={redirectTo} replace />;
+  }
+`
+    : ''
+}
   return <>{children}</>;
 }
 `;

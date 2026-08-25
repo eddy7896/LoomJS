@@ -17,7 +17,13 @@ import { indent } from './text';
 import { tsTypeOf } from '@loom/typesys';
 import { MESSAGE_FN } from './messages';
 import { authVar, sessionTypeOf } from './auth';
-import { DIVIDE_HELPER_SOURCE, emitDerived, planDerived, usesDivideHelper } from './derived';
+import {
+  DIVIDE_HELPER_SOURCE,
+  derivedReadsSession,
+  emitDerived,
+  planDerived,
+  usesDivideHelper,
+} from './derived';
 import {
   emitScreenStates,
   planScreenStates,
@@ -127,6 +133,9 @@ export function emitArtboardModule(
   // Function nodes outside any API route run here, in the browser: the container boundary is the
   // network boundary (`docs/specs/binding-trigger-runtime.md`).
   const derived = planDerived(snapshot, artboard, plans, states);
+  // A Compare folding the session into a boolean needs the module to hold `useAuth()` (O2). The
+  // derivation cannot ask for it itself — it is planned before the context exists.
+  if (derivedReadsSession(derived)) hooks.auth = true;
 
   const ctx: EmitContext = {
     snapshot,

@@ -759,9 +759,41 @@ function GuardSection({ artboardId }: { artboardId: string }) {
               ))}
             </select>
           </Field>
+          {/*
+            Which roles may open it (O2). Only offered where there are roles to offer — a picker
+            with nothing in it is a control that looks broken.
+          */}
+          {(snapshot.roles ?? []).length > 0 ? (
+            <>
+              <Field label="Only for">
+                <select
+                  data-testid="guard-roles"
+                  value={guard.requireRole?.[0] ?? ''}
+                  onChange={(e) =>
+                    setArtboardGuard(artboardId, {
+                      redirectTo: guard.redirectTo,
+                      requireRole: e.target.value ? [e.target.value] : undefined,
+                    })
+                  }
+                >
+                  <option value="">Anyone signed in</option>
+                  {(snapshot.roles ?? []).map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <p className="panel__hint">
+                The role is read from the membership row by the server, so the browser is told it
+                rather than claiming it.
+              </p>
+            </>
+          ) : null}
+
           <p className="panel__hint">
-            This keeps a signed-out visitor from landing here. What keeps their data private is the
-            server, which answers every request as whoever is asking.
+            This keeps somebody from landing on a screen built for a different job. What keeps their
+            data private is the database, which answers every request under its own policies.
           </p>
         </>
       ) : null}

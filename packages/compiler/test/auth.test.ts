@@ -85,7 +85,9 @@ describe('what a designer wired', () => {
 
   it('signs in with what was typed, and stops there when it fails', () => {
     const screen = fileAt(project, 'src/artboards/SignIn.tsx');
-    expect(screen).toContain('if (!(await auth.signIn(String(field_cp_email), String(field_cp_password)))) return;');
+    expect(screen).toContain(
+      'if (!(await auth.signIn(String(field_cp_email), String(field_cp_password)))) return;',
+    );
     // The navigation is the step after, so it only happens on a real sign-in.
     expect(screen).toMatch(/signIn[\s\S]*navigate\("\/"\)/);
   });
@@ -116,7 +118,9 @@ describe('a guarded screen', () => {
 
   it('renders nothing while the session is still unknown', () => {
     // A flash of a protected screen before the redirect is a leak, however brief.
-    expect(fileAt(authSnapshot(), 'src/state/auth.tsx')).toContain('if (loading) return null;');
+    // Nothing decides anything before the first session answer arrives. Asserted as the
+    // behaviour rather than the exact destructuring, which roles changed (O2).
+    expect(fileAt(authSnapshot(), 'src/state/auth.tsx')).toContain('loading) return null;');
   });
 
   it('refuses a redirect to a screen that is itself signed-in-only', () => {

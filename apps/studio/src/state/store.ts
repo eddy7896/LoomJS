@@ -923,6 +923,17 @@ export function setTenancy(tenancy: Tenancy | undefined): void {
   dispatch({ type: 'setTenancy', tenancy });
 }
 
+/**
+ * The roles this app knows — "admin", "teacher", "parent" (O2).
+ *
+ * An **option set and nothing more**. What a role may *do* is decided by the row-level-security
+ * policies and by the conditions on the canvas; a second place that also decided it is how an
+ * authorization bug gets somewhere to hide.
+ */
+export function setRoles(roles: string[]): void {
+  dispatch({ type: 'setRoles', roles });
+}
+
 /** Put a screen inside a shell, or take it back out. */
 export function setArtboardShell(artboardId: Id, shellId: Id | undefined): void {
   dispatch({ type: 'setArtboardShell', artboardId, shellId });

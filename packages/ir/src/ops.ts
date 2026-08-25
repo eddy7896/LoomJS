@@ -97,6 +97,14 @@ export type Op =
   | { type: 'setArtboardShell'; artboardId: string; shellId: string | undefined }
   /** Which tables hold the organisations, and whose rows belong to one (O1). */
   | { type: 'setTenancy'; tenancy: Tenancy | undefined }
+  /**
+   * The role names this project knows (O2).
+   *
+   * Retypes the `role` port of every `Current org` node in the same op: the port's type *is* the
+   * set of roles, so leaving them behind would mean a graph where a comparison type-checks against
+   * a role that no longer exists.
+   */
+  | { type: 'setRoles'; roles: string[] }
   | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
@@ -435,6 +443,21 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         if (artboard.shellId === op.definitionId) delete artboard.shellId;
       }
       delete next.definitions[op.definitionId];
+      return next;
+    }
+
+    case 'setRoles': {
+      const roles = op.roles.map((role) => role.trim()).filter(Boolean);
+      if (roles.length > 0) next.roles = roles;
+      else delete next.roles;
+
+      const type =
+        roles.length > 0 ? ({ kind: 'enum', values: roles } as const) : ({ kind: 'text' } as const);
+
+      for (const node of Object.values(next.nodes)) {
+        if (node.category !== 'state' || node.kind !== 'currentOrg') continue;
+        node.ports = node.ports.map((port) => (port.id === 'pt_role' ? { ...port, type } : port));
+      }
       return next;
     }
 
