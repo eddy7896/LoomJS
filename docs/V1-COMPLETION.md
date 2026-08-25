@@ -758,3 +758,103 @@ Picked up cold, in this order:
    between a demo and a product.
 6. **Write `docs/specs/tenancy.md`** before O1 — verifying Supabase RLS and `auth.jwt()` claim
    shapes against live docs first, per `04`.
+
+---
+
+## 10. The node vocabulary (track N)
+
+> Added after Wave 1's compiler work, from a survey of what the Nodes canvas can actually say. The
+> finding: **the connectors got ahead of the vocabulary.** Five bucket providers ship with zero
+> nodes; a route can be branched only by stopping it; and a node card shows its configuration
+> without letting anyone change it.
+
+### What exists, honestly
+
+| Connector class | Nodes today |
+| --- | --- |
+| **Data** | `select insert update delete upsert count aggregate`, typed per table from introspection, plus a raw `query` for SQL |
+| **API (tools)** | One typed node per operation: OpenAI, Anthropic, Stripe, Resend, Twilio, Slack, IoT, generic HTTP |
+| **Files (buckets)** | **None.** Local, R2, S3, Supabase and Firebase storage all ship, and nothing on the canvas can reach them |
+
+And in the language itself: `Gate` stops a pipeline, `Compare` and `Logic` make booleans, conditions
+hide elements. There is no **branch** — no way to say "if it paid, send a receipt; otherwise send a
+reminder" — and no way to do anything **per row**.
+
+### The budget, and why it moves
+
+`§2` fixed a vocabulary budget of +5 elements, +1 node category and +5 node kinds, and said
+exceeding it needs an argument rather than a ticket. This is the argument.
+
+That budget was drawn against the *ten app classes' capabilities*. This track is a different axis:
+it does not add capability, it lets the canvas say things the runtime already does. File connectors
+exist and are unreachable; a branch is expressible today only by emitting two routes and a Gate.
+Completing a half-built thing is not the scope creep guardrail 7 warns about — **shipping a
+connector with no node is.**
+
+Revised: **+1 category** (`file`), **+7 kinds**. Named below, and the ceiling still applies.
+
+### N1 — Editing a node from its own card
+
+The card shows a title, a subtitle and its ports, all read-only; every change is a trip to the
+inspector. For a Figma-fluent audience that is the wrong default — direct manipulation is the
+gesture they arrive with.
+
+The name, the operation and the small enumerated fields become editable in place. The inspector
+keeps everything: it is where the long tail lives, and two surfaces reading one schema is the same
+arrangement the element inspector already has. Nothing here changes the document model.
+
+_Done-when:_ renaming a node and changing its operation both work without leaving the canvas, and
+the inspector shows the change immediately.
+
+### N2 — Branch, and For each
+
+**`fn / branch`.** One boolean in, two trigger outs: `then` and `else`. The thing a Gate cannot do —
+a Gate stops a pipeline, and stopping is not choosing.
+
+**`fn / forEach`.** A container, like an API route: a list in, a body that runs once per item, and
+`done` / `failed` out.
+
+Bounded on purpose, and this is the line: **it walks a list and it has a cap.** It cannot loop on a
+condition and it cannot loop forever. "Narrow the query" stays loom's answer to *where is the loop*
+(`docs/06-glossary.md`); this is the answer to *do this to each of these*, which is a different
+question and one that email, invoicing and bulk import all ask. A `while` is the general-purpose-VPL
+slide guardrail 7 names, and it stays refused.
+
+_Done-when:_ a branch sends a paid order down one path and an unpaid one down the other; a For each
+sends one email per row and reports which rows failed without stopping at the first.
+
+### N3 — File connector nodes
+
+A new `file` category, because a bucket operation is neither a table read nor a typed HTTP call.
+Four kinds: `putFile`, `deleteFile`, `listFiles`, `signUrl`.
+
+They run **server-side only**, for the reason the whole storage design already turns on: a bucket
+credential in a browser is a bucket anyone can write to (`docs/29-storage.md`). The upload *field*
+keeps its three-step signed path; these are for everything a project needs to do to a file that is
+not a person choosing one.
+
+_Done-when:_ a screen lists what is in a bucket, and a delete removes it.
+
+### N4 — Schema as nodes
+
+Two things, deliberately separate.
+
+**Design-time (the normal path).** `Table`, `Column` and `Relation` nodes that describe a schema on
+the canvas. Applying them does exactly what the Data panel does now — runs the change and records a
+numbered migration the project owns (`docs/15-schema.md`). They emit **no runtime code**: the app
+that ships has no idea they existed.
+
+**Runtime DDL (`db / ddl`, behind a warning).** A node that runs a statement while the app is
+running. It is offered because occasionally a product genuinely needs it — a tenant onboarding that
+provisions a schema — and it is offered *with its costs stated on the node itself*: it needs
+elevated privileges in production, it records no migration, and it is how environments drift apart.
+The compiler refuses it outside an API route, like every other statement.
+
+_Done-when:_ a table drawn on the canvas exists in the database and in `migrations/`; and a runtime
+DDL node compiles only inside a route, carrying its warning into the emitted code.
+
+### Order
+
+N1 first — every node built after it inherits the editing. Then N2, which is contained and needs no
+connector. Then N3, which closes the hole. N4 last: it is the largest, and it is the one whose
+design most benefits from the other three being real.

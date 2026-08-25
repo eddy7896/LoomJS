@@ -1539,6 +1539,65 @@ input::placeholder {
   font-weight: 600;
 }
 
+/*
+ * The name, editable on the card (N1).
+ *
+ * Styled to look like the text it replaces rather than like a form field: a box drawn around every
+ * node's title would make the canvas read as a settings screen. The affordance arrives on hover,
+ * which is the same bargain the layer names in the tree already make.
+ */
+.nnode__title--edit {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+}
+
+.nnode__title--edit::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+.nnode__title--edit:hover {
+  border-color: var(--line);
+}
+
+.nnode__title--edit:focus {
+  border-color: var(--brand);
+  background: var(--surface);
+  outline: none;
+}
+
+/* The choices this node offers, on the node itself. */
+.nnode__picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.nnode__pick {
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.nnode__pick:focus {
+  border-color: var(--brand);
+  outline: none;
+}
+
 .nnode__kind {
   font-size: 10px;
   color: var(--ink-2);

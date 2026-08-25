@@ -105,6 +105,14 @@ export type Op =
    * a role that no longer exists.
    */
   | { type: 'setRoles'; roles: string[] }
+  /**
+   * What a node calls itself (N1).
+   *
+   * A node's name belongs to the person: four Math nodes all reading "Math" is a graph that says
+   * nothing about which button does what. Empty puts it back to the default label, which is not
+   * the same as a node called "".
+   */
+  | { type: 'setNodeName'; nodeId: string; name: string }
   | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
@@ -443,6 +451,15 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         if (artboard.shellId === op.definitionId) delete artboard.shellId;
       }
       delete next.definitions[op.definitionId];
+      return next;
+    }
+
+    case 'setNodeName': {
+      const node = next.nodes[op.nodeId];
+      if (!node) throw new Error(`setNodeName: unknown node ${op.nodeId}`);
+      const name = op.name.trim();
+      if (name) node.name = name;
+      else delete node.name;
       return next;
     }
 

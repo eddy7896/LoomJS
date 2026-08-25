@@ -354,6 +354,16 @@ export function groupNodes(nodeIds: readonly Id[], title = 'Group'): Id | undefi
   return id;
 }
 
+/**
+ * Rename a node (N1).
+ *
+ * Emptying it puts the default label back rather than leaving a node called nothing — a blank
+ * title on a canvas is a node you cannot refer to.
+ */
+export function renameNode(nodeId: Id, name: string): void {
+  dispatch({ type: 'setNodeName', nodeId, name });
+}
+
 export function renameNodeGroup(groupId: Id, title: string): void {
   dispatch({ type: 'setNodeGroup', groupId, title });
 }

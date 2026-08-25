@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { Node, Port } from '@loom/ir';
-import { mirrorPortsFor, nodeTitle } from '@loom/components';
+import { defForNode, mirrorPortsFor, nodeTitle } from '@loom/components';
 import { formatType } from '@loom/typesys';
 import { useEditor } from '../state/useEditor';
 import { select } from '../state/store';
@@ -27,6 +27,8 @@ import {
   mirrorableComponents,
   moveNode,
   removeWire,
+  renameNode,
+  setNodeConfig,
 } from '../state/graph';
 
 /**
@@ -64,6 +66,29 @@ function LoomNode({ data, selected }: NodeProps) {
   const inputs = node.ports.filter((port) => port.direction === 'in');
   const outputs = node.ports.filter((port) => port.direction === 'out');
 
+  /**
+   * The fields worth putting on the card: the ones that are a choice from a short list.
+   *
+   * A mirror has none — it is a view of a component, and its configuration is the component's.
+   */
+  const def = defForNode(node);
+  const picks = (def?.fields ?? []).filter(
+    (field) => field.control === 'select' && (field.options ?? []).length > 0,
+  );
+
+  /**
+   * What the person actually typed, as opposed to the label a node is born with.
+   *
+   * `createNode` sets `name` to the def's label, so a fresh Math node is already called "Math" —
+   * which is the same rule `nodeTitle` reads: while the name is still that untouched default, the
+   * card shows what the node is *configured to do* instead. Putting "Math" in the box would throw
+   * that away and make four nodes look alike again.
+   *
+   * So the field is empty until somebody names it, and the configured description is the
+   * placeholder behind it.
+   */
+  const given = node.name && node.name !== def?.label ? node.name : '';
+
   return (
     <div
       className={`nnode nnode--${node.category} ${selected ? 'is-selected' : ''} ${
@@ -71,12 +96,60 @@ function LoomNode({ data, selected }: NodeProps) {
       }`}
       data-auto={node.auto?.state}
     >
+      {/*
+        The head is editable in place (N1).
+        
+        A card that shows its configuration and refuses to change it sends a Figma-fluent person to
+        a panel for something they are already looking at. The name is the common case — four Math
+        nodes all reading "Math" is a graph that says nothing about which button does what.
+
+        `nodrag` because React Flow claims a pointer-down on a node to move it, so without it a
+        click into the field drags the node instead of placing a caret.
+      */}
       <header className="nnode__head">
-        <span className="nnode__title">{nodeTitle(node)}</span>
+        <input
+          className="nnode__title nnode__title--edit nodrag"
+          data-testid={`node-name-${node.id}`}
+          value={given}
+          placeholder={nodeTitle(node)}
+          title="What this node is called"
+          onChange={(event) => renameNode(node.id, event.target.value)}
+          onPointerDown={(event) => event.stopPropagation()}
+        />
         {/* AUTO is drawn, not hidden: a node loom wrote should say so on the canvas. */}
         {node.auto ? <span className="badge badge--auto">AUTO</span> : null}
         <span className="nnode__kind mono">{subtitle}</span>
       </header>
+
+      {/*
+        The choices this node offers, on the node (N1).
+        
+        Only the enumerated ones — an operation, a comparison, a scope. Those are the fields whose
+        whole value is being switched between a handful of named things, and reading one without
+        being able to change it is the frustration this closes. Everything typed stays in the
+        inspector, which is where the long tail belongs.
+      */}
+      {picks.length > 0 ? (
+        <div className="nnode__picks">
+          {picks.map((field) => (
+            <select
+              key={field.key}
+              className="nnode__pick nodrag"
+              data-testid={`node-pick-${node.id}-${field.key}`}
+              title={field.label}
+              value={String((node.config as Record<string, unknown>)?.[field.key] ?? field.default)}
+              onPointerDown={(event) => event.stopPropagation()}
+              onChange={(event) => setNodeConfig(node.id, { [field.key]: event.target.value })}
+            >
+              {(field.options ?? []).map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ))}
+        </div>
+      ) : null}
 
       {body.length > 0 ? (
         <div className="nnode__body">
@@ -343,10 +416,14 @@ export function NodesCanvas() {
   return (
     <div className="nodes-canvas">
       {picked.length > 1 ? (
-        <button className="nodes-canvas__group" data-testid="group-nodes" onClick={() => {
-          groupNodes(picked);
-          setPicked([]);
-        }}>
+        <button
+          className="nodes-canvas__group"
+          data-testid="group-nodes"
+          onClick={() => {
+            groupNodes(picked);
+            setPicked([]);
+          }}
+        >
           Group {picked.length} nodes
         </button>
       ) : null}
