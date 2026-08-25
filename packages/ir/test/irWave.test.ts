@@ -46,13 +46,13 @@ function loaded(): Snapshot {
         params: [{ name: 'title', type: { kind: 'text' } }],
       },
     },
-    layouts: { lay_shell: { id: 'lay_shell', name: 'App shell', root: rootId } },
+
     artboards: {
       [artboardId]: {
         ...artboard,
         kind: 'document',
         page: { preset: 'a4', width: 210, height: 297, orientation: 'portrait', margin: 12 },
-        layoutId: 'lay_shell',
+        shellId: 'def_header',
         public: true,
         meta: {
           title: 'Invoice',
@@ -106,12 +106,13 @@ describe('a version-1 document still opens', () => {
    * could only refuse; this is the first bump, and refusing here would throw away every project
    * anyone had saved — for a change that added nothing but optional fields.
    */
-  it('carries a version-1 document forward by stamping it', () => {
+  it('carries a version-1 document forward by stamping it, and nothing more', () => {
     const v1 = { ...createTrivialSnapshot(), schemaVersion: 1 };
     const migrated = migrateSnapshot(v1) as Snapshot;
 
     expect(migrated.schemaVersion).toBe(SCHEMA_VERSION);
     // A stamp, and nothing else: no invented defaults, no moved data.
+    // A stamp: no invented defaults, no moved data, no keys that were not already there.
     expect({ ...migrated, schemaVersion: 1 }).toEqual(v1);
     expect(() => SnapshotSchema.parse(migrated)).not.toThrow();
   });
@@ -126,7 +127,8 @@ describe('a version-1 document still opens', () => {
     expect(canOpenVersion(2)).toBe(true);
     // A document from a *newer* build. Nothing here can carry it back, and guessing would be the
     // half-loaded project P0 refused for.
-    expect(canOpenVersion(3)).toBe(false);
+    expect(canOpenVersion(3)).toBe(true);
+    expect(canOpenVersion(4)).toBe(false);
     expect(canOpenVersion(undefined)).toBe(false);
   });
 

@@ -12,7 +12,6 @@ import type {
   Condition,
   ConditionalStyle,
   Layout,
-  LayoutDefinition,
   Migration,
   Meta,
   NodeGroup,
@@ -85,17 +84,16 @@ export type Op =
   | { type: 'addInstance'; parentId: string; instance: Component }
   | { type: 'renameDefinition'; definitionId: string; name: string }
   /**
-   * Create an app shell (R2).
+   * Create a component from scratch, tree and all — which is how a shell is made (R1, R2).
    *
-   * The whole subtree arrives in **one op**, because a shell is not a shell until it has a slot —
-   * an intermediate state with a root and no Outlet is one the compiler refuses, and undo should
-   * not be able to stop there.
+   * The whole subtree arrives in **one op**, because a shell is not usable until it has a screen
+   * slot: an intermediate state with a root and no `Outlet` is one the compiler refuses, and undo
+   * should not be able to stop there.
    */
-  | { type: 'addLayout'; layout: LayoutDefinition; components: Component[] }
-  | { type: 'renameLayout'; layoutId: string; name: string }
-  | { type: 'removeLayout'; layoutId: string }
+  | { type: 'addDefinition'; definition: ComponentDefinition; components: Component[] }
+  | { type: 'removeDefinition'; definitionId: string }
   /** Put a screen inside a shell, or take it back out. */
-  | { type: 'setArtboardLayout'; artboardId: string; layoutId: string | undefined }
+  | { type: 'setArtboardShell'; artboardId: string; shellId: string | undefined }
   | { type: 'setDefinitionParams'; definitionId: string; params: Param[] }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
@@ -325,7 +323,7 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'addFlow': {
       if (!next.artboards[op.flow.from] || !next.artboards[op.flow.to]) {
-        throw new Error(`addFlow: flow ${op.flow.id} references an unknown artboard`);
+        throw new Error(`addFlow: flow ${op.flow.id} references an unknown screen`);
       }
       next.flows[op.flow.id] = op.flow;
       return next;
@@ -345,21 +343,21 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'renameArtboard': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`renameArtboard: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`renameArtboard: unknown screen ${op.artboardId}`);
       artboard.name = op.name;
       return next;
     }
 
     case 'setArtboardParams': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardParams: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardParams: unknown screen ${op.artboardId}`);
       artboard.params = op.params;
       return next;
     }
 
     case 'setArtboardGuides': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardGuides: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardGuides: unknown screen ${op.artboardId}`);
       const empty = op.guides.x.length === 0 && op.guides.y.length === 0;
       if (empty) delete artboard.guides;
       else artboard.guides = op.guides;
@@ -368,7 +366,7 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'setArtboardGuard': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardGuard: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardGuard: unknown screen ${op.artboardId}`);
       // Undefined is "anyone may open it", which is the absence of the key rather than an empty
       // object — a guard nobody can satisfy is not the same fact as no guard.
       if (op.guard) artboard.guard = op.guard;
@@ -378,7 +376,7 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'setArtboardKind': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardKind: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardKind: unknown screen ${op.artboardId}`);
 
       // Absent means `screen`, so turning one back drops the key rather than writing the default
       // into every document that was never a document.
@@ -419,35 +417,29 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
       return next;
     }
 
-    case 'addLayout': {
+    case 'addDefinition': {
       for (const component of op.components) next.components[component.id] = component;
-      next.layouts = { ...(next.layouts ?? {}), [op.layout.id]: op.layout };
+      next.definitions = { ...(next.definitions ?? {}), [op.definition.id]: op.definition };
       return next;
     }
 
-    case 'renameLayout': {
-      const layout = next.layouts?.[op.layoutId];
-      if (!layout) throw new Error(`renameLayout: unknown layout ${op.layoutId}`);
-      layout.name = op.name;
-      return next;
-    }
+    case 'removeDefinition': {
+      if (!next.definitions?.[op.definitionId]) return next;
 
-    case 'removeLayout': {
-      if (!next.layouts?.[op.layoutId]) return next;
-      // Every screen inside it goes back to being a whole page. A dangling `layoutId` would be a
+      // Every screen wearing it goes back to being a whole page. A dangling `shellId` would be a
       // screen that renders into a shell nobody can find.
       for (const artboard of Object.values(next.artboards)) {
-        if (artboard.layoutId === op.layoutId) delete artboard.layoutId;
+        if (artboard.shellId === op.definitionId) delete artboard.shellId;
       }
-      delete next.layouts[op.layoutId];
+      delete next.definitions[op.definitionId];
       return next;
     }
 
-    case 'setArtboardLayout': {
+    case 'setArtboardShell': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardLayout: unknown artboard ${op.artboardId}`);
-      if (op.layoutId) artboard.layoutId = op.layoutId;
-      else delete artboard.layoutId;
+      if (!artboard) throw new Error(`setArtboardShell: unknown screen ${op.artboardId}`);
+      if (op.shellId) artboard.shellId = op.shellId;
+      else delete artboard.shellId;
       return next;
     }
 
@@ -469,7 +461,7 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'setArtboardMeta': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardMeta: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardMeta: unknown screen ${op.artboardId}`);
 
       // Absent means private, so turning it back off drops the key rather than writing `false`
       // into every screen that was never public.
@@ -483,14 +475,14 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
 
     case 'setArtboardSize': {
       const artboard = next.artboards[op.artboardId];
-      if (!artboard) throw new Error(`setArtboardSize: unknown artboard ${op.artboardId}`);
+      if (!artboard) throw new Error(`setArtboardSize: unknown screen ${op.artboardId}`);
       artboard.size = op.size;
       return next;
     }
 
     case 'setEntryArtboard': {
       if (!next.artboards[op.artboardId]) {
-        throw new Error(`setEntryArtboard: unknown artboard ${op.artboardId}`);
+        throw new Error(`setEntryArtboard: unknown screen ${op.artboardId}`);
       }
       next.entryArtboard = op.artboardId;
       return next;

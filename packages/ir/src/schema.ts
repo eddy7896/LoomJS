@@ -24,10 +24,10 @@ import { z } from 'zod';
  * anything. Refusing a document loudly is the right answer to a change that loses data, and the
  * wrong answer to one that cannot.
  */
-export const SCHEMA_VERSION = 2 as const;
+export const SCHEMA_VERSION = 3 as const;
 
 /** Versions this build can still open. Anything older is refused, and says so.  */
-export const READABLE_VERSIONS = [1, 2] as const;
+export const READABLE_VERSIONS = [1, 2, 3] as const;
 
 export const IdSchema = z.string().min(1);
 export type Id = z.infer<typeof IdSchema>;
@@ -569,8 +569,13 @@ export const ArtboardSchema = z.object({
   kind: ArtboardKindSchema.optional(),
   /** Required when `kind` is `document`; meaningless otherwise. */
   page: PageSchema.optional(),
-  /** The shell this screen renders inside (R2). Absent means it is the whole page. */
-  layoutId: IdSchema.optional(),
+  /**
+   * The shell this screen renders inside (R2). Absent means it is the whole page.
+   *
+   * Points at a **component definition** — one that happens to contain a screen slot. A shell used
+   * to be its own kind of thing, and it was the same three fields with a different name.
+   */
+  shellId: IdSchema.optional(),
   /**
    * Crawlable without a session (L4). A public route is prerendered to real HTML at build time;
    * a private one stays behind the app shell. Absent means private, because the safe default for
@@ -729,11 +734,18 @@ export const MigrationSchema = z.object({
 export type Migration = z.infer<typeof MigrationSchema>;
 
 // ---------------------------------------------------------------------------
-// Reusable components and layouts (R1, R2)
+// Reusable components, and the shells that are one of them (R1, R2)
 // ---------------------------------------------------------------------------
 
 /**
- * A component defined once and placed many times (`docs/V1-COMPLETION.md` R1).
+ * A component defined once and placed many times (`docs/V1-COMPLETION.md` R1) — and, when it holds
+ * a screen slot, the shell a set of screens render inside (R2).
+ *
+ * **These were two concepts and are now one**, because the second was the first with a different
+ * name: `LayoutDefinition` was `{ id, name, root }` and this is that plus params. What made a
+ * shell a shell was never its shape, it was the `Outlet` in its tree — so that is what decides it
+ * now, and a definition holding one is used as a shell rather than placed as an instance.
+ *
  *
  * `root` is a subtree that lives in `components` like any other, and is not on any artboard — the
  * definition is the thing, the instances are references to it. `params` are the only way in: an
@@ -748,21 +760,6 @@ export const ComponentDefinitionSchema = z.object({
   params: z.array(ParamSchema).optional(),
 });
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
-
-/**
- * The shell a set of screens render inside (`docs/V1-COMPLETION.md` R2) — a sidebar, a top bar,
- * whatever a project puts around every page of itself.
- *
- * `root` holds exactly one `Outlet` element somewhere in its subtree: the hole the screen renders
- * into. Emitted as a react-router layout route, so the shell mounts once and navigating between
- * the screens inside it does not tear it down and rebuild it.
- */
-export const LayoutDefinitionSchema = z.object({
-  id: IdSchema,
-  name: z.string(),
-  root: IdSchema,
-});
-export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
 
 // ---------------------------------------------------------------------------
 // Tenancy (O1) — who the rows belong to
@@ -811,8 +808,7 @@ export const SnapshotSchema = z.object({
    * reachable from here rather than from any artboard.
    */
   definitions: z.record(z.string(), ComponentDefinitionSchema).optional(),
-  /** The shells screens render inside (R2). */
-  layouts: z.record(z.string(), LayoutDefinitionSchema).optional(),
+
   /**
    * The role names this app knows (O2). An option set and nothing more: "admin", "teacher".
    *
@@ -863,9 +859,50 @@ export function deserializeSnapshot(json: string): Snapshot {
  */
 export function migrateSnapshot(document: unknown): unknown {
   if (typeof document !== 'object' || document === null) return document;
-  const version = (document as { schemaVersion?: unknown }).schemaVersion;
-  if (version === 1) return { ...(document as object), schemaVersion: 2 };
-  return document;
+
+  let next = document as Record<string, unknown>;
+  const version = next.schemaVersion;
+  if (typeof version !== 'number' || version < 1 || version >= SCHEMA_VERSION) return document;
+
+  /**
+   * **1 → 2** is a stamp and nothing else. Every field the IR wave added is optional
+   * (`docs/V1-COMPLETION.md` §5), so a version-1 document already satisfies the version-2 schema —
+   * there is no data to move, and inventing a default would be the bug.
+   */
+  if (version < 2) next = { ...next, schemaVersion: 2 };
+
+  /**
+   * **2 → 3** merges shells into components, and this one does move data.
+   *
+   * A shell was `{ id, name, root }` and a component definition is that plus params, so every
+   * layout becomes a definition and every screen's `layoutId` becomes a `shellId` pointing at it.
+   * Nothing is lost: what made a shell a shell was the `Outlet` in its tree, which is still there.
+   */
+  if (version < 3) {
+    next = { ...next, schemaVersion: 3 };
+
+    // Only touch what is actually there. A document with no shells should come back byte-for-byte
+    // what it was, plus a number — inventing an empty `definitions` key would make a stamp look
+    // like a rewrite in every diff and every round-trip test.
+    const layouts = next.layouts as Record<string, unknown> | undefined;
+    if (layouts && Object.keys(layouts).length > 0) {
+      next.definitions = { ...((next.definitions ?? {}) as Record<string, unknown>), ...layouts };
+    }
+    delete next.layouts;
+
+    const artboards = (next.artboards ?? {}) as Record<string, Record<string, unknown>>;
+    if (Object.values(artboards).some((artboard) => artboard.layoutId)) {
+      next.artboards = Object.fromEntries(
+        Object.entries(artboards).map(([id, artboard]) => {
+          if (!artboard.layoutId) return [id, artboard];
+          const { layoutId, ...rest } = artboard;
+          return [id, { ...rest, shellId: layoutId }];
+        }),
+      );
+    }
+  }
+
+  return next;
 }
 
 /** Can this build open a document of that version at all? */

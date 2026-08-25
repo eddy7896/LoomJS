@@ -5,7 +5,6 @@ import {
   newArtboardId,
   newComponentId,
   newDefinitionId,
-  newLayoutId,
   newFlowId,
   type ArtboardKind,
   type Component,
@@ -400,7 +399,7 @@ export function entryArtboardId(snapshot: Snapshot): Id {
 export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArtboardId): Id {
   return (
     snapshot.artboards[artboardId]?.root ??
-    snapshot.layouts?.[artboardId]?.root ??
+    snapshot.definitions?.[artboardId]?.root ??
     snapshot.artboards[entryArtboardId(snapshot)]?.root ??
     ''
   );
@@ -408,7 +407,7 @@ export function rootComponentId(snapshot: Snapshot, artboardId = state.activeArt
 
 /** Is this id a board that can be edited — a screen, or a shell? */
 export function isBoard(snapshot: Snapshot, id: Id): boolean {
-  return Boolean(snapshot.artboards[id] ?? snapshot.layouts?.[id]);
+  return Boolean(snapshot.artboards[id] ?? snapshot.definitions?.[id]);
 }
 
 export function parentOf(snapshot: Snapshot, id: Id): Component | undefined {
@@ -870,12 +869,16 @@ export function addInstance(definitionId: Id): Id | undefined {
 /**
  * Create an app shell (R2, `docs/V1-COMPLETION.md`).
  *
- * It arrives as a row with a sidebar-shaped frame and the screen slot beside it, because that is
- * what an app shell is nine times out of ten, and an empty box with instructions is a worse start
- * than a wrong guess a designer can drag.
+ * A shell **is a component** — one holding a screen slot. This makes the same kind of thing
+ * `promoteToDefinition` makes, with a slot already in it, because "a frame with a hole for the
+ * page" is what a shell is and there is no second concept underneath.
+ *
+ * It arrives as a row with a sidebar-shaped frame beside the slot, because that is what an app
+ * shell is nine times out of ten, and an empty box with instructions is a worse start than a wrong
+ * guess a designer can drag.
  */
-export function addLayout(name = 'App shell'): Id {
-  const layoutId = newLayoutId();
+export function addShell(name = 'App shell'): Id {
+  const shellId = newDefinitionId();
 
   const root = createComponent('Frame', newComponentId());
   const sidebar = createComponent('Frame', newComponentId());
@@ -898,24 +901,20 @@ export function addLayout(name = 'App shell'): Id {
   };
 
   dispatch({
-    type: 'addLayout',
-    layout: { id: layoutId, name, root: root.id },
+    type: 'addDefinition',
+    definition: { id: shellId, name, root: root.id },
     components: [root, sidebar, outlet],
   });
-  return layoutId;
+  return shellId;
 }
 
-export function renameLayout(layoutId: Id, name: string): void {
-  dispatch({ type: 'renameLayout', layoutId, name });
-}
-
-export function removeLayout(layoutId: Id): void {
-  dispatch({ type: 'removeLayout', layoutId });
+export function removeDefinition(definitionId: Id): void {
+  dispatch({ type: 'removeDefinition', definitionId });
 }
 
 /** Put a screen inside a shell, or take it back out. */
-export function setArtboardLayout(artboardId: Id, layoutId: Id | undefined): void {
-  dispatch({ type: 'setArtboardLayout', artboardId, layoutId });
+export function setArtboardShell(artboardId: Id, shellId: Id | undefined): void {
+  dispatch({ type: 'setArtboardShell', artboardId, shellId });
 }
 
 export function renameDefinition(definitionId: Id, name: string): void {

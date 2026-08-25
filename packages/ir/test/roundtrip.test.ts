@@ -213,7 +213,7 @@ describe('artboard and flow ops', () => {
     const { snapshot, home } = twoScreens();
     expect(() =>
       applyOp(snapshot, { type: 'addFlow', flow: { id: 'fl_x', from: home, to: 'ab_ghost' } }),
-    ).toThrow(/unknown artboard/);
+    ).toThrow(/unknown screen/);
   });
 
   it('removing an artboard takes its tree and its flows', () => {
@@ -245,9 +245,9 @@ describe('artboard and flow ops', () => {
     const { snapshot } = twoScreens();
     expect(() =>
       applyOp(snapshot, { type: 'setArtboardParams', artboardId: 'ab_ghost', params: [] }),
-    ).toThrow(/unknown artboard/);
+    ).toThrow(/unknown screen/);
     expect(() => applyOp(snapshot, { type: 'setEntryArtboard', artboardId: 'ab_ghost' })).toThrow(
-      /unknown artboard/,
+      /unknown screen/,
     );
   });
 });
@@ -265,8 +265,20 @@ describe('AUTO marks (M5)', () => {
           category: 'api',
           kind: 'route',
           ports: [
-            { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
-            { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'record' } },
+            {
+              id: 'pt_run',
+              name: 'run',
+              direction: 'in',
+              portKind: 'trigger',
+              type: { kind: 'trigger' },
+            },
+            {
+              id: 'pt_result',
+              name: 'result',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'record' },
+            },
           ],
           position: { x: 0, y: 0 },
           config: { method: 'POST', path: 'create', body: ['nd_step'] },
@@ -279,7 +291,15 @@ describe('AUTO marks (M5)', () => {
           id: 'nd_step',
           category: 'db',
           kind: 'insert',
-          ports: [{ id: 'pt_row', name: 'row', direction: 'out', portKind: 'data', type: { kind: 'record' } }],
+          ports: [
+            {
+              id: 'pt_row',
+              name: 'row',
+              direction: 'out',
+              portKind: 'data',
+              type: { kind: 'record' },
+            },
+          ],
           position: { x: 0, y: 120 },
           config: { table: 'notes' },
           auto,
@@ -287,7 +307,12 @@ describe('AUTO marks (M5)', () => {
       },
       {
         type: 'addWire',
-        wire: { id: 'wr_a', from: { nodeId: 'nd_step', portId: 'pt_row' }, to: { nodeId: 'nd_route', portId: 'pt_run' }, auto },
+        wire: {
+          id: 'wr_a',
+          from: { nodeId: 'nd_step', portId: 'pt_row' },
+          to: { nodeId: 'nd_route', portId: 'pt_run' },
+          auto,
+        },
       },
     ]);
   };

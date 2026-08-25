@@ -23,8 +23,15 @@ import { emitContainerFiles } from './emit/container';
 import { emitReadme } from './emit/readme';
 import { responsiveCss } from './emit/responsive';
 import { printCss } from './emit/document';
-import { definitionComponentName, definitionPath, orderDefinitions } from './emit/definition';
-import { groupByShell, shellComponentName, shellPath, validShells } from './emit/shell';
+import {
+  definitionComponentName,
+  definitionPath,
+  groupByShell,
+  isShell,
+  orderDefinitions,
+  validateShells,
+} from './emit/definition';
+
 import {
   APP_ROUTES_PATH,
   ENTRY_SERVER_PATH,
@@ -68,6 +75,7 @@ export function compile(snapshot: Snapshot): CompileResult {
   validateWires(snapshot);
   validateServerOnlyWork(snapshot);
   validateGuards(snapshot);
+  validateShells(snapshot);
 
   // A project with users emits an auth server and stops using the service-role key for its data:
   // the database answers as the person asking, and row-level security decides
@@ -191,6 +199,12 @@ export function compile(snapshot: Snapshot): CompileResult {
    * screen and wrong inside a component.
    */
   for (const definition of orderDefinitions(snapshot)) {
+    /**
+     * A definition holding a screen slot is a **shell** (R2), and the only thing that changes is
+     * that its links know which page is showing. One loop, because a shell is one of these.
+     */
+    const kind = isShell(snapshot, definition) ? 'shell' : 'definition';
+
     files.push({
       path: definitionPath(definition),
       content: emitArtboardModule(
@@ -204,27 +218,7 @@ export function compile(snapshot: Snapshot): CompileResult {
         routes,
         definitionComponentName(definition),
         globals,
-        'definition',
-      ),
-    });
-  }
-
-  /**
-   * App shells (R2), emitted like a definition: same walker, no params.
-   *
-   * `validShells` runs first and refuses a layout with no screen slot or more than one, naming the
-   * layout rather than a component id — the thing a designer would go and fix.
-   */
-  for (const layout of validShells(snapshot)) {
-    files.push({
-      path: shellPath(layout),
-      content: emitArtboardModule(
-        snapshot,
-        { id: layout.id, name: layout.name, root: layout.root },
-        routes,
-        shellComponentName(layout),
-        globals,
-        'shell',
+        kind,
       ),
     });
   }
@@ -403,7 +397,7 @@ function emitApp(
 
   const blocks: string[] = [];
   for (const [layoutId, artboardIds] of shells) {
-    const name = shellComponentName(snapshot.layouts![layoutId]!);
+    const name = definitionComponentName(snapshot.definitions![layoutId]!);
     const children = artboardIds.map((id) => routeFor(byArtboard.get(id)!, 10)).join('\n');
     blocks.push(`        <Route element={<${name} />}>\n${children}\n        </Route>`);
   }
@@ -513,7 +507,8 @@ function validateServerOnlyWork(snapshot: Snapshot): void {
 function validateFlows(snapshot: Snapshot): void {
   for (const flow of Object.values(snapshot.flows)) {
     /**
-     * A flow may start from an **app shell** as well as a screen (R2).
+     * A flow may start from an **app shell** as well as a screen (R2) — a shell is a component
+     * definition, so this accepts one of those as a source.
      *
      * A shell's whole job is navigation — it is the thing holding the sidebar — so refusing it as
      * a source would mean the one place that navigates most could not say where it goes. It is
@@ -522,12 +517,12 @@ function validateFlows(snapshot: Snapshot): void {
      * It may never *end* at one: a shell is not a destination, it is what a destination renders
      * inside.
      */
-    if (!snapshot.artboards[flow.from] && !snapshot.layouts?.[flow.from]) {
+    if (!snapshot.artboards[flow.from] && !snapshot.definitions?.[flow.from]) {
       throw new CompileError(`Flow "${flow.id}" starts at an unknown screen.`, flow.id);
     }
     const destination = snapshot.artboards[flow.to];
     if (!destination) {
-      throw new CompileError(`Flow "${flow.id}" ends at an unknown artboard.`, flow.id);
+      throw new CompileError(`Flow "${flow.id}" ends at an unknown screen.`, flow.id);
     }
 
     const declared = new Set((destination.params ?? []).map((p) => p.name));
@@ -549,13 +544,16 @@ function sortedArtboards(snapshot: Snapshot): [string, Artboard][] {
 function resolveEntryArtboard(snapshot: Snapshot): Artboard {
   const ids = Object.keys(snapshot.artboards);
   if (ids.length === 0) {
-    throw new CompileError('Project has no artboards; nothing to compile.', snapshot.id);
+    throw new CompileError(
+      'This project has no screens yet, so there is nothing to compile.',
+      snapshot.id,
+    );
   }
 
   const entryId = snapshot.entryArtboard ?? ids[0]!;
   const entry = snapshot.artboards[entryId];
   if (!entry) {
-    throw new CompileError(`entryArtboard "${entryId}" does not exist.`, snapshot.id);
+    throw new CompileError(`The entry screen "${entryId}" does not exist.`, snapshot.id);
   }
   return entry;
 }

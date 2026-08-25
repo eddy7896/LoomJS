@@ -4,7 +4,7 @@ import { DEFAULT_SCREEN, defFor } from '@loom/components';
 import { useEditor } from '../state/useEditor';
 import {
   addArtboard,
-  addLayout,
+  addShell,
   entryArtboardId,
   moveComponent,
   parentOf,
@@ -105,7 +105,7 @@ export function LayersPanel() {
         <button
           data-testid="add-shell"
           title="A frame drawn once, around every screen inside it"
-          onClick={() => addLayout()}
+          onClick={() => addShell()}
         >
           + Shell
         </button>

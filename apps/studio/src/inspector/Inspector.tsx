@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Component, Snapshot, Style } from '@loom/ir';
-import { DEFAULT_PAGE, PAGE_PRESETS, type PagePreset } from '@loom/compiler';
+import { DEFAULT_PAGE, PAGE_PRESETS, shellDefinitions, type PagePreset } from '@loom/compiler';
 import {
   MATH_BODY_FIELDS,
   MATH_CANVAS_FIELDS,
@@ -37,7 +37,7 @@ import {
   promoteToDefinition,
   renameDefinition,
   setDefinitionParams,
-  setArtboardLayout,
+  setArtboardShell,
   setArtboardKind,
   setArtboardMeta,
   setArtboardPage,
@@ -1046,7 +1046,7 @@ function ComponentSection({ component }: { component: Component }) {
 function ShellSection({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
-  const shells = Object.values(snapshot.layouts ?? {});
+  const shells = shellDefinitions(snapshot);
   if (!artboard) return null;
 
   return (
@@ -1062,8 +1062,8 @@ function ShellSection({ artboardId }: { artboardId: string }) {
           <Field label="Renders inside">
             <select
               data-testid="artboard-shell"
-              value={artboard.layoutId ?? ''}
-              onChange={(e) => setArtboardLayout(artboardId, e.target.value || undefined)}
+              value={artboard.shellId ?? ''}
+              onChange={(e) => setArtboardShell(artboardId, e.target.value || undefined)}
             >
               <option value="">On its own — the whole page</option>
               {shells.map((shell) => (

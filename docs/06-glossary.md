@@ -7,7 +7,10 @@
 
 ## Principles
 
-- Keep Figma's words for Figma's things (artboard, frame, component, layer) — don't rename.
+- Keep Figma's words for Figma's things (frame, component, instance, layer) — don't rename.
+  **"Artboard" is not one of them**: Figma calls these Frames, and artboard is Illustrator's and
+  XD's word. It survives as the TypeScript type name and a CSS class, and appears nowhere a
+  designer reads — the UI says **Screen**.
 - Calmest accurate word for the scary things (Gate, not `if`).
 - One term per concept in the UI; synonyms allowed only in casual docs.
 - Types and values render in **JetBrains Mono**; concepts in prose.
@@ -27,10 +30,15 @@
 
 | Term | Meaning |
 | --- | --- |
-| **Artboard** | one screen of the app |
-| **Component** | a UI building block on an artboard |
-| **Layer** | a component in the artboard's tree |
-| **Flow** | an arrow between artboards = navigation; compiles to a route + guard. NOT a Wire. |
+| **Screen** | one page of the app. Has a URL. (`Artboard` in the code.) |
+| **Document** | a screen-sized thing meant for paper — an invoice, a report card. Printed, not routed. |
+| **Frame** | a container: a box that holds other components and arranges them |
+| **Component** | a frame defined once and placed many times. Instances stay in step with it. |
+| **Instance** | a placement of a component. Overrides its params, never its insides. |
+| **Screen slot** | the hole in a shell where the page appears. Exactly one per shell. |
+| **Shell** | a component holding a screen slot — the frame a set of screens render inside. Not a second kind of object: the slot is what makes it one. |
+| **Layer** | a component in a screen's tree |
+| **Flow** | an arrow between screens = navigation; compiles to a route + guard. NOT a Wire. |
 | **Binding** | the link from a component property to a backend node |
 
 ## Nodes mode — the graph

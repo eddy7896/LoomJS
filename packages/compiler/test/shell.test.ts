@@ -3,7 +3,13 @@ import { createComponent } from '@loom/components';
 import { applyOp, createEmptyProject, type Component, type Snapshot } from '@loom/ir';
 import { compile } from '../src/index';
 import { CompileError } from '../src/types';
-import { groupByShell, shellComponentName, validShells } from '../src/emit/shell';
+import {
+  definitionComponentName,
+  groupByShell,
+  isShell,
+  placeableDefinitions,
+  validateShells,
+} from '../src/emit/definition';
 
 /**
  * App shells (R2, `docs/V1-COMPLETION.md`).
@@ -15,6 +21,9 @@ import { groupByShell, shellComponentName, validShells } from '../src/emit/shell
  * component every screen happens to place. A shell that remounts on every click loses its scroll
  * position, closes its open sections, and re-runs whatever it does on mount — so what is asserted
  * below is the *nesting*, which is what makes React keep it mounted.
+ *
+ * A shell **is a component definition** that happens to hold a screen slot. It was briefly its own
+ * kind of thing, and the second concept was the first with a different name.
  */
 
 function withShell(screens: number, opts: { outlets?: number; inShell?: number } = {}): Snapshot {
@@ -42,7 +51,7 @@ function withShell(screens: number, opts: { outlets?: number; inShell?: number }
         id: `ab_${index}`,
         name: `Screen${index}`,
         root: root.id,
-        ...(index < inShell ? { layoutId: 'lay_main' } : {}),
+        ...(index < inShell ? { shellId: 'def_main' } : {}),
       },
       root,
     });
@@ -51,14 +60,15 @@ function withShell(screens: number, opts: { outlets?: number; inShell?: number }
   return {
     ...snapshot,
     components: { ...snapshot.components, ...components },
-    layouts: { lay_main: { id: 'lay_main', name: 'Main shell', root: shellRoot.id } },
+    definitions: { def_main: { id: 'def_main', name: 'Main shell', root: shellRoot.id } },
   };
 }
 
 describe('a sidebar drawn once, across four routes', () => {
   it('emits the shell as one module', () => {
     const files = compile(withShell(4)).files;
-    const shell = files.find((file) => file.path === 'src/layouts/MainShell.tsx');
+    // Alongside every other component, because it is one.
+    const shell = files.find((file) => file.path === 'src/components/MainShell.tsx');
 
     expect(shell).toBeDefined();
     expect(shell!.content).toContain('export default function MainShell');
@@ -103,7 +113,7 @@ describe('a sidebar drawn once, across four routes', () => {
       root: createComponent('Frame', 'cp_root'),
     });
     const files = compile(plain).files;
-    expect(files.filter((file) => file.path.startsWith('src/layouts/'))).toHaveLength(0);
+    expect(files.filter((file) => file.path.startsWith('src/components/'))).toHaveLength(0);
     expect(files.find((file) => file.path === 'src/App.tsx')!.content).not.toContain(
       '<Route element=',
     );
@@ -135,11 +145,11 @@ describe('the active item', () => {
         [link.id]: link,
         cp_nav: { ...base.components.cp_nav!, children: [link.id] },
       },
-      flows: { fl_home: { id: 'fl_home', from: 'lay_main', to: 'ab_0' } },
+      flows: { fl_home: { id: 'fl_home', from: 'def_main', to: 'ab_0' } },
     };
 
     const shell = compile(snapshot).files.find(
-      (file) => file.path === 'src/layouts/MainShell.tsx',
+      (file) => file.path === 'src/components/MainShell.tsx',
     )!;
 
     expect(shell.content).toContain('<NavLink');
@@ -148,23 +158,47 @@ describe('the active item', () => {
   });
 });
 
-describe('what a shell is refused', () => {
-  /** No slot means the screens have nowhere to appear, and the app renders the shell alone. */
-  it('refuses a shell with no screen slot', () => {
-    const base = withShell(1, { outlets: 0 });
-    expect(() => validShells(base)).toThrow(CompileError);
-    expect(() => validShells(base)).toThrow(/no screen slot/);
+describe('a shell is a component with a slot', () => {
+  it('is exactly the slot that decides it, not a second kind of object', () => {
+    const shell = withShell(1);
+    expect(isShell(shell, shell.definitions!.def_main!)).toBe(true);
+
+    const plain = withShell(1, { outlets: 0 });
+    // Same three fields; no slot, so it is an ordinary component.
+    expect(isShell(plain, plain.definitions!.def_main!)).toBe(false);
+  });
+
+  /**
+   * Placing a shell as an instance would put a second `Outlet` in the route tree and react-router
+   * would render the page twice, so the palette never offers one.
+   */
+  it('keeps shells out of the list of components you can place', () => {
+    const shell = withShell(1);
+    expect(placeableDefinitions(shell)).toEqual([]);
+
+    const plain = withShell(1, { outlets: 0 });
+    expect(placeableDefinitions(plain).map((d) => d.id)).toEqual(['def_main']);
   });
 
   /** Two slots means react-router renders the page twice, which reads as a duplicated screen. */
-  it('refuses a shell with more than one screen slot', () => {
-    const base = withShell(1, { outlets: 2 });
-    expect(() => validShells(base)).toThrow(/2 screen slots/);
+  it('refuses more than one screen slot', () => {
+    expect(() => validateShells(withShell(1, { outlets: 2 }))).toThrow(CompileError);
+    expect(() => validateShells(withShell(1, { outlets: 2 }))).toThrow(/2 screen slots/);
   });
 
-  it('names the layout rather than a component id, because that is what gets fixed', () => {
+  /** A component with no slot is not broken — it is just not a shell. */
+  it('says nothing about a component that has no slot at all', () => {
+    expect(() => validateShells(withShell(1, { outlets: 0, inShell: 0 }))).not.toThrow();
+  });
+
+  it('refuses a screen that renders inside something with no slot', () => {
+    const broken = withShell(1, { outlets: 0, inShell: 1 });
+    expect(() => validateShells(broken)).toThrow(/no screen slot/);
+  });
+
+  it('names the component rather than a component id, because that is what gets fixed', () => {
     try {
-      validShells(withShell(1, { outlets: 0 }));
+      validateShells(withShell(1, { outlets: 2 }));
       expect.unreachable();
     } catch (error) {
       expect((error as CompileError).message).toContain('Main shell');
@@ -175,7 +209,7 @@ describe('what a shell is refused', () => {
 describe('grouping', () => {
   it('puts a screen whose shell was deleted back on its own, rather than refusing', () => {
     const base = withShell(2);
-    const orphaned: Snapshot = { ...base, layouts: {} };
+    const orphaned: Snapshot = { ...base, definitions: {} };
 
     const { shells, loose } = groupByShell(orphaned, ['ab_0', 'ab_1']);
     expect(shells.size).toBe(0);
@@ -183,8 +217,10 @@ describe('grouping', () => {
     expect(loose).toEqual(['ab_0', 'ab_1']);
   });
 
-  it('names a shell the way a person named it', () => {
-    expect(shellComponentName({ id: 'lay_1', name: 'Main shell', root: 'x' })).toBe('MainShell');
-    expect(shellComponentName({ id: 'lay_1', name: '...', root: 'x' })).toMatch(/^[A-Za-z]/);
+  it('names a shell the way a person named it — the same way any component is named', () => {
+    expect(definitionComponentName({ id: 'def_1', name: 'Main shell', root: 'x' })).toBe(
+      'MainShell',
+    );
+    expect(definitionComponentName({ id: 'def_1', name: '...', root: 'x' })).toMatch(/^[A-Za-z]/);
   });
 });

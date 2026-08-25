@@ -7,7 +7,7 @@ import {
   type WheelEvent,
 } from 'react';
 import type { Artboard, Id } from '@loom/ir';
-import { isDocument, pageOf, pageSize } from '@loom/compiler';
+import { isDocument, isShell, pageOf, pageSize, shellDefinitions } from '@loom/compiler';
 import { DEFAULT_SCREEN, presetForSize } from '@loom/components';
 import { themeStyle } from '@loom/ui';
 import { useVariantStylesheet } from './useVariantStylesheet';
@@ -107,22 +107,25 @@ export function Canvas() {
    */
   const artboards = useMemo(() => {
     const screens = Object.values(snapshot.artboards).sort((a, b) => a.id.localeCompare(b.id));
-    const shells = Object.values(snapshot.layouts ?? {})
+    const shells = shellDefinitions(snapshot)
       .sort((a, b) => a.id.localeCompare(b.id))
-      .map((layout): Artboard => ({
-        id: layout.id,
-        name: layout.name,
-        root: layout.root,
+      .map((shell): Artboard => ({
+        id: shell.id,
+        name: shell.name,
+        root: shell.root,
         // A shell is drawn at a desktop width because that is where a sidebar is a sidebar.
         size: { width: 1280, height: 800 },
       }));
     return [...screens, ...shells];
-  }, [snapshot.artboards, snapshot.layouts]);
+  }, [snapshot]);
 
   /** Which of those boards is a shell — for the label, and for what the row offers. */
-  const isShell = useCallback(
-    (id: Id): boolean => Boolean(snapshot.layouts?.[id]),
-    [snapshot.layouts],
+  const isShellBoard = useCallback(
+    (id: Id): boolean => {
+      const definition = snapshot.definitions?.[id];
+      return definition ? isShell(snapshot, definition) : false;
+    },
+    [snapshot],
   );
 
   /** The size being dragged, held locally so a resize is one undo step rather than sixty. */
@@ -324,7 +327,7 @@ export function Canvas() {
           >
             <div className="artboard__label" onClick={() => setActiveArtboard(artboard.id)}>
               {artboard.name}
-              {isShell(artboard.id) ? <span className="chip">shell</span> : null}
+              {isShellBoard(artboard.id) ? <span className="chip">shell</span> : null}
               {artboard.id === entryId ? <span className="chip">entry</span> : null}
               <span className="chip chip--mono" data-testid={`screen-size-${artboard.id}`}>
                 {sizeOf(artboard).width} x {sizeOf(artboard).height}

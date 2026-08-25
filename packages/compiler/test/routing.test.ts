@@ -26,7 +26,9 @@ describe('flow arrows -> react-router (M2)', () => {
     const home = fileAt(masterDetailSnapshot(), 'src/artboards/Home.tsx');
     expect(home).toContain("import { useNavigate } from 'react-router-dom'");
     expect(home).toContain('const navigate = useNavigate();');
-    expect(home).toContain('onClick={() => navigate("/item-detail" + "/" + encodeURIComponent(String("42")))}');
+    expect(home).toContain(
+      'onClick={() => navigate("/item-detail" + "/" + encodeURIComponent(String("42")))}',
+    );
   });
 
   it('reads a declared param in the destination artboard', () => {
@@ -84,7 +86,7 @@ describe('flow errors (Build tier)', () => {
       }
     })();
     expect(error).toBeInstanceOf(CompileError);
-    expect(error!.message).toMatch(/unknown artboard/);
+    expect(error!.message).toMatch(/unknown screen/);
   });
 
   it('rejects a trigger that points at no pipeline on this screen', () => {

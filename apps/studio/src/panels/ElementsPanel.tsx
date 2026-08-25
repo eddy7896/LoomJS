@@ -12,6 +12,7 @@ import { addInstance, addComponent } from '../state/store';
 import { addBodyStep, addGlobalNode, addGraphNode } from '../state/graph';
 import { startPaletteDrag, type PaletteDrag } from '../canvas/paletteDrag';
 import { SSO_PROVIDERS } from '@loom/connectors';
+import { placeableDefinitions } from '@loom/compiler';
 import { connection } from '../state/connectors';
 
 /**
@@ -163,7 +164,9 @@ export function ElementsPanel() {
        * they are things this project made, and a project with none should not see an empty
        * category suggesting it is missing something.
        */
-      const definitions = Object.values(snapshot.definitions ?? {});
+      // Shells excluded: one is used *around* screens, not placed inside one, and placing it
+      // would put a second screen slot in the route tree (R2).
+      const definitions = placeableDefinitions(snapshot);
       const components =
         definitions.length === 0
           ? []

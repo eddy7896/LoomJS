@@ -16,6 +16,13 @@ export { planRoutes, kebabCase, type RouteInfo, type RouteMap } from './emit/rou
 export { componentStyle, styleToCss } from './emit/style';
 // The canvas resolves phone overrides itself: an artboard has a width, and a media query does not
 // know about it (`docs/V1-COMPLETION.md` L3).
+// A shell is a component definition holding a screen slot (R2).
+export {
+  isShell,
+  placeableDefinitions,
+  shellDefinitions,
+  definitionComponentName,
+} from './emit/definition';
 export { resolveResponsive, hasResponsive, responsiveCss, SM_MAX_WIDTH } from './emit/responsive';
 // Paper (`docs/V1-COMPLETION.md` L2). The canvas draws a document at its real page size.
 export {
