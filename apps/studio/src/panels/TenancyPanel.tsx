@@ -37,6 +37,7 @@ export function TenancyPanel({ tables }: { tables: readonly TableSchema[] }) {
               orgTable: names[0]!,
               membershipTable: names[1] ?? names[0]!,
               tenantColumn: 'org_id',
+              userColumn: 'user_id',
               roleColumn: 'role',
               scopedTables: [],
             })
@@ -95,6 +96,24 @@ export function TenancyPanel({ tables }: { tables: readonly TableSchema[] }) {
       </div>
 
       <div className="field">
+        <span className="field__label">The column naming the person</span>
+        <input
+          data-testid="tenancy-user-column"
+          value={tenancy.userColumn ?? ''}
+          placeholder="user_id"
+          onChange={(e) => setTenancy({ ...tenancy, userColumn: e.target.value || undefined })}
+        />
+      </div>
+
+      {/* Without it the policies cannot say "an organisation this person belongs to" (O3). */}
+      {tenancy.userColumn ? null : (
+        <p className="panel__hint">
+          Needed before the database can enforce any of this: the policies have to know which column
+          of {tenancy.membershipTable} holds the person&apos;s user id.
+        </p>
+      )}
+
+      <div className="field">
         <span className="field__label">The column naming the owner</span>
         <input
           data-testid="tenancy-column"
@@ -124,9 +143,16 @@ export function TenancyPanel({ tables }: { tables: readonly TableSchema[] }) {
         Said plainly rather than implied. Until the database itself refuses (O3), this narrows
         what the app asks for — it does not stop somebody asking the database directly.
       */}
+      {/*
+        The one thing a person configuring this most needs to know, and the easiest to leave
+        implied: policies in the repo are not policies in the database.
+      */}
       <p className="panel__hint">
-        This scopes what the app asks for. It is not yet enforced by the database, so treat it as
-        correct behaviour rather than as a boundary until row-level security is emitted.
+        The app is compiled with row-level security policies in{' '}
+        <code className="mono">supabase/migrations/</code>. They do nothing until you run them
+        against your database — and until then this scopes what the app asks for rather than what
+        the database allows. <code className="mono">scripts/rls-breach.mjs</code> checks it for
+        real.
       </p>
 
       <button data-testid="disable-tenancy" onClick={() => setTenancy(undefined)}>

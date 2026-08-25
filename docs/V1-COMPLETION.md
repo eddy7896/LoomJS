@@ -541,7 +541,7 @@ for element visibility; the role read from the membership row, never from the cl
 _Done-when:_ a teacher opening an admin route is redirected, and an admin-only button is **absent**
 from the teacher's DOM, not hidden.
 
-**O3 — RLS generation.** _The security phase. Do not ship O1/O2 without it._ Tenant and role rules
+**O3 — RLS generation** ✅ _(emitted; gate closes when the breach script is run against a live database)_ _(orig:.** _The security phase. Do not ship O1/O2 without it._ Tenant and role rules
 emit as **Supabase row-level-security policies in a migration the user owns**, and the app's server
 queries answer as the requesting user rather than as the service role.
 

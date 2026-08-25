@@ -782,6 +782,13 @@ export const TenancySchema = z.object({
   membershipTable: z.string().min(1),
   /** The column on every tenanted table naming its owner. */
   tenantColumn: z.string().min(1),
+  /**
+   * The column on the membership row naming **the person** — the one holding `auth.users.id`.
+   *
+   * Required by the row-level-security policies (O3): "rows whose organisation is one this person
+   * belongs to" cannot be written without knowing which column says who they are.
+   */
+  userColumn: z.string().min(1).optional(),
   /** The column on the membership row holding the role. */
   roleColumn: z.string().min(1).optional(),
   /**

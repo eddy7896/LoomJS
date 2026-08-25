@@ -54,6 +54,7 @@ import {
 } from './emit/auth';
 import { emitAuthFunctions } from './emit/authServer';
 import { TENANCY_MODULE_PATH, emitTenancyModule, tenancyOf, validateTenancy } from './emit/tenancy';
+import { emitRlsFiles, validateRls } from './emit/rls';
 
 /**
  * Compile a snapshot into the file set of a runnable Vite + React + TS app.
@@ -90,6 +91,7 @@ export function compile(snapshot: Snapshot): CompileResult {
    */
   const tenancy = tenancyOf(snapshot);
   validateTenancy(snapshot, auth);
+  validateRls(snapshot);
 
   // App-wide variables are planned once for the whole project: a global's identity is its name,
   // and the screen that writes it is rarely the screen that reads it (`emit/state.ts`).
@@ -264,6 +266,13 @@ export function compile(snapshot: Snapshot): CompileResult {
     files.push(...emitAuthFunctions(ssoProvidersUsed(snapshot), Boolean(tenancy)));
     if (tenancy) {
       files.push({ path: TENANCY_MODULE_PATH, content: emitTenancyModule(tenancy) });
+
+      /**
+       * The rules the database enforces (O3). Everything else about tenancy is the app being
+       * careful; this is the only part that refuses.
+       */
+      // The policies, and the script that tries to get past them (O3).
+      files.push(...emitRlsFiles(snapshot));
     }
   }
 

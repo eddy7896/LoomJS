@@ -23,6 +23,7 @@ const TENANCY: Tenancy = {
   orgTable: 'orgs',
   membershipTable: 'memberships',
   tenantColumn: 'org_id',
+  userColumn: 'user_id',
   roleColumn: 'role',
   scopedTables: ['notes'],
 };
