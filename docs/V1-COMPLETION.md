@@ -793,7 +793,7 @@ connector with no node is.**
 
 Revised: **+1 category** (`file`), **+7 kinds**. Named below, and the ceiling still applies.
 
-### N1 — Editing a node from its own card
+### N1 — Editing a node from its own card ✅ _(done)_
 
 The card shows a title, a subtitle and its ports, all read-only; every change is a trip to the
 inspector. For a Figma-fluent audience that is the wrong default — direct manipulation is the
@@ -806,7 +806,7 @@ arrangement the element inspector already has. Nothing here changes the document
 _Done-when:_ renaming a node and changing its operation both work without leaving the canvas, and
 the inspector shows the change immediately.
 
-### N2 — Branch, and For each
+### N2 — Branch, and For each ✅ _(done)_
 
 **`fn / branch`.** One boolean in, two trigger outs: `then` and `else`. The thing a Gate cannot do —
 a Gate stops a pipeline, and stopping is not choosing.
@@ -823,7 +823,7 @@ slide guardrail 7 names, and it stays refused.
 _Done-when:_ a branch sends a paid order down one path and an unpaid one down the other; a For each
 sends one email per row and reports which rows failed without stopping at the first.
 
-### N3 — File connector nodes
+### N3 — File connector nodes ✅ _(done)_
 
 A new `file` category, because a bucket operation is neither a table read nor a typed HTTP call.
 Four kinds: `putFile`, `deleteFile`, `listFiles`, `signUrl`.
@@ -835,7 +835,7 @@ not a person choosing one.
 
 _Done-when:_ a screen lists what is in a bucket, and a delete removes it.
 
-### N4 — Schema as nodes
+### N4 — Schema as nodes ✅ _(done)_
 
 Two things, deliberately separate.
 

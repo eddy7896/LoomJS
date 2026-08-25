@@ -10,3 +10,4 @@ export * from './registry';
 export * from './nodes';
 export * from './buckets';
 export * from './files';
+export * from './schemaNodes';

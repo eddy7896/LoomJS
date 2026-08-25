@@ -57,6 +57,7 @@ import { TENANCY_MODULE_PATH, emitTenancyModule, tenancyOf, validateTenancy } fr
 import { emitRlsFiles, validateRls } from './emit/rls';
 import { emitBoundaryFile } from './emit/boundary';
 import { emitFilesFile } from './emit/files';
+import { isDesignTimeSchema } from '@loom/connectors';
 import { nodesInsideRoutes } from './emit/derived';
 
 /**
@@ -521,7 +522,14 @@ function validateServerOnlyWork(snapshot: Snapshot): void {
       );
     }
 
-    if (node.category === 'db' && !insideAnApiBody.has(node.id)) {
+    /**
+     * A designed table is not database *work* — it describes a schema and emits nothing (N4).
+     *
+     * It belongs on the canvas rather than in a route, so the rule that database work runs on the
+     * server has nothing to say about it. Without this exemption, drawing a table would be refused
+     * for not being somewhere it must never be.
+     */
+    if (node.category === 'db' && !isDesignTimeSchema(node) && !insideAnApiBody.has(node.id)) {
       throw new CompileError(
         `"${node.name ?? node.id}" reads the database, so it must sit inside an API route. ` +
           'Database work never runs in the browser.',

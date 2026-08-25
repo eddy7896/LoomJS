@@ -18,6 +18,7 @@ import { CompileError, type EmittedFile } from '../types';
 import { firestorePrelude, firestoreStep } from './firestore';
 import { ORG_ID_VAR, isScoped, scopeFilter } from './tenancy';
 import { supportsFileOps } from './files';
+import { isDesignTimeSchema, isRuntimeDdl, type DdlConfig } from '@loom/connectors';
 import { toolPrelude, toolStep, toolTimeout, usesFormEncoding } from './tools';
 import { queryStep, sqlStep } from './sql';
 import type { PipelinePlan } from './pipeline';
@@ -92,6 +93,22 @@ function connectorFor(node: Node, snapshot: Snapshot): { moduleId: string } {
 }
 
 function emitDbStep(node: Node, snapshot: Snapshot): string {
+  /**
+   * A designed table describes a schema; it does not do anything (N4).
+   *
+   * It should never be in a route body — there is nothing for it to run — so being here at all is
+   * a misunderstanding worth naming rather than an empty step to skip silently.
+   */
+  if (isDesignTimeSchema(node)) {
+    throw new CompileError(
+      `"${node.name ?? 'This table'}" describes a table rather than doing something. Apply it ` +
+        `from the canvas; it is not a step a route runs.`,
+      node.id,
+    );
+  }
+
+  if (isRuntimeDdl(node)) return emitDdlStep(node, snapshot);
+
   /**
    * Rows belonging to an organisation are narrowed to the one asking (O1).
    *
@@ -391,6 +408,53 @@ ${checks.join('\n')}
  * (`docs/06-glossary.md`). It runs on the server for the same reason validation does: a check the
  * browser could skip is not a check.
  */
+/**
+ * A statement run while the app is running (N4).
+ *
+ * Offered because a product occasionally needs it — a tenant onboarding that provisions a schema —
+ * and emitted with what it costs written into the code, because the person who meets this next is
+ * reading the repo rather than the node that made it.
+ *
+ * The acknowledgement is not ceremony. This needs a credential in production that can alter a
+ * schema, and a project that ships one without anybody deciding to is a project that shipped it by
+ * accident.
+ */
+function emitDdlStep(node: Node, snapshot: Snapshot): string {
+  const config = (node.config ?? {}) as Partial<DdlConfig>;
+  const statement = String(config.statement ?? '').trim();
+
+  if (!statement) {
+    throw new CompileError(`"${node.name ?? 'This step'}" has no statement to run.`, node.id);
+  }
+
+  if (!config.acknowledged) {
+    throw new CompileError(
+      `"${node.name ?? 'This step'}" changes the schema while the app is running. That needs a ` +
+        `database credential in production that can alter a schema, records no migration, and is ` +
+        `how environments drift apart. Tick the acknowledgement on the node if that is what you ` +
+        `mean — or draw the table on the canvas instead, which records a migration you own.`,
+      node.id,
+    );
+  }
+
+  const connector = config.connectorId ? snapshot.connectors[config.connectorId] : undefined;
+  if (!connector || !dialectOf(connector.moduleId)) {
+    throw new CompileError(
+      `"${node.name ?? 'This step'}" runs a statement, and that needs a connection that speaks ` +
+        `SQL directly. PostgREST cannot change a schema.`,
+      node.id,
+    );
+  }
+
+  return `  {
+    // Changes the schema at run time (docs/V1-COMPLETION.md N4). This needs a credential that can
+    // alter a schema, and it records no migration — whatever it does to this database is not
+    // described anywhere the repo can carry to the next environment.
+    await write(${JSON.stringify(statement)}, []);
+    value = true;
+  }`;
+}
+
 /**
  * One step against a bucket (N3).
  *

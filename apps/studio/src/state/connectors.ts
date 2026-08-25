@@ -14,6 +14,7 @@ import {
   parseColumnRows,
   parseSampledDocs,
   planChange,
+  type SchemaTableConfig,
   queryNodePorts,
   sampleRow,
   seedStatement,
@@ -33,6 +34,7 @@ import {
 } from '@loom/connectors';
 import { apiPortsFromBody } from '@loom/components';
 import { dispatch, getState, select } from './store';
+import { setNodeConfig } from './graph';
 
 /**
  * Connections, and the env bucket that backs them.
@@ -511,8 +513,11 @@ export function setQuerySql(nodeId: Id, sql: string, returns?: 'one' | 'many'): 
   const node = snapshot.nodes[nodeId];
   if (!node || node.category !== 'db' || node.kind !== 'query') return;
 
-  const config = { ...((node.config ?? {}) as Record<string, unknown>), sql, returns:
-    returns ?? ((node.config ?? {}) as { returns?: string }).returns ?? 'many' };
+  const config = {
+    ...((node.config ?? {}) as Record<string, unknown>),
+    sql,
+    returns: returns ?? ((node.config ?? {}) as { returns?: string }).returns ?? 'many',
+  };
 
   dispatch({ type: 'setNodeConfig', nodeId, config, ports: queryNodePorts(sql) });
 
@@ -586,7 +591,9 @@ export function setDbFilters(nodeId: Id, filters: DbFilter[]): void {
  * comes back is whether it worked; what happens next is a re-read, because the cached schema is
  * now wrong.
  */
-export async function applySchemaChange(change: SchemaChange): Promise<{ ok: boolean; error?: string }> {
+export async function applySchemaChange(
+  change: SchemaChange,
+): Promise<{ ok: boolean; error?: string }> {
   const connector = connection(getState().snapshot);
   if (!connector) return { ok: false, error: 'No connection to change.' };
 
@@ -717,7 +724,13 @@ function applyToShape(change: SchemaChange): { ok: boolean; error?: string } {
       tables.push({
         name: change.table.name,
         columns: [
-          { name: 'id', type: { kind: 'text' }, required: false, primaryKey: true, generated: true },
+          {
+            name: 'id',
+            type: { kind: 'text' },
+            required: false,
+            primaryKey: true,
+            generated: true,
+          },
           ...change.table.columns.map(columnFromSpec),
         ],
       });
@@ -810,7 +823,11 @@ export function retypeAgainstSchema(): void {
       type: 'setNodeConfig',
       nodeId: node.id,
       config: config as unknown as Record<string, unknown>,
-      ports: dbNodePorts(table, (config.operation ?? node.kind) as DbOperation, config.filters ?? []),
+      ports: dbNodePorts(
+        table,
+        (config.operation ?? node.kind) as DbOperation,
+        config.filters ?? [],
+      ),
     });
   }
 
@@ -916,7 +933,9 @@ export async function enableProvider(input: {
       }),
     });
     const payload = (await response.json()) as { ok?: boolean; error?: string };
-    return payload.ok ? { ok: true } : { ok: false, error: payload.error ?? 'It was not accepted.' };
+    return payload.ok
+      ? { ok: true }
+      : { ok: false, error: payload.error ?? 'It was not accepted.' };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
@@ -942,4 +961,43 @@ export function setSelfHostedAuth(value: boolean): void {
     connectorId: connector.id,
     config: { ...(connector.config as Record<string, unknown>), selfHostedAuth: value },
   });
+}
+
+/**
+ * Apply a table drawn on the canvas (N4, `docs/V1-COMPLETION.md` §10).
+ *
+ * It goes through **exactly** the path the Data panel uses: plan the change, run it, record a
+ * numbered migration the project owns. Nothing here is a second way to change a schema — a second
+ * way is how two of them end up disagreeing about what the database contains.
+ *
+ * The table first, then its relations, because a foreign key cannot point at a table that does not
+ * exist yet. Each is its own migration, which is also how they would have been made by hand.
+ */
+export async function applyDesignedTable(nodeId: Id): Promise<{ ok: boolean; error?: string }> {
+  const node = getState().snapshot.nodes[nodeId];
+  const config = (node?.config ?? {}) as Partial<SchemaTableConfig>;
+  const spec = config.table;
+
+  if (!spec?.name?.trim()) return { ok: false, error: 'This table has no name yet.' };
+
+  const created = await applySchemaChange({ kind: 'createTable', table: spec });
+  if (!created.ok) return created;
+
+  for (const relation of config.relations ?? []) {
+    const linked = await applySchemaChange({
+      kind: 'addRelation',
+      table: spec.name,
+      column: relation.column,
+      target: relation.target,
+      targetColumn: relation.targetColumn,
+      onDelete: relation.onDelete,
+    });
+    // Reported rather than swallowed: the table exists at this point, so stopping here leaves a
+    // real half-done state that whoever is looking needs to know about.
+    if (!linked.ok) return linked;
+  }
+
+  // Stamped, so the node says it has been run rather than offering to run it again.
+  setNodeConfig(nodeId, { appliedAt: new Date().toISOString() });
+  return { ok: true };
 }
