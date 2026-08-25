@@ -28,9 +28,12 @@ export const pagerEmitter: ComponentEmitter = {
     /**
      * How many rows there are altogether.
      *
-     * Unbound it is zero, which makes the last page unknowable — so Next stays available rather
-     * than being disabled on the first page. A control that refuses to advance because nothing
-     * told it how many rows exist is a control that looks broken.
+     * Unbound it is zero, so there is one page and Next is off. That is the honest answer:
+     * nothing has said there are more rows, and letting someone page forward into rows that may
+     * not exist trades a control that looks stuck for one that lies.
+     *
+     * It is not left silent — a Pager with no total raises a Problem naming what to wire into it
+     * (`diagnostics.ts`), which is where "why is this disabled" gets answered.
      */
     const total = component.props.total;
     const totalExpr = total ? valueExpr(total, ctx, component.id, 'total') : '0';

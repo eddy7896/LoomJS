@@ -116,8 +116,12 @@ describe('what it warns about', () => {
     expect(noted?.severity).toBe('warning');
   });
 
-  /** Unbound, Next stays available: a control that refuses to advance looks broken. */
-  it('still lets you go forward when the total is unknown', () => {
+  /**
+   * Unbound, there is one page and both ends are off. Honest rather than optimistic: nothing has
+   * said there are more rows, and paging into rows that may not exist would be a control that
+   * lies rather than one that looks stuck. The Problems row says what to wire.
+   */
+  it('settles on a single page when the total is unknown', () => {
     expect(homeOf(withPager())).toContain('Math.ceil(Number(0) / 100)');
   });
 });

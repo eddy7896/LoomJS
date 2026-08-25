@@ -632,6 +632,20 @@ export function apiPortsFromBody(body: Node[]): Port[] {
   ports.push(port('pt_pending', 'pending', 'out', 'data', { kind: 'boolean' }));
   ports.push(port('pt_error', 'error', 'out', 'data', { kind: 'optional', of: { kind: 'text' } }));
 
+  /**
+   * How many rows exist altogether, when the route's last step reads a page of them (Q2).
+   *
+   * Only then: a route that inserts a row has no total, and a port that is always there and
+   * usually meaningless is a port people wire by mistake. Without this the Pager had nothing to
+   * read a total *from* — the control existed and could not be connected to anything.
+   */
+  const paged =
+    last?.category === 'db' &&
+    (last.config as { operation?: string } | undefined)?.operation === 'select';
+  if (paged) {
+    ports.push(port('pt_total', 'total', 'out', 'data', { kind: 'number' }));
+  }
+
   return ports;
 }
 
