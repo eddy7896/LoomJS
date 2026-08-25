@@ -112,6 +112,7 @@ export function emitArtboardModule(
     message: false,
     link: false,
     navLink: false,
+    boundary: false,
     outlet: false,
     auth: false,
     upload: false,
@@ -258,6 +259,10 @@ export function emitArtboardModule(
     requireOutlet: () => {
       hooks.outlet = true;
     },
+    requireBoundary: () => {
+      hooks.boundary = true;
+      return 'ErrorBoundary';
+    },
     requireAuth: () => {
       hooks.auth = true;
       return authVar();
@@ -400,6 +405,8 @@ ${indentBlock(rendered)}
   // rather than owning it (`emit/globals.ts`).
   if (usesGlobals(states)) imports.push(`import { useGlobals } from '../state/globals';\n`);
   if (hooks.message) imports.push(`import { useMessages } from '../state/messages';\n`);
+  // One bad row must not blank the list (L1).
+  if (hooks.boundary) imports.push(`import { ErrorBoundary } from '../state/boundary';\n`);
   // Three steps that never touch a credential: ask, send, report (`docs/29-storage.md`).
   if (hooks.upload) imports.push(`import { uploadFile } from '../upload';\n`);
   // Inline SVG, drawn from one module the whole project shares (`docs/30-charts.md`).

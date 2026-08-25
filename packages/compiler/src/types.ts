@@ -100,6 +100,11 @@ export interface EmitContext {
   /** Declare that this shell renders the slot its screens appear in (R2). */
   requireOutlet: () => void;
   /**
+   * Declare that this module catches a render error somewhere inside it (L1); returns the
+   * component name to emit. A List asks for it so one bad row does not blank the rest.
+   */
+  requireBoundary: () => string;
+  /**
    * Declare that this screen reads or changes who is signed in; returns the local holding the
    * session (spec 10). It carries no token — only who the server says is here.
    */

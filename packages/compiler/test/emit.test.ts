@@ -17,29 +17,35 @@ const byPath = (files: { path: string; content: string }[], path: string): strin
 describe('compile(trivial snapshot)', () => {
   it('emits a complete Vite + React + TS repo', () => {
     const { files } = compile(trivialSnapshot());
-    expect(files.map((f) => f.path).sort()).toEqual([
-      '.gitignore',
-      'index.html',
-      'package.json',
-      'src/App.tsx',
-      'src/artboards/Home.tsx',
-      'src/index.css',
-      'src/main.tsx',
-      'src/components.css',
-      'src/theme.css',
-      'tsconfig.json',
-      'vite.config.ts',
-      // Somewhere to run it that is not a platform (C1, `docs/18-containers.md`). Every project
-      // gets these: they are four small files, and "the repo is yours" means it runs anywhere.
-      'server.ts',
-      'Dockerfile',
-      '.dockerignore',
-      'docker-compose.yml',
-      // Every project explains itself, written from what it actually is (`docs/25-readme.md`).
-      'README.md',
-      // Compared as a set: the emitted order is the compiler's business, and pinning it here
-      // makes every new file a two-line edit for no reader's benefit.
-    ].sort());
+    expect(files.map((f) => f.path).sort()).toEqual(
+      [
+        '.gitignore',
+        'index.html',
+        'package.json',
+        'src/App.tsx',
+        'src/artboards/Home.tsx',
+        'src/index.css',
+        'src/main.tsx',
+        'src/components.css',
+        'src/theme.css',
+        'tsconfig.json',
+        'vite.config.ts',
+        // Somewhere to run it that is not a platform (C1, `docs/18-containers.md`). Every project
+        // gets these: they are four small files, and "the repo is yours" means it runs anywhere.
+        'server.ts',
+        'Dockerfile',
+        '.dockerignore',
+        'docker-compose.yml',
+        // Every project explains itself, written from what it actually is (`docs/25-readme.md`).
+        'README.md',
+        // The one thing emitted whether or not the project asks for it (L1): a render error that
+        // is not caught takes the whole page with it, and insurance added after the crash is not
+        // insurance.
+        'src/state/boundary.tsx',
+        // Compared as a set: the emitted order is the compiler's business, and pinning it here
+        // makes every new file a two-line edit for no reader's benefit.
+      ].sort(),
+    );
   });
 
   it('emits the artboard as a React component with flex layout and the text content', () => {

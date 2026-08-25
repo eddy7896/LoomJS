@@ -1113,6 +1113,32 @@ const NAV = `
 }
 `;
 
+const BOUNDARY = `
+/* ---- Error boundaries (docs/V1-COMPLETION.md L1) ------------------------------------------ */
+
+/*
+ * What is shown where something failed to render. Deliberately quiet: it is a report, not an
+ * alarm, and whatever is beside it is still perfectly good.
+ */
+.loom-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--loom-color-border);
+  border-radius: var(--loom-radius-sm);
+  background: var(--loom-color-panel);
+  color: var(--loom-color-ink);
+  font-size: var(--loom-text-sm);
+}
+
+.loom-error__detail {
+  color: var(--loom-color-muted);
+  font-family: var(--loom-font-mono);
+  font-size: var(--loom-text-xs);
+}
+`;
+
 export function componentsCss(): string {
   return [
     HEADER,

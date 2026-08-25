@@ -111,7 +111,11 @@ describe('what a designer wired', () => {
 describe('a guarded screen', () => {
   it('is wrapped where the router mounts it', () => {
     const app = fileAt(authSnapshot(), 'src/App.tsx');
-    expect(app).toContain('<RequireSignIn redirectTo="/sign-in"><Home /></RequireSignIn>');
+    // The guard is outside the boundary, so a screen that throws while the guard is deciding
+    // still redirects rather than being caught and shown as an error (L1).
+    expect(app).toContain('<RequireSignIn redirectTo="/sign-in">');
+    expect(app).toContain('<Home />');
+    expect(app.indexOf('<RequireSignIn')).toBeLessThan(app.indexOf('<ErrorBoundary'));
     // The provider is above the router, because the guard reads it while deciding to mount.
     expect(app.indexOf('<AuthProvider>')).toBeLessThan(app.indexOf('<BrowserRouter>'));
   });

@@ -28,7 +28,13 @@ export const listEmitter: ComponentEmitter = {
     const items = component.props.items;
     const itemsExpr = items ? valueExpr(items, ctx, component.id, 'items') : '[]';
 
-    const attrs = classAttr(component) + styleAttr(component, ctx, component.layout ? layoutToStyle(component.layout) : { display: 'flex' });
+    const attrs =
+      classAttr(component) +
+      styleAttr(
+        component,
+        ctx,
+        component.layout ? layoutToStyle(component.layout) : { display: 'flex' },
+      );
     const itemVar = `item_${component.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     const empty = staticString(component, 'empty');
 
@@ -44,6 +50,9 @@ ${indent(depth)}</div>`;
     }
 
     const template = ctx.withItem(itemVar, () => ctx.renderChild(templateId, depth + 3));
+    // A row that throws takes the whole list with it otherwise — and the point of a list is that
+    // the other four hundred rows are still useful (L1).
+    ctx.requireBoundary();
 
     // Paging what was fetched, not what exists: a server-side page needs an offset the caller
     // supplies, and nothing on a screen can hand one over yet. For the hundreds of rows a `limit`
@@ -56,7 +65,9 @@ ${indent(depth + 2)}<span>{${JSON.stringify(empty)}}</span>
 ${indent(depth + 1)}) : (
 ${indent(depth + 2)}(${itemsExpr}).map((${itemVar}: Record<string, unknown>, index: number) => (
 ${indent(depth + 3)}<div key={index}>
+${indent(depth + 4)}<ErrorBoundary label="This row did not load.">
 ${template}
+${indent(depth + 4)}</ErrorBoundary>
 ${indent(depth + 3)}</div>
 ${indent(depth + 2)}))
 ${indent(depth + 1)})}
@@ -79,7 +90,9 @@ ${indent(depth + 2)}) : (
 ${indent(depth + 3)}<>
 ${indent(depth + 4)}{${rows}.slice(current * ${pageSize}, current * ${pageSize} + ${pageSize}).map((${itemVar}: Record<string, unknown>, index: number) => (
 ${indent(depth + 5)}<div key={index}>
+${indent(depth + 6)}<ErrorBoundary label="This row did not load.">
 ${template}
+${indent(depth + 6)}</ErrorBoundary>
 ${indent(depth + 5)}</div>
 ${indent(depth + 4)}))}
 ${indent(depth + 4)}{${pages} > 1 ? (

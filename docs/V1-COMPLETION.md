@@ -633,7 +633,7 @@ _Done-when:_ one action produces an unread badge and an email, from one place in
 
 ### Track L — Layout reach
 
-**L1 — Error boundaries (C18).** One boundary per route, one per List item, emitted always.
+**L1 — Error boundaries (C18).** ✅ _(done)_ One boundary per route, one per List item, emitted always.
 **Node side:** none. Pure emission.
 _Done-when:_ a row that throws shows a row-level error and the other rows still render.
 

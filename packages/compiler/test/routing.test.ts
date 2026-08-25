@@ -12,13 +12,16 @@ describe('flow arrows -> react-router (M2)', () => {
   it('emits one route per artboard, entry at /', () => {
     const app = fileAt(masterDetailSnapshot(), 'src/App.tsx');
     expect(app).toContain("import { BrowserRouter, Route, Routes } from 'react-router-dom'");
-    expect(app).toContain('<Route path="/" element={<Home />} />');
-    expect(app).toContain('<Route path="/item-detail/:id" element={<ItemDetail />} />');
+    expect(app).toContain('<Route path="/"');
+    expect(app).toContain('<Home />');
+    expect(app).toContain('<Route path="/item-detail/:id"');
+    expect(app).toContain('<ItemDetail />');
   });
 
   it('still emits a single route for a one-artboard project', () => {
     const app = fileAt(trivialSnapshot(), 'src/App.tsx');
-    expect(app).toContain('<Route path="/" element={<Home />} />');
+    expect(app).toContain('<Route path="/"');
+    expect(app).toContain('<Home />');
     expect(app.match(/<Route /g)).toHaveLength(1);
   });
 

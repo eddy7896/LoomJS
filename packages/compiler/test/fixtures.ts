@@ -1,6 +1,6 @@
 import {
   apiPortsFromBody,
-  componentDefs,
+  placeableDefs,
   createComponent,
   CURRENT_USER_DEF,
 } from '@loom/components';
@@ -536,7 +536,9 @@ export function everyComponentSnapshot(): Snapshot {
   const root = base.components.cp_root000001!;
   const components: Record<string, Component> = {};
 
-  for (const def of componentDefs()) {
+  // What the palette offers. An `Instance` is created by promoting a frame and has nothing to
+  // render without a definition behind it (R1), so placing a blank one would place a build error.
+  for (const def of placeableDefs()) {
     if (def.type === 'Frame') continue;
     const component = createComponent(def.type, `cp_${def.type.toLowerCase()}`);
     if (def.type === 'Select' || def.type === 'RadioGroup') {
