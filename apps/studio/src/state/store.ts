@@ -12,6 +12,7 @@ import {
   type Guides,
   type Id,
   type Layout,
+  type Meta,
   type Op,
   type Page,
   type Param,
@@ -783,6 +784,16 @@ export function setArtboardKind(artboardId: Id, kind: ArtboardKind, page?: Page)
     kind,
     page: kind === 'document' ? (page ?? DEFAULT_PAGE) : undefined,
   });
+}
+
+/**
+ * Whether a stranger may read this screen, and what they are told about it (L4).
+ *
+ * The two travel together because they are one decision: meta on a private screen reaches nobody,
+ * and a public screen with no title is one a search engine has nothing to show for.
+ */
+export function setArtboardMeta(artboardId: Id, isPublic: boolean, meta?: Meta): void {
+  dispatch({ type: 'setArtboardMeta', artboardId, isPublic, meta });
 }
 
 /** The paper a document is laid out on. Meaningless on a screen, and the panel does not offer it. */

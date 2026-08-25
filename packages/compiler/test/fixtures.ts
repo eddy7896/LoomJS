@@ -196,7 +196,13 @@ export function pipelineSnapshot(): Snapshot {
     config: { op: 'uppercase' },
     ports: [
       { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'text' } },
-      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+      {
+        id: 'pt_result',
+        name: 'result',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'text' },
+      },
     ],
   };
 
@@ -247,9 +253,27 @@ export function pipelineSnapshot(): Snapshot {
 export const NOTES_TABLE = {
   name: 'notes',
   columns: [
-    { name: 'id', type: { kind: 'number' as const }, required: false, primaryKey: true, generated: true },
-    { name: 'title', type: { kind: 'text' as const }, required: true, primaryKey: false, generated: false },
-    { name: 'body', type: { kind: 'text' as const }, required: false, primaryKey: false, generated: false },
+    {
+      name: 'id',
+      type: { kind: 'number' as const },
+      required: false,
+      primaryKey: true,
+      generated: true,
+    },
+    {
+      name: 'title',
+      type: { kind: 'text' as const },
+      required: true,
+      primaryKey: false,
+      generated: false,
+    },
+    {
+      name: 'body',
+      type: { kind: 'text' as const },
+      required: false,
+      primaryKey: false,
+      generated: false,
+    },
   ],
 };
 
@@ -285,7 +309,10 @@ export function supabaseSnapshot(): Snapshot {
     id: 'cp_title',
     type: 'TextField',
     name: 'Title',
-    props: { value: { kind: 'static', value: '' }, placeholder: { kind: 'static', value: 'Title' } },
+    props: {
+      value: { kind: 'static', value: '' },
+      placeholder: { kind: 'static', value: 'Title' },
+    },
   };
 
   const saveButton: Component = {
@@ -301,8 +328,20 @@ export function supabaseSnapshot(): Snapshot {
     },
   };
 
-  const selectNode = createDbNode('nd_select', { x: 0, y: 0 }, 'cn_supabase', NOTES_TABLE, 'select');
-  const insertNode = createDbNode('nd_insert', { x: 0, y: 200 }, 'cn_supabase', NOTES_TABLE, 'insert');
+  const selectNode = createDbNode(
+    'nd_select',
+    { x: 0, y: 0 },
+    'cn_supabase',
+    NOTES_TABLE,
+    'select',
+  );
+  const insertNode = createDbNode(
+    'nd_insert',
+    { x: 0, y: 200 },
+    'cn_supabase',
+    NOTES_TABLE,
+    'insert',
+  );
 
   const readRoute: Node = {
     id: 'nd_read',
@@ -410,7 +449,10 @@ export function formSnapshot(): Snapshot {
     id: 'cp_title',
     type: 'TextField',
     name: 'Title',
-    props: { value: { kind: 'static', value: '' }, placeholder: { kind: 'static', value: 'Title' } },
+    props: {
+      value: { kind: 'static', value: '' },
+      placeholder: { kind: 'static', value: 'Title' },
+    },
   };
 
   const bodyField: Component = {
@@ -598,7 +640,13 @@ export function operatorPipelineSnapshot(): Snapshot {
     name: kind,
     ports: [
       { id: 'pt_input', name: 'input', direction: 'in', portKind: 'data', type: { kind: 'any' } },
-      { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'any' } },
+      {
+        id: 'pt_result',
+        name: 'result',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'any' },
+      },
     ],
     position: { x: 0, y: 0 },
     config,
@@ -613,7 +661,13 @@ export function operatorPipelineSnapshot(): Snapshot {
       into: 'total',
     }),
     // Reads nothing from the record and writes nowhere: the shape that must NOT declare `source`.
-    step('nd_math_bare', 'math', { left: '', operator: 'add', rightKind: 'value', right: '1', into: '' }),
+    step('nd_math_bare', 'math', {
+      left: '',
+      operator: 'add',
+      rightKind: 'value',
+      right: '1',
+      into: '',
+    }),
     step('nd_compare', 'compare', {
       left: 'total',
       operator: 'atLeast',
@@ -665,7 +719,13 @@ export function triggeredMathSnapshot(): Snapshot {
     kind: 'mirror',
     mirrorOf: componentId,
     ports: [
-      { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+      {
+        id: 'pt_value',
+        name: 'value',
+        direction: 'out',
+        portKind: 'data',
+        type: { kind: 'number' },
+      },
     ],
     position: { x: 0, y: 0 },
   });
@@ -702,10 +762,34 @@ export function triggeredMathSnapshot(): Snapshot {
         kind: 'math',
         name: 'Math',
         ports: [
-          { id: 'pt_run', name: 'run', direction: 'in', portKind: 'trigger', type: { kind: 'trigger' } },
-          { id: 'pt_in_0', name: 'input 1', direction: 'in', portKind: 'data', type: { kind: 'number' } },
-          { id: 'pt_in_1', name: 'input 2', direction: 'in', portKind: 'data', type: { kind: 'number' } },
-          { id: 'pt_result', name: 'result', direction: 'out', portKind: 'data', type: { kind: 'number' } },
+          {
+            id: 'pt_run',
+            name: 'run',
+            direction: 'in',
+            portKind: 'trigger',
+            type: { kind: 'trigger' },
+          },
+          {
+            id: 'pt_in_0',
+            name: 'input 1',
+            direction: 'in',
+            portKind: 'data',
+            type: { kind: 'number' },
+          },
+          {
+            id: 'pt_in_1',
+            name: 'input 2',
+            direction: 'in',
+            portKind: 'data',
+            type: { kind: 'number' },
+          },
+          {
+            id: 'pt_result',
+            name: 'result',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'number' },
+          },
         ],
         position: { x: 0, y: 0 },
         config: { operator: 'divide', inputs: 2 },
@@ -713,15 +797,27 @@ export function triggeredMathSnapshot(): Snapshot {
     },
     {
       type: 'addWire',
-      wire: { id: 'wr_a', from: { nodeId: 'nd_ma', portId: 'pt_value' }, to: { nodeId: 'nd_math', portId: 'pt_in_0' } },
+      wire: {
+        id: 'wr_a',
+        from: { nodeId: 'nd_ma', portId: 'pt_value' },
+        to: { nodeId: 'nd_math', portId: 'pt_in_0' },
+      },
     },
     {
       type: 'addWire',
-      wire: { id: 'wr_b', from: { nodeId: 'nd_mb', portId: 'pt_value' }, to: { nodeId: 'nd_math', portId: 'pt_in_1' } },
+      wire: {
+        id: 'wr_b',
+        from: { nodeId: 'nd_mb', portId: 'pt_value' },
+        to: { nodeId: 'nd_math', portId: 'pt_in_1' },
+      },
     },
     {
       type: 'addWire',
-      wire: { id: 'wr_go', from: { nodeId: 'nd_go', portId: 'pt_click' }, to: { nodeId: 'nd_math', portId: 'pt_run' } },
+      wire: {
+        id: 'wr_go',
+        from: { nodeId: 'nd_go', portId: 'pt_click' },
+        to: { nodeId: 'nd_math', portId: 'pt_run' },
+      },
     },
     {
       type: 'setProp',
@@ -1134,9 +1230,7 @@ export function submitSequenceSnapshot(
     {
       kind: 'navigate',
       flowId: 'fl_done',
-      ...(options.conditional
-        ? { when: { source: { nodeId: stateId, portId: 'pt_value' } } }
-        : {}),
+      ...(options.conditional ? { when: { source: { nodeId: stateId, portId: 'pt_value' } } } : {}),
     },
   ];
 
@@ -1391,7 +1485,13 @@ export function authSnapshot(options: { guard?: boolean } = {}): Snapshot {
         mirrorOf: `cp_${which}`,
         position: { x: 0, y: 0 },
         ports: [
-          { id: 'pt_value', name: 'value', direction: 'out', portKind: 'data', type: { kind: 'text' } },
+          {
+            id: 'pt_value',
+            name: 'value',
+            direction: 'out',
+            portKind: 'data',
+            type: { kind: 'text' },
+          },
         ],
       },
     })),
@@ -1487,7 +1587,12 @@ export function authSnapshot(options: { guard?: boolean } = {}): Snapshot {
 
 function withPageSize(snapshot: Snapshot, pageSize: number): Snapshot {
   return applyOps(snapshot, [
-    { type: 'setProp', componentId: 'cp_list', key: 'pageSize', value: { kind: 'static', value: pageSize } },
+    {
+      type: 'setProp',
+      componentId: 'cp_list',
+      key: 'pageSize',
+      value: { kind: 'static', value: pageSize },
+    },
   ]);
 }
 
@@ -1527,7 +1632,13 @@ export function postgresOperationsSnapshot(): Snapshot {
   ];
 
   for (const step of steps) {
-    const made = createDbNode(step.id, { x: 0, y: 400 }, 'cn_supabase', NOTES_TABLE, step.operation);
+    const made = createDbNode(
+      step.id,
+      { x: 0, y: 400 },
+      'cn_supabase',
+      NOTES_TABLE,
+      step.operation,
+    );
     const node = { ...made, config: { ...made.config, ...step.config } };
     const routeId = `nd_r_${step.operation}`;
 
@@ -1582,9 +1693,27 @@ export function firestoreSnapshot(): Snapshot {
               {
                 name: 'notes',
                 columns: [
-                  { name: 'id', type: { kind: 'text' }, required: false, primaryKey: true, generated: true },
-                  { name: 'title', type: { kind: 'text' }, required: false, primaryKey: false, generated: false },
-                  { name: 'weight', type: { kind: 'number' }, required: false, primaryKey: false, generated: false },
+                  {
+                    name: 'id',
+                    type: { kind: 'text' },
+                    required: false,
+                    primaryKey: true,
+                    generated: true,
+                  },
+                  {
+                    name: 'title',
+                    type: { kind: 'text' },
+                    required: false,
+                    primaryKey: false,
+                    generated: false,
+                  },
+                  {
+                    name: 'weight',
+                    type: { kind: 'number' },
+                    required: false,
+                    primaryKey: false,
+                    generated: false,
+                  },
                 ],
               },
             ],
@@ -1603,9 +1732,11 @@ export function firestoreSnapshot(): Snapshot {
  */
 export function firestoreOperationsSnapshot(): Snapshot {
   const base = firestoreSnapshot();
-  const table = (base.connectors.cn_supabase!.config as {
-    schema: { tables: TableSchema[] };
-  }).schema.tables[0]!;
+  const table = (
+    base.connectors.cn_supabase!.config as {
+      schema: { tables: TableSchema[] };
+    }
+  ).schema.tables[0]!;
   const ops: Op[] = [];
 
   const steps = [
@@ -1727,9 +1858,35 @@ export function toolSnapshot(
           id: 'cp_answer',
           type: 'Text',
           name: 'Answer',
-          props: { content: { kind: 'bound', source: { nodeId: 'nd_route', portId: 'pt_result' } } },
+          props: {
+            content: { kind: 'bound', source: { nodeId: 'nd_route', portId: 'pt_result' } },
+          },
         },
       },
     ],
   );
+}
+
+/**
+ * A public marketing page (L4): the trivial screen, marked crawlable, with a title and a
+ * description of its own.
+ *
+ * Used by the smoke gate, because L4's done-when is not "the files were emitted" — it is that
+ * fetching the built page returns the words. Only a real build can answer that.
+ */
+export function publicPageSnapshot(): Snapshot {
+  const base = trivialSnapshot();
+  const home = base.artboards.ab_home000001!;
+
+  return {
+    ...base,
+    name: 'Acme',
+    artboards: {
+      ab_home000001: {
+        ...home,
+        public: true,
+        meta: { title: 'Acme — invoicing', description: 'Bills, sent.' },
+      },
+    },
+  };
 }

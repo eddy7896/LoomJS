@@ -12,6 +12,7 @@ import type {
   ConditionalStyle,
   Layout,
   Migration,
+  Meta,
   NodeGroup,
   Page,
   Param,
@@ -64,6 +65,8 @@ export type Op =
    * decision: a document without a page has no size, and a page on a screen means nothing.
    */
   | { type: 'setArtboardKind'; artboardId: string; kind: ArtboardKind; page?: Page }
+  /** Crawlable without a session, and what a crawler is told about it (L4). */
+  | { type: 'setArtboardMeta'; artboardId: string; isPublic: boolean; meta?: Meta }
   | { type: 'setArtboardGuides'; artboardId: string; guides: Guides }
   | { type: 'setEntryArtboard'; artboardId: string }
   | { type: 'removeArtboard'; artboardId: string }
@@ -356,6 +359,20 @@ export function applyOp(snapshot: Snapshot, op: Op): Snapshot {
         artboard.kind = op.kind;
         if (op.page) artboard.page = op.page;
       }
+      return next;
+    }
+
+    case 'setArtboardMeta': {
+      const artboard = next.artboards[op.artboardId];
+      if (!artboard) throw new Error(`setArtboardMeta: unknown artboard ${op.artboardId}`);
+
+      // Absent means private, so turning it back off drops the key rather than writing `false`
+      // into every screen that was never public.
+      if (op.isPublic) artboard.public = true;
+      else delete artboard.public;
+
+      if (op.meta && Object.values(op.meta).some(Boolean)) artboard.meta = op.meta;
+      else delete artboard.meta;
       return next;
     }
 

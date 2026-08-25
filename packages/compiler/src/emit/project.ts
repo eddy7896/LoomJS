@@ -1,6 +1,7 @@
 import { FONT_STYLESHEET, componentsCss, themeCss, type ThemeOverrides } from '@loom/ui';
 import type { EmittedFile } from '../types';
 import { DEV_API_PLUGIN } from './server';
+import { PRERENDER_BUILD } from './seo';
 
 /**
  * The emitted app's fixed scaffold: a real Vite + React + TypeScript SPA (docs/07 — the V1
@@ -50,6 +51,11 @@ export interface ScaffoldOptions {
   /** The print stylesheet (L2), when the project has any document at all. Same rule. */
   printCss?: string;
   /**
+   * True when the project has public pages to prerender (L4). It adds two steps to the build — a
+   * Vite SSR build and the prerender script — and nothing at all to the dependencies.
+   */
+  prerender?: boolean;
+  /**
    * Packages something else decided this project needs — a bucket's SDK, today.
    *
    * Passed in rather than switched on here: which SDK an upload needs is the bucket manifest's
@@ -73,7 +79,7 @@ export function scaffoldFiles(
     type: 'module',
     scripts: {
       dev: 'vite',
-      build: 'tsc --noEmit && vite build',
+      build: options.prerender ? PRERENDER_BUILD : 'tsc --noEmit && vite build',
       preview: 'vite preview',
       // What a container runs, and what anyone can run locally to see the built app served the
       // way it will be served (docs/18-containers.md).

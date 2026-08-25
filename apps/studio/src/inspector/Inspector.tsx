@@ -35,6 +35,7 @@ import {
   setArtboardParams,
   setArtboardGuard,
   setArtboardKind,
+  setArtboardMeta,
   setArtboardPage,
   setArtboardSize,
   setEntryArtboard,
@@ -851,6 +852,86 @@ function PageSection({ artboardId }: { artboardId: string }) {
   );
 }
 
+/**
+ * Who may read this screen, and what they are told about it (L4, `docs/V1-COMPLETION.md`).
+ *
+ * Private is the default and the panel does not pretend otherwise: the safe answer to "should a
+ * stranger see this" is no, and a builder whose screens are public unless you remember to say
+ * otherwise has chosen that for everyone using it.
+ */
+function PublicSection({ artboardId }: { artboardId: string }) {
+  const snapshot = useEditor((s) => s.snapshot);
+  const artboard = snapshot.artboards[artboardId];
+  if (!artboard) return null;
+
+  const isPublic = artboard.public === true;
+  const meta = artboard.meta ?? {};
+  const params = artboard.params ?? [];
+  const update = (patch: Partial<typeof meta>): void =>
+    setArtboardMeta(artboardId, isPublic, { ...meta, ...patch });
+
+  return (
+    <section className="field-group" data-testid="public-section">
+      <h3 className="field-group__title">Visibility</h3>
+      <Field label="Who can read it">
+        <select
+          data-testid="artboard-public"
+          value={isPublic ? 'public' : 'private'}
+          onChange={(e) => setArtboardMeta(artboardId, e.target.value === 'public', meta)}
+        >
+          <option value="private">Only the app — rendered in the browser</option>
+          <option value="public">Anyone — published as real HTML</option>
+        </select>
+      </Field>
+
+      {isPublic ? (
+        <>
+          {artboard.guard ? (
+            <p className="panel__hint">
+              This screen is also only for signed-in people, so it will not be published — that
+              would put a signed-in screen where anyone can read it.
+            </p>
+          ) : params.length > 0 ? (
+            <p className="panel__hint">
+              This screen takes a param, so there is one page per record and the build cannot render
+              them ahead of time. It still works; a crawler will see an empty page.
+            </p>
+          ) : (
+            <p className="panel__hint">
+              Rendered to real HTML at build time, so a search engine and a slow connection both get
+              words rather than an empty page.
+            </p>
+          )}
+
+          <Field label="Title">
+            <input
+              data-testid="meta-title"
+              value={meta.title ?? ''}
+              placeholder={artboard.name}
+              onChange={(e) => update({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Description">
+            <input
+              data-testid="meta-description"
+              value={meta.description ?? ''}
+              onChange={(e) => update({ description: e.target.value })}
+            />
+          </Field>
+          <Field label="Share image">
+            <input
+              data-testid="meta-image"
+              value={meta.image ?? ''}
+              placeholder="https://…"
+              onChange={(e) => update({ image: e.target.value })}
+            />
+          </Field>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function ArtboardInspector({ artboardId }: { artboardId: string }) {
   const snapshot = useEditor((s) => s.snapshot);
   const artboard = snapshot.artboards[artboardId];
@@ -903,6 +984,10 @@ function ArtboardInspector({ artboardId }: { artboardId: string }) {
       ) : null}
 
       <GuardSection artboardId={artboard.id} />
+
+      {/* A document is printed, not crawled, so publishing it would be answering a question
+          nobody asked about a page that is not a web page. */}
+      {artboard.kind === 'document' ? null : <PublicSection artboardId={artboard.id} />}
 
       <section className="field-group">
         <h3 className="field-group__title">Params</h3>

@@ -637,18 +637,18 @@ _Done-when:_ one action produces an unread badge and an email, from one place in
 **Node side:** none. Pure emission.
 _Done-when:_ a row that throws shows a row-level error and the other rows still render.
 
-**L2 — Documents and print (C15).** `Artboard.kind: 'document'` with page size and margins, emitted
+**L2 — Documents and print (C15).** ✅ _(done)_ `Artboard.kind: 'document'` with page size and margins, emitted
 as a print stylesheet plus a browser-side PDF path.
 **Node side:** none — the `download` action (§4.5) prints it. A document artboard reads params like
 any other, so "invoice #123" is the flow payload mechanism already built at M2.
 _Done-when:_ an invoice prints to a correct A4 PDF with a repeating header.
 
-**L3 — Responsive, narrowly (C13).** **Two** breakpoints — `sm` and the base — as style and layout
+**L3 — Responsive, narrowly (C13).** ✅ _(done)_ **Two** breakpoints — `sm` and the base — as style and layout
 overrides. `free`-placed frames warn honestly that they will not reflow, because they will not.
 **Node side:** none.
 _Done-when:_ one screen reads correctly at 390 px and 1440 px with no second document.
 
-**L4 — Public pages and SEO (C14).** `Artboard.meta`, a public/private flag, build-time prerender of
+**L4 — Public pages and SEO (C14).** ✅ _(done)_ `Artboard.meta`, a public/private flag, build-time prerender of
 public routes to real HTML, `sitemap.xml`, `robots.txt`.
 **Node side:** none. Meta is **static in v1** — bound meta would need an artboard-scoped mirror, and
 that is a v2 line, taken deliberately rather than by drift.
@@ -702,7 +702,7 @@ schedules make ecommerce and billing real; import/export and audit are the first
 _Acceptance test:_ an **ecommerce app** — catalog, cart, Stripe checkout in a transaction, a webhook
 marking paid, a nightly abandoned-cart job, an order inbox that updates live.
 
-**Wave 3 — make it reach**
+**Wave 3 — make it reach** ✅ _(done — built first, at the user's direction)_
 `L2, L3, L4`
 
 Documents, phones and crawlers.

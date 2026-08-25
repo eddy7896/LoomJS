@@ -24,6 +24,7 @@ import {
   ssoSnapshot,
   toolSnapshot,
   postgresSnapshot,
+  publicPageSnapshot,
   submitSequenceSnapshot,
   supabaseSnapshot,
   trivialSnapshot,
@@ -69,7 +70,9 @@ async function stop(child: ReturnType<typeof spawn>): Promise<void> {
     // are started with `--strictPort`, the next run's gate on that port failed to start at all —
     // a green suite turning red for a reason nothing in the failing test could explain.
     await new Promise<void>((resolve) => {
-      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], {
+        stdio: 'ignore',
+      });
       killer.on('close', () => resolve());
       killer.on('error', () => {
         child.kill();
@@ -121,6 +124,33 @@ describe('emitted app builds for real', () => {
     expect(bundle).toBeDefined();
     const code = await readFile(join(dist, 'assets', bundle!), 'utf8');
     expect(code).toContain('Hello loomJS');
+  });
+
+  /**
+   * L4's done-when, run for real (`docs/V1-COMPLETION.md`).
+   *
+   * Every other test in this file can be satisfied by emitting the right strings. This one cannot:
+   * the claim is that **a crawler fetching a public page gets the words**, and the only thing that
+   * can answer it is the built `dist` a static host would serve. The prerender is a Vite SSR build
+   * plus a script, and both have to actually run.
+   */
+  it('publishes a public page as real HTML, with its own head', async () => {
+    const dir = await emitProject(publicPageSnapshot());
+    await run(npm, ['run', 'build'], { cwd: dir, shell: true });
+
+    const html = await readFile(join(dir, 'dist', 'index.html'), 'utf8');
+
+    // The gate itself: the heading is in the body, not behind a bundle the crawler will not run.
+    expect(html).toContain('Hello loomJS');
+    expect(html).not.toContain('<div id="root"></div>');
+
+    // And the head this screen declared, rather than the shell's default.
+    expect(html).toContain('<title>Acme — invoicing</title>');
+    expect(html).toContain('Bills, sent.');
+    expect(html).toContain('og:title');
+
+    // It is still an app: the bundle is there and hydrates over the rendered markup.
+    expect(html).toContain('<script type="module"');
   });
 
   it('type-checks every component the studio can place', async () => {
@@ -217,7 +247,9 @@ describe('emitted app builds for real', () => {
 
     const home = await readFile(join(dir, 'src', 'artboards', 'Home.tsx'), 'utf8');
     // `total = total + b`: the variable is read inside the very handler that writes it.
-    expect(home).toContain('set_global_answer((Number((global_answer ?? "")) + Number(field_cp_b)))');
+    expect(home).toContain(
+      'set_global_answer((Number((global_answer ?? "")) + Number(field_cp_b)))',
+    );
 
     const report = await readFile(join(dir, 'src', 'artboards', 'Report.tsx'), 'utf8');
     expect(report).toContain('global_answer ?? ""');
@@ -339,9 +371,7 @@ describe('emitted app builds for real', () => {
     };
     expect(pkg.dependencies['firebase-admin']).toBeDefined();
     expect(pkg.dependencies.pg).toBeUndefined();
-    expect(await readFile(join(dir, '.env.example'), 'utf8')).toBe(
-      'FIREBASE_SERVICE_ACCOUNT=\n',
-    );
+    expect(await readFile(join(dir, '.env.example'), 'utf8')).toBe('FIREBASE_SERVICE_ACCOUNT=\n');
   });
 });
 
@@ -547,7 +577,10 @@ describe('emitted app talks to a Supabase-shaped backend', () => {
         const chunks: Buffer[] = [];
         req.on('data', (chunk: Buffer) => chunks.push(chunk));
         req.on('end', () => {
-          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<
+            string,
+            unknown
+          >;
           const inserted = { id: rows.length + 1, body: null, ...body };
           rows.push(inserted as (typeof rows)[number]);
           res.statusCode = 201;
@@ -632,7 +665,12 @@ describe('a CRUD resource runs for real', () => {
         if (operator === 'eq' && String(actual) !== value) return false;
         if (operator === 'ilike') {
           const needle = value.replace(/[*%]/g, '').toLowerCase();
-          if (!String(actual ?? '').toLowerCase().includes(needle)) return false;
+          if (
+            !String(actual ?? '')
+              .toLowerCase()
+              .includes(needle)
+          )
+            return false;
         }
       }
       return true;
@@ -972,7 +1010,10 @@ describe('an inferred backend runs for real', () => {
         const chunks: Buffer[] = [];
         req.on('data', (chunk: Buffer) => chunks.push(chunk));
         req.on('end', () => {
-          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<
+            string,
+            unknown
+          >;
           const inserted = { id: rows.length + 1, body: null, ...body };
           rows.push(inserted);
           res.statusCode = 201;
@@ -1018,7 +1059,9 @@ describe('an inferred backend runs for real', () => {
         body: JSON.stringify({ input: { title: 'inferred row', body: '' } }),
       });
       expect(created.status).toBe(200);
-      expect(await created.json()).toEqual({ result: { id: 1, title: 'inferred row', body: null } });
+      expect(await created.json()).toEqual({
+        result: { id: 1, title: 'inferred row', body: null },
+      });
 
       // An empty optional column is left out rather than written as an empty string.
       expect(rows[0]).toEqual({ id: 1, title: 'inferred row', body: null });

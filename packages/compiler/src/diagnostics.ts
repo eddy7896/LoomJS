@@ -132,6 +132,44 @@ export function diagnose(snapshot: Snapshot, options: DiagnoseOptions = {}): Pro
     });
   };
 
+  // ---- Public pages: what can and cannot be prerendered (`docs/V1-COMPLETION.md` L4) --------
+
+  for (const artboard of Object.values(snapshot.artboards)) {
+    if (artboard.public !== true) continue;
+
+    /**
+     * A route with a param has one page per record, and the build does not know the records. It
+     * still works — it is just client-rendered like everything else — so this says what will
+     * happen rather than refusing something that is merely limited.
+     */
+    if ((artboard.params ?? []).length > 0) {
+      add(
+        'public-route-has-params',
+        'warning',
+        `"${artboard.name}" takes a param, so there is one page per record and the build cannot ` +
+          `render them ahead of time. It will still work; a crawler will see an empty page.`,
+        artboard.id,
+        'artboard',
+      );
+    }
+
+    /**
+     * Public and guarded at once is a contradiction worth stopping on. The guard exists because
+     * the content is for a particular person; writing it into a file anyone can fetch would turn
+     * a router-level convenience into a disclosure.
+     */
+    if (artboard.guard) {
+      add(
+        'public-screen-is-guarded',
+        'error',
+        `"${artboard.name}" is marked public and also only for signed-in people. It will not be ` +
+          `published, because publishing it would put a signed-in screen where anyone can read it.`,
+        artboard.id,
+        'artboard',
+      );
+    }
+  }
+
   // ---- Documents: paper has rules a screen does not (`docs/V1-COMPLETION.md` L2) ----------
 
   for (const artboard of Object.values(snapshot.artboards)) {
